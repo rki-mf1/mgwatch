@@ -3,6 +3,8 @@
 /mgw_api/test/
 /Dockerfile
 /xdb.sqbpro
+*.~lock.*
+dump.rdb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
