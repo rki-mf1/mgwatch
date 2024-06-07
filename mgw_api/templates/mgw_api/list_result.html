@@ -1,0 +1,39 @@
+{% extends "mgw_api/base.html" %}
+
+{% block title %}Result Files!{% endblock %}
+
+{% block content %}
+
+<div class="list-div">
+    <h1 class="list-head">Result Files</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Signature</th>
+                <th>Date</th>
+                <th>Size (KB)</th>
+                <th>Watched</th>
+                <th>Delete</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in result_files %}
+                <tr>
+                    <td><a href="{% url 'results_table' result.pk %}">{{ result.name }}</a></td>
+                    <td>{{ result.signature.name }}</td>
+                    <td>{{ result.created_at }}</td>
+                    <td>{{ result.file.size|filesizeformat }}</td>
+                    <td><a href="{% url 'mgw_api:toggle_watch' result.pk %}">{{ result.is_watched }}</a></td>
+                    <td><a href="{% url 'mgw_api:delete_result' result.pk %}">delete</a></td>
+                </tr>
+            {% empty %}
+                <tr>
+                  <td colspan="3">No result files found.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}

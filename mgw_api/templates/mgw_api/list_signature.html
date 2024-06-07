@@ -1,0 +1,54 @@
+{% extends "mgw_api/base.html" %}
+
+{% block title %}Uploaded Signature Files!{% endblock %}
+
+{% block content %}
+
+<div class="list-div">
+    <h1 class="list-head">Signature Files</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>File</th>
+                <th>Size (KB)</th>
+                <th>Delete</th>
+                <th>Search</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for signature in signature_files %}
+                <tr>
+                    <td>{{ signature.name }}</td>
+                    <td>{{ signature.file.name }}</td>
+                    <td>{{ signature.file.size|filesizeformat }}</td>
+                    <td><a href="{% url 'mgw_api:delete_signature' signature.pk %}">delete</a></td>
+                    <td><form action="{% url 'mgw_api:process_signature' signature.pk %}" method="post">
+                        {% csrf_token %}
+                        <button type="submit">search</button>
+                    </form></td>
+                </tr>
+            {% empty %}
+                <tr>
+                  <td colspan="3">No signature files found.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="submission-message">
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li {% if message.tags %} class=" {{ message.tags }} "{% endif %}>
+                    {{ message }}
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+

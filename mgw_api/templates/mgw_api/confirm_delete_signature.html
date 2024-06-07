@@ -1,0 +1,15 @@
+{% extends "mgw_api/base.html" %}
+
+{% block title %}Confirm Signature Deleteion!{% endblock %}
+
+{% block content %}
+
+<h1>Confirm Delete</h1>
+<p>Are you sure you want to delete the signature file "{{ signature.file.name }}"?</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirm</button>
+    <a href="{% url 'mgw_api:list_signature' %}">Cancel</a>
+</form>
+
+{% endblock %}

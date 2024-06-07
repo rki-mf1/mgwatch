@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Daniel Desirò" />
+    <meta name="description" content="MetagenomeWatch (MGW) provides a metagenome search engine ablte to search through petabyte scale databases in real time." />
+
+    <title>{% block title %}Django - File Uploads{% endblock %}</title>
+
+    {% load static %}
+
+    <link rel="stylesheet" href="{% static 'mgw_api/style.css' %}">
+
+    <div>
+        {% if request.user.is_authenticated %}
+            {{ request.user.username }}
+            <a href="{% url 'mgw_api:logout' %}">Logout</a>
+        {% else %}
+            <a href="{% url 'mgw_api:login' %}">Login</a>
+            <a href="{% url 'mgw_api:signup' %}">Signup</a>
+        {% endif %}
+    </div>
+
+    <ul class="nav">
+        <li><a href="{% url 'mgw_api:home' %}" class="active">Home</a></li>
+        <li><a href="{% url 'mgw_api:upload_fasta' %}" class="active">Upload Fasta</a></li>
+        <li><a href="{% url 'mgw_api:list_signature' %}" class="active">List Signatures</a></li>
+        <li><a href="{% url 'mgw_api:settings' %}" class="active">Settings</a></li>
+        <li><a href="{% url 'mgw_api:list_result' %}" class="active">List Results</a></li>
+    </ul>
+</head>
+
+<body>
+    <div id="sidebar">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+
+</html>

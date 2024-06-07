@@ -1,0 +1,90 @@
+{% extends "mgw_api/base.html" %}
+
+{% block title %}Result Files!{% endblock %}
+
+{% block content %}
+
+<div class="list-div">
+    <h1>{{ result.name }} - {{ result.signature.name }} - {{ result.created_at }}</h1>
+    
+    <input type="text" id="whiteListSearch" placeholder="White-list Search">
+    <input type="text" id="blackListSearch" placeholder="Black-list Search">
+    <button onclick="resetTable()">Reset Table</button>
+    
+    <table border="1" id="resultTable">
+        <thead>
+            <tr>
+                {% for cell in table_data.0 %}
+                    <th onclick="sortTable({{ forloop.counter0 }})">{{ cell }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in table_data %}
+            <tr>
+                {% for cell in row %}
+                <td>{{ cell }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{% url 'mgw_api:toggle_watch' result.pk %}">Toggle Watch: {{ result.is_watched }}</a></td>
+    <a href="{% url 'mgw_api:delete_result' result.pk %}">Delete this Result</a></td>
+    <a href="{% url 'mgw_api:list_result' %}">Back to Results List</a>
+
+    <script>
+        let sortDirection = {};
+
+        function sortTable(columnIndex) {
+            const table = document.getElementById('resultTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.rows);
+            const isAsc = sortDirection[columnIndex] === 'asc';
+            
+            rows.sort((a, b) => {
+                const cellA = a.cells[columnIndex].innerText;
+                const cellB = b.cells[columnIndex].innerText;
+                return isAsc ? cellA.localeCompare(cellB) : cellB.localeCompare(cellA);
+            });
+
+            rows.forEach(row => tbody.appendChild(row));
+            sortDirection[columnIndex] = isAsc ? 'desc' : 'asc';
+        }
+
+        function resetTable() {
+            const table = document.getElementById('resultTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.rows);
+            rows.sort((a, b) => a.rowIndex - b.rowIndex);
+            rows.forEach(row => row.classList.remove('hidden'));
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        document.getElementById('whiteListSearch').addEventListener('input', filterTable);
+        document.getElementById('blackListSearch').addEventListener('input', filterTable);
+
+        function filterTable() {
+            const whiteListQuery = document.getElementById('whiteListSearch').value.toLowerCase();
+            const blackListQuery = document.getElementById('blackListSearch').value.toLowerCase();
+            const table = document.getElementById('resultTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.rows);
+
+            rows.forEach(row => {
+                const rowText = row.innerText.toLowerCase();
+                const isWhiteListed = whiteListQuery ? rowText.includes(whiteListQuery) : true;
+                const isBlackListed = blackListQuery ? rowText.includes(blackListQuery) : false;
+
+                if (isWhiteListed && !isBlackListed) {
+                    row.classList.remove('hidden');
+                } else {
+                    row.classList.add('hidden');
+                }
+            });
+        }
+    </script>
+</div>
+
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "mgw_api/base.html" %}
+
+{% block title %}Welcome!{% endblock %}
+
+{% block content %}
+
+<div class="list-div">
+    <h1 class="list-head">Example Search</h1>
+</div>
+
+<div class="example-form">
+    <h1 class="example-head">Example Search</h1>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="search-name">
+            {{ form.name }}
+        </div>
+        <div class="search-fasta">
+            {{ form.file }}
+        </div>
+
+        <div class="form-row">
+            <input type="radio" id="Ralso" name="options" value="option1" />
+            <label for="Ralso">
+                <em>Ralstonia solanacearum</em>: a soilborne bacterial pathogen that causes bacterial wilt in several crops.
+                <a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/305/">RefSeq:GCF_021117135.1 GCF_021117135.1_ASM2111713v1_genomic.fna</a>
+            </label>
+        </div><br />
+
+        <div class="form-row">
+            <input type="radio" id="Sal" name="options" value="option2" />
+            <label for="Sal">
+                <em>Salmonella enterica</em> subsp. <em>enterica</em>: a widespread bacterial pathogen that causes salmonellosis in humans.
+                <a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/59201/">RefSeq:GCF_000006945.2 GCF_000006945.2_ASM694v2_genomic.fna</a>
+            </label>
+        </div><br />
+        
+        <div class="form-row">
+            <input type="radio" id="Promar" name="options" value="option3" />
+            <label for="Promar">
+                <em>Prochlorococcus marinus</em>: a widespread and abundant marine cyanobacteria.
+                <a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/1219/">RefSeq:GCF_000015665.1 GCF_000015665.1_ASM1566v1_genomic.fna</a>
+            </label>
+        </div><br />
+
+        <div class="form-row">
+            <input type="radio" id="Canal" name="options" value="option4" />
+            <label for="Canal">
+                <em>Candida albicans </em>: a fungi common in the human gut and other parts of the body. It is an opportunistic pathogen and causes infection under certain conditions.
+                <a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/5476/">RefSeq:GCF_000182965.3 GCF_000182965.3_ASM18296v3_genomic.fna</a>
+            </label>
+        </div><br />
+
+        <div class="form-row">
+            <input type="radio" id="Aspsyd" name="options" value="option5" />
+            <label for="Aspsyd">
+                <em>Aspergillus sydowii </em>: a fungal pathogen that can cause disease in humans and sea fan corals.
+                <a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/75750/">RefSeq:GCF_001890705.1 GCF_001890705.1_Aspsy1_genomic.fna</a>
+            </label>
+        </div><br />
+
+        <div class="form-row">
+            <input type="radio" id="Pelagi" name="options" value="option6" />
+            <label for="Pelagi">
+                <em>Candidatus Pelagibacter ubique </em>: ubiquitous marine bacterium SAR11, strain HTCC1062.
+                <a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/335992/">RefSeq:GCF_000012345.1 GCF_000012345.1_ASM1234v1_genomic.fna</a>
+            </label>
+        </div><br /><br />
+        
+        <button type="submit" id="myButton" class="btn btn-light">
+                <strong>Submit</strong>
+        </button>
+
+        <input type="submit" value="Submit" class="search-field">
+    </form>
+</div>
+
+{% endblock %}

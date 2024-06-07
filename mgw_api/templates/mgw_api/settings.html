@@ -1,0 +1,37 @@
+{% extends "mgw_api/base.html" %}
+
+{% block title %}Welcome!{% endblock %}
+
+{% block content %}
+
+<div class="settings-form">
+    <h1 class="settings-head">Settings</h1>
+
+    <form method="post" enctype="multipart/form-data" id="settings-form">
+        {% csrf_token %}
+
+        {% for settings in settings_form %}
+            <div class="form-boolean">
+                {{ settings }} {{ settings.help_text }}
+            </div>
+        {% empty %}
+            <div class="form-boolean">
+                <td colspan="3">No settings files found.</td>
+            </div>
+        {% endfor %}
+        
+        <div class="submit-button">
+            <input type="submit" value="Save changes" class="settings-field">
+        </div>
+    </form>
+</div>
+
+<script>
+    document.querySelectorAll('#settings-form input[type="checkbox"]').forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
+            document.getElementById('settings-form').submit();
+        });
+    });
+</script>
+
+{% endblock %}

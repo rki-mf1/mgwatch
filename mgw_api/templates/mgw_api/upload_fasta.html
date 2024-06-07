@@ -1,0 +1,36 @@
+{% extends "mgw_api/base.html" %}
+
+{% block title %}Welcome!{% endblock %}
+
+{% block content %}
+
+<div class="search-form">
+    <h1 class="search-head">Welcome!</h1>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="search-name">
+            {{ fasta_form.name }}
+        </div>
+        <div class="search-fasta">
+            {{ fasta_form.file }}
+        </div>
+
+        <input type="submit" value="Submit" class="search-field">
+    </form>
+</div>
+
+<div class="submission-message">
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li {% if message.tags %} class=" {{ message.tags }} "{% endif %}>
+                    {{ message }}
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</div>
+
+{% endblock %}
