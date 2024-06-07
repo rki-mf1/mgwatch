@@ -1,2 +1,2 @@
-# mgwatch
+# MetagenomeWatch
 MetagenomeWatch
