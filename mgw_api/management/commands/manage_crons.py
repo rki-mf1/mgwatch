@@ -13,15 +13,17 @@ def get_conda_path():
         print("Error: Conda not found in the system PATH.")
         sys.exit(1)
 
-def get_cron_jobs():
-    conda_path = get_conda_path()
-    conda_activate_path = os.path.join(os.path.dirname(conda_path), "activate")
+def get_cron_jobs(manage_py_path):
+    #conda_activate_path = os.path.join(os.path.dirname(conda_path), "activate")
+    cron_jobs = list()
     env_name = "mgw"
-    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "process_fasta.py")
-    log_file_path = "Documents/branchwater/mgw/mgw_api/management/commands/cronlog.log"
-    sleep_command = "sleep 10"
-    python_command = f"{conda_path} run -n {env_name} python {script_path} >> {log_file_path} 2>&1"
-    cron_jobs = [{"schedule":"*/1 * * * *", "command":f"{sleep_command}; {python_command}"},]
+    conda_path = get_conda_path()
+    cron_path = os.path.dirname(os.path.abspath(__file__))
+    log_file_path = os.path.join(cron_path, "cronlog.log")
+    for script in ["create_index",]:
+        python_command = f"{conda_path} run -n {env_name} {sys.executable} {manage_py_path} {script} >> {log_file_path} 2>&1"
+        cron_jobs.append({"schedule":"*/1 * * * *", "command":f"{python_command}"})
+    #0 - At minute 0 | 1 - At 1 AM | * - Every day of the month | * - Every month | 6 - On Saturday
     return cron_jobs
 
 def start_cron_jobs(cron_jobs):
@@ -45,8 +47,8 @@ def stop_cron_jobs(cron_jobs):
 if __name__ == "__main__":
     action = sys.argv[1].lower()
     manage_py_path = sys.argv[2]
-    cron_jobs = get_cron_jobs()
+    cron_jobs = get_cron_jobs(manage_py_path)
     if action == "start":
-        start_cron_jobs()
+        start_cron_jobs(cron_jobs)
     elif action == "stop":
-        stop_cron_jobs()
+        stop_cron_jobs(cron_jobs)

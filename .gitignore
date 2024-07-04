@@ -5,6 +5,8 @@
 /xdb.sqbpro
 *.~lock.*
 dump.rdb
+test.py
+cronlog.log
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
