@@ -3,6 +3,7 @@
 /mgw_api/test/
 /Dockerfile
 /xdb.sqbpro
+/media/*
 *.~lock.*
 dump.rdb
 test.py
