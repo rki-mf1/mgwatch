@@ -15,10 +15,10 @@ done
 function main() {
 
     ################################################################
-    echo "# Running manual index update."
+    echo "# Starting MetagenomeWatch server."
     environment="mgw"
-    address="localhost:8080"
-    command="runserver"
+    address=""
+    command="create_index"
     mgw_server environment command address
 }
 
