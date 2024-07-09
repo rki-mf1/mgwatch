@@ -1,50 +1,5 @@
-.nav {
-    font: bold normal 1em/3em Arial,sans-serif;
-    text-shadow: 1px 1px white;
-    color: #039;
-    background-color: #eeeeee;
-    border: 1px solid #eee;
-}
+/* Random CSS stuff */
 
-ul.nav {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    text-align: center;
-}
-
-.nav li {
-    width: 200px;
-    list-style-type: none;
-    display: inline-block;
-}
-
-.nav a {
-    display: block;
-    text-decoration: none;
-    border: 1px solid #999;
-}
-
-.nav a:hover {
-    color: red;
-    background-color: #fed;
-    border: 1px dotted red;
-}
-
-.nav a:active {
-    color: #ffffff;
-    background-color: #000000;
-    border: 1px dotted #999999;
-}
-
-
-h1 {
-    color: rgb(0, 0, 0);
-}
-
-p {
-    color: red;
-}
 
 body {
     content: ' ';
@@ -114,4 +69,527 @@ th {
 
 .hidden {
     display: none;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* CSS with purpose */
+
+.nav {
+    font: bold normal 1em/3em Arial,sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    padding-bottom: 0px;
+    padding-top: 0px;
+    background-color: #f9f9f900;
+    border: 1px solid #00000000;
+    border-radius: 5px;
+    margin-top: 0px;
+    margin-bottom: 5px;
+}
+
+ul.nav {
+    list-style: none;
+    text-align: center;
+}
+
+.nav li {
+    width: 20%;
+    padding: 5px;
+    list-style-type: none;
+    display: inline-block;
+}
+
+.nav a {
+    display: block;
+    text-decoration: none;
+    border-radius: 5px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+}
+
+.nav a:hover {
+    color: #000000;
+    background-color: #ffffff;
+    border: 1px dotted #000000;
+}
+
+.nav a:active {
+    color: #ffffff;
+    text-shadow: none;
+    background-color: #000000;
+    border: 1px dotted #999999;
+}
+
+
+.page-head {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.page-head h1 {
+    font-size: 36px;
+    color: #000000;
+    margin-bottom: 20px;
+}
+
+
+.help-section {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.help-section h2 {
+    font-size: 24px;
+    color: #000000;
+    margin-bottom: 10px;
+}
+.help-section p {
+    font-size: 16px;
+    color: #000000;
+    line-height: 1.5;
+}
+.help-section ol {
+    margin: 15px 0;
+    padding-left: 20px;
+}
+.help-section ol li {
+    margin-bottom: 10px;
+}
+.help-section ol li strong {
+    color: #000000;
+}
+
+
+.upload-section {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.upload-section h2 {
+    font-size: 24px;
+    color: #000000;
+    margin-bottom: 10px;
+}
+.upload-section form {
+    width: 100%;
+}
+.upload-section form div {
+    margin-bottom: 10px;
+}
+.upload-section input[type="submit"] {
+    background-color: #000000;
+    text-shadow: none;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+.upload-section input[type="submit"]:hover {
+    background-color: #363636;
+}
+
+
+.signature-list {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.signature-list h2 {
+    font-size: 24px;
+    color: #000000;
+    margin-bottom: 10px;
+}
+.signature-list table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+}
+.signature-list th, .signature-list td {
+    border: 1px solid #000000;
+    padding: 8px;
+    text-align: left;
+}
+.signature-list th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+    color: #000000;
+}
+.signature-list tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+.signature-list a {
+    color: #ff0000;
+    text-shadow: none;
+    text-decoration: none;
+}
+.signature-list a:hover {
+    text-decoration: underline;
+}
+.signature-list button {
+    background-color: #000000;
+    text-shadow: none;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+    margin: 4px 2px;
+    cursor: pointer;
+    border-radius: 3px;
+}
+.signature-list button[type="submit"]:hover {
+    background-color: #363636;
+}
+
+
+.result-list {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.result-list h2 {
+    font-size: 24px;
+    color: #000000;
+    margin-bottom: 10px;
+}
+.result-list table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+}
+.result-list th, .result-list td {
+    border: 1px solid #000000;
+    padding: 8px;
+    text-align: left;
+}
+.result-list th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+    color: #000000;
+}
+.result-list tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+.result-list a {
+    color: #ff0000;
+    text-shadow: none;
+    text-decoration: none;
+}
+.result-list a:hover {
+    text-decoration: underline;
+}
+.result-list button {
+    background-color: #000000;
+    text-shadow: none;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+    margin: 4px 2px;
+    cursor: pointer;
+    border-radius: 3px;
+}
+.result-list button[type="submit"]:hover {
+    background-color: #363636;
+}
+
+
+.settings-section {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.settings-section h2 {
+    font-size: 24px;
+    color: #000000;
+    margin-bottom: 10px;
+}
+.settings-section form {
+    width: 100%;
+}
+.settings-section form div {
+    margin-bottom: 10px;
+}
+.settings-section input[type="submit"] {
+    background-color: #000000;
+    text-shadow: none;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+.settings-section input[type="submit"]:hover {
+    background-color: #363636;
+}
+
+
+.confirm-delete {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.confirm-delete h2 {
+    font-size: 24px;
+    color: #000000;
+    margin-bottom: 10px;
+}
+.confirm-delete p {
+    font-size: 16px;
+    color: #000000;
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+.confirm-delete form {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.confirm-delete button {
+    background-color: #ff0000;
+    text-shadow: none;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+.confirm-delete button:hover {
+    background-color: #ff4848;
+}
+.confirm-delete a {
+    background-color: #000000;
+    text-shadow: none;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+.confirm-delete a:hover {
+    background-color: #363636;
+}
+
+
+.account-navigation {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    padding-top: 0px;
+    padding-bottom: 0px;
+    background-color: #f9f9f900;
+    border: 1px solid #00000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.account-navigation a {
+    color: #000000;
+    text-decoration: none;
+    margin: 3px;
+    font-size: 14px;
+}
+.account-navigation a:hover {
+    text-decoration: underline;
+}
+
+
+.login-section {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.login-section h2 {
+    font-size: 24px;
+    color: #000000;
+    margin-bottom: 10px;
+}
+.login-section form {
+    width: 100%;
+}
+.login-section form div {
+    margin-bottom: 10px;
+}
+.login-section button {
+    background-color: #000000;
+    text-shadow: none;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+.login-section button:hover {
+    background-color: #363636;
+}
+.login-section a {
+    display: inline-block;
+    margin-top: 10px;
+    margin-left: 10px;
+    color: #000000;
+    text-decoration: none;
+    font-size: 16px;
+}
+.login-section a:hover {
+    text-decoration: underline;
+}
+
+
+.signup-section {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+.signup-section h2 {
+    font-size: 24px;
+    color: #000000;
+    margin-bottom: 10px;
+}
+.signup-section form {
+    width: 100%;
+}
+.signup-section form div {
+    margin-bottom: 10px;
+}
+.signup-section button {
+    background-color: #000000;
+    text-shadow: none;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+.signup-section button:hover {
+    background-color: #45a049;
+}
+.signup-section a {
+    display: inline-block;
+    margin-top: 10px;
+    margin-left: 10px;
+    color: #000000;
+    text-decoration: none;
+    font-size: 16px;
+}
+.signup-section a:hover {
+    text-decoration: underline;
 }

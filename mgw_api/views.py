@@ -47,7 +47,7 @@ def user_login(request):
             user = authenticate(request, username=username, password=password)
             if user:
                 login(request, user) 
-                return redirect("mgw_api:home")
+                return redirect("mgw_api:upload_fasta")
     else:
         form = LoginForm()
     return render(request, 'mgw_api/login.html', {'form': form})
@@ -61,11 +61,6 @@ def user_logout(request):
 
 ################################################################
 ## pages
-
-@login_required
-def home(request):
-    return render(request, 'mgw_api/home.html')
-
 
 @login_required
 def upload_fasta(request):

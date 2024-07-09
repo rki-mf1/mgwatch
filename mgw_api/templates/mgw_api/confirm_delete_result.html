@@ -4,12 +4,14 @@
 
 {% block content %}
 
-<h1>Confirm Delete</h1>
-<p>Are you sure you want to delete the result file "{{ result.file.name }}"?</p>
-<form method="post">
-    {% csrf_token %}
-    <button type="submit">Confirm</button>
-    <a href="{% url 'mgw_api:list_result' %}">Cancel</a>
-</form>
+<div class="confirm-delete">
+    <h2>Confirm Delete</h2>
+    <p>Are you sure you want to delete the result file "{{ result.file.name }}"?</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">Confirm</button>
+        <a href="{% url 'mgw_api:list_result' %}">Cancel</a>
+    </form>
+</div>
 
 {% endblock %}

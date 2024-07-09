@@ -22,8 +22,6 @@ class Command(StaticRunServerCommand):
         # get manage.py location
         manage_py_path = os.path.abspath("manage.py")
         command_path = os.path.dirname(os.path.abspath(__file__))
-        # stop running cron jobs
-        #stop_cron_jobs(manage_py_path, command_path)
         # stop cron jobs on exit
         signal.signal(signal.SIGINT, lambda signal, frame: stop_cron_jobs(manage_py_path, command_path, signal, frame))
         signal.signal(signal.SIGTERM, lambda signal, frame: stop_cron_jobs(manage_py_path, command_path, signal, frame))

@@ -1,27 +1,27 @@
 {% extends "mgw_api/base.html" %}
 
-{% block title %}Welcome!{% endblock %}
+{% block title %}Settings{% endblock %}
 
 {% block content %}
 
-<div class="settings-form">
-    <h1 class="settings-head">Settings</h1>
+<div class="settings-section">
+    <h2>Settings</h2>
 
     <form method="post" enctype="multipart/form-data" id="settings-form">
         {% csrf_token %}
 
         {% for settings in settings_form %}
-            <div class="form-boolean">
+            <div>
                 {{ settings }} {{ settings.help_text }}
             </div>
         {% empty %}
-            <div class="form-boolean">
+            <div>
                 <td colspan="3">No settings files found.</td>
             </div>
         {% endfor %}
         
-        <div class="submit-button">
-            <input type="submit" value="Save changes" class="settings-field">
+        <div>
+            <input type="submit" value="Save changes">
         </div>
     </form>
 </div>
