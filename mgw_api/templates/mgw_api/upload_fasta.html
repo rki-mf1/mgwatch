@@ -1,23 +1,20 @@
 {% extends "mgw_api/base.html" %}
 
-{% block title %}Welcome!{% endblock %}
+{% block title %}Welcome to MetagenomeWatch!{% endblock %}
 
 {% block content %}
 
-<div class="search-form">
-    <h1 class="search-head">Welcome!</h1>
+<div class="page-head">
+    <h1>Welcome to MetagenomeWatch!</h1>
+</div>
 
+<div class="upload-section">
+    <h2>Upload Genome</h2>
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
-
-        <div class="search-name">
-            {{ fasta_form.name }}
-        </div>
-        <div class="search-fasta">
-            {{ fasta_form.file }}
-        </div>
-
-        <input type="submit" value="Submit" class="search-field">
+        <div>{{ fasta_form.name }}</div>
+        <div>{{ fasta_form.file }}</div>
+        <input type="submit" value="Submit">
     </form>
 </div>
 
@@ -32,5 +29,17 @@
         </ul>
     {% endif %}
 </div>
+
+<div class="help-section">
+    <h2>How to Get Started</h2>
+    <p>Welcome to MetagenomeWatch! To get started, simply upload a Fasta file with your favourite genomes. All entries will then be converted into signatures in the background. Depending on the size of the genome, this may take some time. The converted genomes are then available in the "Genomes & Search" section. Here you can then submit your genome for a metagenome search in the Sequencing Read Archive database. Your search results are then available in the "Results & Watches" section, where you can set up a watch for your search query. This monitoring enables an automatic search when the database is updated. Here is a brief overview of the different sections:</p>
+    <ol>
+      <li><strong>Uploads & Help:</strong> Select a Fasta file with a genome of interest and upload it.</li>
+      <li><strong>Genomes & Search:</strong> Start a search in the Sequencing Read Archive database.</li>
+      <li><strong>Results & Watches:</strong> Check your results and set watches.</li>
+      <li><strong>Settings:</strong> Set up search settings.</li>
+    </ol>
+    <p>If you have any questions or require further assistance, please feel free to contact our development team. Happy searching!</p>
+  </div>
 
 {% endblock %}

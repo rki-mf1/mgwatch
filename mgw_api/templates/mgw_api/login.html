@@ -4,13 +4,15 @@
 
 {% block content %}
 
-<h1>Login</h1>
-<form method="POST">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Login</button>
-    <a href="{% url 'mgw_api:signup' %}">Dont have Account Create</a>
-</form>
+<div class="login-section">
+    <h2>Login</h2>
+    <form method="POST">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Login</button>
+        <a href="{% url 'mgw_api:signup' %}">Don't have an account?</a>
+    </form>
+</div>
 
 {% endblock %}
 

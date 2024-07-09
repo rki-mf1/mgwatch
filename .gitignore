@@ -9,6 +9,7 @@ dump.rdb
 test.py
 cronlog.log
 testfile.log
+home.html
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

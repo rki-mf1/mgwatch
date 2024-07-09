@@ -13,7 +13,7 @@
 
     <link rel="stylesheet" href="{% static 'mgw_api/style.css' %}">
 
-    <div>
+    <div class="account-navigation">
         {% if request.user.is_authenticated %}
             {{ request.user.username }}
             <a href="{% url 'mgw_api:logout' %}">Logout</a>
@@ -24,11 +24,10 @@
     </div>
 
     <ul class="nav">
-        <li><a href="{% url 'mgw_api:home' %}" class="active">Home</a></li>
-        <li><a href="{% url 'mgw_api:upload_fasta' %}" class="active">Upload Fasta</a></li>
-        <li><a href="{% url 'mgw_api:list_signature' %}" class="active">List Signatures</a></li>
+        <li><a href="{% url 'mgw_api:upload_fasta' %}" class="active">Uploads & Help</a></li>
+        <li><a href="{% url 'mgw_api:list_signature' %}" class="active">Genomes & Search</a></li>
+        <li><a href="{% url 'mgw_api:list_result' %}" class="active">Results & Watches</a></li>
         <li><a href="{% url 'mgw_api:settings' %}" class="active">Settings</a></li>
-        <li><a href="{% url 'mgw_api:list_result' %}" class="active">List Results</a></li>
     </ul>
 </head>
 
