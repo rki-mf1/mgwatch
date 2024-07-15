@@ -1,56 +1,42 @@
 # mgw_api/management/commands/create_signature.py
 
 from django.core.management.base import BaseCommand
-from django.core.files.base import ContentFile
 from mgw_api.models import Fasta, Signature
+from django.conf import settings
 
-import sourmash
-import re
+import subprocess
+import os
 
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         pending_files = Fasta.objects.filter(processed=False)
-        kmers = [21,31,51]
         for fasta in pending_files:
             try:
                 # Read fasta and generate signatures
-                fasta_dict = self.read_fasta_file(fasta.file.path)
-                sig_data = self.calculate_signatures(fasta_dict, [21, 31, 51])
+                user_path = os.path.dirname(fasta.file.path)
+                signature_file = os.path.join(user_path, f"signature_{fasta.name}.sig.gz")
+                self.stdout.write(self.style.SUCCESS(signature_file))
+                result = self.calculate_signatures(fasta.file.path, signature_file)
+                if result.returncode != 0:
+                    raise Exception(f"Sketching failed with exit code {result.returncode}: {result.stderr}")
                 # Save signatures to django model
-                signature_file = f"signature_{fasta.name}.js"
-                signature_content = ContentFile(sig_data)
+                relative_path = os.path.relpath(signature_file, settings.MEDIA_ROOT)
+                self.stdout.write(self.style.SUCCESS(relative_path))
                 signature_model = Signature(user=fasta.user, fasta=fasta, name=fasta.name)
-                signature_model.file.save(signature_file, signature_content)
+                signature_model.file.name = relative_path
                 signature_model.size = signature_model.file.size
                 signature_model.save()
-                # Update the processed status
+                ## Update the processed status
                 self.stdout.write(self.style.SUCCESS(f"Successfully processed file '{fasta.name}'"))
                 fasta.delete()
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"Error processing file '{fasta.name}': {e}"))
+            fasta.processed = True
+            fasta.save()
 
-    def read_fasta_file(self, fasta_file):
-        fasta_dict, seq = dict(), ""
-        with open(fasta_file, "r") as infa:
-            for line in infa:
-                line = line.strip()
-                if re.match(r">", line):
-                    if seq: fasta_dict[name] = seq
-                    seq, name = "", line[1:]
-                else:
-                    seq += line
-            fasta_dict[name] = seq
-        return fasta_dict
-
-    def calculate_signatures(self, fasta_dict, kmers):
-        signature_list = list()
-        #mh = MinHash(n=0, ksize=K, is_protein=True, scaled=1)
-        #sourmash_args.SaveSignaturesToFile
-        for k in kmers:
-            mh = sourmash.MinHash(n=0, ksize=k, scaled=1000)
-            for name,seq in fasta_dict.items():
-                mh.add_sequence(seq,force=True)
-            sig = sourmash.SourmashSignature(mh, name=name)
-            signature_list.append(sig)
-        return sourmash.save_signatures(signature_list)
+    def calculate_signatures(self, fasta_file, sig_file):
+        pstring = "k=21,k=31,k=51,scaled=1000,noabund"
+        cmd = ["sourmash", "sketch", "dna", "--param-string", pstring, "--output", sig_file, fasta_file]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        return result # returncode: 0 = success, 2 = fail
