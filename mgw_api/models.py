@@ -43,9 +43,9 @@ class Fasta(models.Model):
     def __str__(self):
         return self.name
 
-    def delete(self):
+    def delete(self, *args, **kwargs):
         self.file.delete()
-        super().delete()
+        super().delete(*args, **kwargs)
 
 
 class Signature(models.Model):
@@ -60,9 +60,9 @@ class Signature(models.Model):
     def __str__(self):
         return self.name
 
-    def delete(self):
+    def delete(self, *args, **kwargs):
         self.file.delete()
-        super().delete()
+        super().delete(*args, **kwargs)
 
 
 class Settings(models.Model):
@@ -94,6 +94,6 @@ class Result(models.Model):
     def __str__(self):
         return self.name
 
-    def delete(self):
+    def delete(self, *args, **kwargs):
         self.file.delete()
-        super().delete()
+        super().delete(*args, **kwargs)

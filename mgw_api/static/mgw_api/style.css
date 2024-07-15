@@ -553,7 +553,8 @@ ul.nav {
     background-color: #f9f9f974;
     border: 1px solid #000000;
     border-radius: 5px;
-    margin-bottom: 10px;
+    margin-top: 5px;
+    margin-bottom: 5px;
 }
 .signup-section h2 {
     font-size: 24px;
@@ -592,4 +593,51 @@ ul.nav {
 }
 .signup-section a:hover {
     text-decoration: underline;
+}
+
+
+.submission-message {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.submission-message ul.messages {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+.submission-message ul.messages li {
+    font-size: 16px;
+    color: #000000;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+.submission-message ul.messages li.info {
+    background-color: #d9edf7;
+    border: 1px solid #bce8f1;
+    color: #31708f;
+}
+.submission-message ul.messages li.success {
+    background-color: #dff0d8;
+    border: 1px solid #d6e9c6;
+    color: #3c763d;
+}
+.submission-message ul.messages li.warning {
+    background-color: #fcf8e3;
+    border: 1px solid #faebcc;
+    color: #8a6d3b;
+}
+.submission-message ul.messages li.error {
+    background-color: #f2dede;
+    border: 1px solid #ebccd1;
+    color: #a94442;
 }

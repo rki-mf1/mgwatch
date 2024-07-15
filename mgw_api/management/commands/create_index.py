@@ -26,7 +26,7 @@ class Command(BaseCommand):
             if new_files:
                 self.create_list(new_files, sig_list)
                 results = [self.update_index(dir_paths, sig_list, database, k) for k in kmers]
-                td, rs = ("failed", ".err") if 255 in [r.returncode for r in results] else ("signatures", "")
+                td, rs = ("failed", ".err") if sum([int(r.returncode) for r in results]) else ("signatures", "")
                 self.move_files(new_files, dir_paths, td, rs)
                 self.update_manifest(new_files, sig_files, manifest)
                 self.stdout.write(self.style.SUCCESS(f"{log}Updated index and moved new signatures."))
