@@ -29,10 +29,10 @@ class Command(BaseCommand):
                 signature_model.save()
                 ## Update the processed status
                 self.stdout.write(self.style.SUCCESS(f"Successfully processed file '{fasta.name}'"))
-                fasta.delete()
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"Error processing file '{fasta.name}': {e}"))
             fasta.processed = True
+            fasta.file.delete()
             fasta.save()
 
     def calculate_signatures(self, fasta_file, sig_file):

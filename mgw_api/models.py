@@ -31,7 +31,7 @@ def user_directory_path(instance, filename):
 
 class Fasta(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, blank=True, null=True)
     file = models.FileField(upload_to=user_directory_path, 
                             validators=[
                                 FileExtensionValidator(["fa", "fasta", "fsa", "fna", "FASTA"]),
@@ -41,7 +41,7 @@ class Fasta(models.Model):
     processed = models.BooleanField(default=False)
 
     def __str__(self):
-        return self.name
+        return self.name or self.file.name
 
     def delete(self, *args, **kwargs):
         self.file.delete()
@@ -56,6 +56,7 @@ class Signature(models.Model):
     date = models.DateTimeField(auto_now_add=True)
     size = models.IntegerField(default=0)
     submitted = models.BooleanField(default=False)
+    settings_used = models.JSONField(null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -67,17 +68,23 @@ class Signature(models.Model):
 
 class Settings(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    kmer_21 = models.BooleanField(default=True, help_text="21 k-mer",)
-    kmer_31 = models.BooleanField(default=False, help_text="31 k-mer")
-    kmer_51 = models.BooleanField(default=False, help_text="51 k-mer")
-    SRA_database = models.BooleanField(default=True, help_text="SRA database")
-    
+    kmer = models.JSONField(default=list, help_text="List of k-mers")
+    database = models.JSONField(default=list, help_text="List of databases")
+    containment = models.FloatField(default=0.10, help_text="Containment value (between 0 and 1)")
+
+    def clean(self):
+        if not self.kmer:
+            raise ValidationError('At least one kmer must be selected.')
+        if not self.database:
+            raise ValidationError('At least one database must be selected.')
+        if not (0 <= self.containment <= 1):
+            raise ValidationError('Containment value must be between 0 and 1.')
+
     def to_dict(self):
         return {
-            "kmer_21": self.kmer_21,
-            "kmer_31": self.kmer_31,
-            "kmer_51": self.kmer_51,
-            "SRA_database": self.SRA_database,
+            "kmer": self.kmer,
+            "database": self.database,
+            "containment": self.containment,
         }
 
 
@@ -86,7 +93,7 @@ class Result(models.Model):
     name = models.CharField(max_length=100)
     signature = models.ForeignKey(Signature, on_delete=models.CASCADE)
     file = models.FileField(upload_to=user_directory_path)
-    settings_used = models.JSONField()
+    settings_used = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     size = models.IntegerField(default=0)
     is_watched = models.BooleanField(default=False)

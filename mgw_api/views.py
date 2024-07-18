@@ -68,16 +68,26 @@ def upload_fasta(request):
         fasta_form = FastaForm(request.POST, request.FILES)
         if fasta_form.is_valid():
             try:
-                uploaded_file = fasta_form.save(commit=False)
-                uploaded_file.user = request.user
-                uploaded_file.size = request.FILES["file"].size
-                uploaded_file.processed = False
-                uploaded_file.save()
-                manage_py_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'manage.py')
-                subprocess.Popen([sys.executable, manage_py_path, "create_signature"])
-                messages.success(request, "File submission successful! Processing will happen in the background.")
+                uploaded_file = request.FILES["file"]
+                filename = uploaded_file.name
+                name = fasta_form.cleaned_data.get("name")
+                if not name:
+                    name = os.path.splitext(filename)[0]
+                if Fasta.objects.filter(user=request.user, name=name).exists():
+                    messages.error(request, "A file with this name already exists. Please choose a different name or file.")
+                else:
+                    uploaded_file_instance = fasta_form.save(commit=False)
+                    uploaded_file_instance.user = request.user
+                    uploaded_file_instance.name = name
+                    uploaded_file_instance.size = uploaded_file.size
+                    uploaded_file_instance.processed = False
+                    uploaded_file_instance.save()
+                    manage_py_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'manage.py')
+                    subprocess.Popen([sys.executable, manage_py_path, "create_signature"])
+                    messages.success(request, "File submission successful! Processing will happen in the background.")
+                    return redirect('mgw_api:upload_fasta')
             except Exception as e:
-                messages.error(request, f"Error file submission failed! ... {e}")
+                messages.error(request, f"Error: file submission failed! ... {e}")
         else:
             for field, errors in fasta_form.errors.items():
                 for error in errors:
@@ -99,8 +109,10 @@ def list_signature(request):
 @login_required
 def delete_signature(request, pk):
     signature = get_object_or_404(Signature, pk=pk, user=request.user)
+    fasta = get_object_or_404(Fasta, pk=signature.fasta.pk, user=request.user)
     if request.method == "POST":
         signature.delete()
+        fasta.delete()
         return redirect("mgw_api:list_signature")
     return render(request, 'mgw_api/confirm_delete_signature.html', {'signature': signature})
 
@@ -110,10 +122,12 @@ def process_signature(request, pk):
     if request.method == "POST":
         try:
             signature = get_object_or_404(Signature, pk=pk, user=request.user)
+            current_settings = Settings.objects.get(user=request.user)
+            signature.settings_used = current_settings.to_dict()
             signature.submitted = True
             signature.save()
             manage_py_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'manage.py')
-            subprocess.Popen([sys.executable, manage_py_path, "sourmash_search"])
+            subprocess.Popen([sys.executable, manage_py_path, "create_search"])
             messages.success(request, "Signature submission successful! Processing will happen in the background.")
         except Exception as e:
             messages.error(request, f"Error signature submission failed! ... {e}")
@@ -127,9 +141,17 @@ def settings(request):
         settings_form = SettingsForm(request.POST, instance=sourmash_settings)
         if settings_form.is_valid():
             settings_form.save()
+            messages.success(request, 'Settings have been successfully saved.')
             return redirect("mgw_api:settings")
+        else:
+            messages.error(request, 'Please correct the errors below.')
     else:
-        settings_form = SettingsForm(instance=sourmash_settings)
+        initial_data = {
+            'kmer': sourmash_settings.kmer if sourmash_settings.kmer else [21],
+            'database': sourmash_settings.database if sourmash_settings.database else ["SRA"],
+            'containment': sourmash_settings.containment if sourmash_settings.containment is not None else 0.10,
+            }
+        settings_form = SettingsForm(instance=sourmash_settings, initial=initial_data)
     return render(request, "mgw_api/settings.html", {"settings_form": settings_form})
 
 
@@ -158,153 +180,3 @@ def delete_result(request, pk):
         return redirect("mgw_api:list_result")
     return render(request, 'mgw_api/confirm_delete_result.html', {'result': result})
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-################################################################
-## funcitons
-
-
-
-#class DetailView(generic.DetailView):
-#    model = Question
-#    template_name = "polls/detail.html"
-
-def detail(request, question_id):
-    question = get_object_or_404(Question, pk=question_id)
-    return render(request, "polls/detail.html", {"question": question})
-
-def handle_uploaded_file(f):
-    with open("some/file/name.txt", "wb+") as destination:
-        for chunk in f.chunks():
-            destination.write(chunk)
-
-def upload_file(request):
-    if request.method == "POST":
-        form = UploadFileForm(request.POST, request.FILES)
-        if form.is_valid():
-            handle_uploaded_file(request.FILES["file"])
-            return HttpResponseRedirect("/success/url/")
-    else:
-        form = UploadFileForm()
-    return render(request, "upload.html", {"form": form})
-
-
-#class HomeView(generic.ListView):
-#
-#    template_name = "polls/index.html"
-#    context_object_name = "latest_question_list"
-#
-#    def get_queryset(self):
-#        """
-#        Return the last five published questions (not including those set to be
-#        published in the future).
-#        """
-#        return Question.objects.filter(pub_date__lte=timezone.now()).order_by("-pub_date")[:5]
-#
-
-
-
-
-
-#class DetailView(generic.DetailView):
-#    model = Question
-#    template_name = "polls/detail.html"
-#
-#def detail(request, question_id):
-#    question = get_object_or_404(Question, pk=question_id)
-#    return render(request, "polls/detail.html", {"question": question})
-#
-#
-#
-#import json
-#import pandas as pd
-#import io
-#import gzip
-#import string
-#import urllib3
-#from django.http import JsonResponse
-#from .mongoquery import getmongo, getacc
-#from django.conf import settings
-#
-#def home(request):
-#    if request.method == 'POST':
-#        form_data = json.loads(request.body.decode('utf-8'))
-#        signatures = form_data['signatures']
-#        mastiff_df = getacc(signatures, settings.CONFIG_DATA)
-#        acc_t = tuple(mastiff_df['SRA_accession'].tolist())
-#
-#        meta_list = ('bioproject', 'assay_type', 'collection_date_sam', 'geo_loc_name_country_calc', 'organism', 'lat_lon')
-#
-#        result_list = getmongo(acc_t, meta_list, settings.CONFIG_DATA)
-#        print(f"Metadata for {len(result_list)} acc returned.")
-#        mastiff_dict = mastiff_df.to_dict('records')
-#
-#        for r in result_list:
-#            for m in mastiff_dict:
-#                if r['acc'] == m['SRA_accession']:
-#                    r['containment'] = round(m['containment'], 2)
-#                    r['cANI'] = round(m['cANI'], 2)
-#                    break
-#
-#        return JsonResponse(result_list, safe=False)
-#    return render(request, 'branchwater/index.html')
-#
-#def advanced(request):
-#    if request.method == 'POST':
-#        form_data = json.loads(request.body.decode('utf-8'))
-#        signatures = form_data['signatures']
-#        mastiff_df = getacc(signatures)
-#        acc_t = tuple(mastiff_df['SRA_accession'].tolist())
-#
-#        meta_dic = form_data['metadata']
-#        meta_list = tuple([key for key, value in meta_dic.items() if value])
-#
-#        result_list = getmongo(acc_t, meta_list, settings.CONFIG_DATA)
-#        print(f"Metadata for {len(result_list)} acc returned.")
-#        mastiff_dict = mastiff_df.to_dict('records')
-#
-#        for r in result_list:
-#            for m in mastiff_dict:
-#                if r['acc'] == m['SRA_accession']:
-#                    r['containment'] = round(m['containment'], 2)
-#                    r['cANI'] = round(m['cANI'], 2)
-#                    break
-#
-#        return JsonResponse(result_list, safe=False)
-#    return render(request, 'branchwater/advanced.html')
-#
-#def about(request):
-#    return render(request, 'branchwater/about.html')
-#
-#def contact(request):
-#    return render(request, 'branchwater/contact.html')
-#
-#def examples(request):
-#    return render(request, 'branchwater//examples.html')

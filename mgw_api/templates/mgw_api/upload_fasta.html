@@ -40,6 +40,14 @@
       <li><strong>Settings:</strong> Set up search settings.</li>
     </ol>
     <p>If you have any questions or require further assistance, please feel free to contact our development team. Happy searching!</p>
-  </div>
+</div>
+
+
+<script>
+    document.getElementById('upload-form').addEventListener('submit', function(event) {
+        const submissionMessageDiv = document.querySelector('.submission-message');
+        submissionMessageDiv.innerHTML = '';
+    });
+</script>
 
 {% endblock %}

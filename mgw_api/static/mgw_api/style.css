@@ -380,12 +380,30 @@ ul.nav {
 .settings-section form {
     width: 100%;
 }
-.settings-section form div {
-    margin-bottom: 10px;
+.settings-section .form-group {
+    margin-bottom: 20px;
+}
+.settings-section .form-group label {
+    font-weight: bold;
+    display: block;
+    margin-bottom: 5px;
+}
+.settings-section .form-group .options * {
+    font-weight: normal;
+    margin-left: 5px;
+}
+.settings-section .form-group .options input[type="number"] {
+    margin-left: 20px;
+}
+.settings-section small {
+    display: block;
+    font-size: 12px;
+    color: #555;
+    margin-top: 5px;
+    margin-bottom: 20px;
 }
 .settings-section input[type="submit"] {
     background-color: #000000;
-    text-shadow: none;
     color: white;
     border: none;
     padding: 10px 20px;
