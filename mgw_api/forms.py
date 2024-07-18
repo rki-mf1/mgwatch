@@ -38,12 +38,21 @@ class LoginForm(forms.Form):
 
 
 class SettingsForm(forms.ModelForm):
+    kmer = forms.MultipleChoiceField(
+        choices=[(21, "21 k-mer"), (31, "31 k-mer"), (51, "51 k-mer")],
+        widget=forms.CheckboxSelectMultiple,
+        initial=[21]
+    )
+    database = forms.MultipleChoiceField(
+        choices=[("SRA", "SRA database"), ("OTHER", "Other database")],
+        widget=forms.CheckboxSelectMultiple,
+        initial=["SRA"]
+    )
+    containment = forms.FloatField(
+        widget=forms.NumberInput(attrs={"min": 0, "max": 1, "step": 0.01}),
+        initial=0.10
+    )
+
     class Meta:
         model = Settings
-        fields = ("kmer_21", "kmer_31", "kmer_51", "SRA_database")
-        widgets = {
-            "kmer_21":forms.CheckboxInput(attrs={"id": "checkbox"}),
-            "kmer_21":forms.CheckboxInput(attrs={"id": "checkbox"}),
-            "kmer_31":forms.CheckboxInput(attrs={"id": "checkbox"}),
-            "SRA_database":forms.CheckboxInput(attrs={"id": "checkbox"}),
-        }
+        fields = ("kmer", "database", "containment")

@@ -12,14 +12,26 @@ done
 
 ################################################################
 ## main
+MIGRATE=${1:-false}
+
 function main() {
 
-    ################################################################
-    echo "# Running manual index update."
     environment="mgw"
-    address="localhost:8080"
+    server=""
+    ################################################################
+    if [[ "$MIGRATE" == "m" ]]; then
+        echo "# Do Migrations."
+        command="makemigrations"
+        mgw_server environment command server
+        command="migrate"
+        mgw_server environment command server
+    fi
+    
+    ################################################################
+    echo "# Start MGW server."
     command="runserver"
-    mgw_server environment command address
+    server="localhost:8080"
+    mgw_server environment command server
 }
 
 

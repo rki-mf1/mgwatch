@@ -30,7 +30,7 @@
                 </tr>
             {% empty %}
                 <tr>
-                  <td colspan="3">No signature files found.</td>
+                  <td colspan="5">No signature files found.</td>
                 </tr>
             {% endfor %}
         </tbody>
@@ -48,6 +48,13 @@
         </ul>
     {% endif %}
 </div>
+
+<script>
+    document.getElementById('upload-form').addEventListener('submit', function(event) {
+        const submissionMessageDiv = document.querySelector('.submission-message');
+        submissionMessageDiv.innerHTML = '';
+    });
+</script>
 
 {% endblock %}
 
