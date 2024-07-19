@@ -11,12 +11,16 @@ from django.utils import timezone
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from .forms import SignupForm, LoginForm
+from django.core.paginator import Paginator
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+import json
 #from .forms import UploadFileForm
 
 #from .models import Choice, Question
 
-from .forms import FastaForm, SettingsForm
-from .models import Fasta, Signature, Settings, Result
+from .forms import FastaForm, SettingsForm, WatchForm, ResultFilterForm
+from .models import Fasta, Signature, Settings, Result, FilterSetting
 
 import os
 import sys
@@ -158,25 +162,90 @@ def settings(request):
 @login_required
 def list_result(request):
     result_files = Result.objects.filter(user=request.user)
-    return render(request, 'mgw_api/list_result.html', {'result_files':result_files})
+    watch_forms = {result.pk:WatchForm(instance=result) for result in result_files}
+    return render(request, 'mgw_api/list_result.html', {'result_files':result_files, 'watch_forms':watch_forms})
+
+
+@login_required
+def toggle_watch(request, pk):
+    result = get_object_or_404(Result, pk=pk, user=request.user)
+    if request.method == "POST":
+        form = WatchForm(request.POST, instance=result)
+        if form.is_valid():
+            form.save()
+            return JsonResponse({'status': 'success'})
+    return JsonResponse({'status': 'fail'}, status=400)
 
 
 @login_required
 def result_table(request, pk):
     result = get_object_or_404(Result, pk=pk, user=request.user)
     table_data = []
-    with open(result.csv_file.path, newline="") as csvfile:
+    with open(result.file.path, newline="") as csvfile:
         reader = csv.reader(csvfile)
         for row in reader:
             table_data.append(row)
-    return render(request, 'mgw_api/result_table.html', {'result': result, 'table_data': table_data})
+    
+    headers = table_data[0]
+    rows = table_data[1:]
+
+    # Identify numeric columns
+    numeric_columns = set()
+    for row in rows:
+        for index, value in enumerate(row):
+            try:
+                float(value)
+                numeric_columns.add(index)
+            except ValueError:
+                pass
+
+    # Load or create filter settings
+    filter_settings, created = FilterSetting.objects.get_or_create(user=request.user, result=result)
+    form = ResultFilterForm(headers=headers, numeric_columns=numeric_columns, data=request.GET or filter_settings.filters)
+
+    if form.is_valid():
+        # Save filter settings
+        filter_settings.filters = form.cleaned_data
+        filter_settings.sort_column = form.cleaned_data.get('sort_column')
+        filter_settings.sort_order = form.cleaned_data.get('sort_order', 'asc')
+        filter_settings.save()
+
+        # Debugging: Check sort_column and sort_order values
+        sort_column = form.cleaned_data.get('sort_column')
+        sort_order = form.cleaned_data.get('sort_order', 'asc')
+        print(f"sort_column: {sort_column}, sort_order: {sort_order}")
+
+        # Filter and sort rows based on the form inputs
+        for index, header in enumerate(headers):
+            filter_value = form.cleaned_data.get(f'filter_{index}')
+            if filter_value:
+                rows = [row for row in rows if filter_value.lower() in row[index].lower()]
+            if index in numeric_columns:
+                min_value = form.cleaned_data.get(f'filter_min_{index}')
+                max_value = form.cleaned_data.get(f'filter_max_{index}')
+                if min_value is not None:
+                    rows = [row for row in rows if float(row[index]) >= min_value]
+                if max_value is not None:
+                    rows = [row for row in rows if float(row[index]) <= max_value]
+
+        if sort_column is not None:
+            rows.sort(key=lambda x: x[sort_column], reverse=(sort_order == 'desc'))
+
+    watch_form = WatchForm(instance=result)
+    return render(request, 'mgw_api/result_table.html', {
+        'result': result,
+        'headers': headers,
+        'rows': rows,
+        'form': form,
+        'watch_form': watch_form,
+    })
 
 
 @login_required
 def delete_result(request, pk):
     result = get_object_or_404(Result, pk=pk, user=request.user)
+    next_url = request.GET.get('next', 'mgw_api:list_result')
     if request.method == "POST":
         result.delete()
         return redirect("mgw_api:list_result")
-    return render(request, 'mgw_api/confirm_delete_result.html', {'result': result})
-
+    return render(request, 'mgw_api/confirm_delete_result.html', {'result': result, 'next_url': next_url})

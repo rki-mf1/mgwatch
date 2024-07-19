@@ -4,7 +4,7 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 
-from mgw_api.models import Fasta, Settings
+from mgw_api.models import Fasta, Settings, Result
 
 
 class FastaForm(forms.ModelForm):
@@ -55,4 +55,25 @@ class SettingsForm(forms.ModelForm):
 
     class Meta:
         model = Settings
-        fields = ("kmer", "database", "containment")
+        fields = ["kmer", "database", "containment"]
+
+
+class WatchForm(forms.ModelForm):
+    class Meta:
+        model = Result
+        fields = ['is_watched']
+
+
+class ResultFilterForm(forms.Form):
+    sort_column = forms.IntegerField(required=False, widget=forms.HiddenInput())
+    sort_order = forms.ChoiceField(choices=[('asc', 'Ascending'), ('desc', 'Descending')], required=False, widget=forms.HiddenInput())
+
+    def __init__(self, headers, numeric_columns, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for index, header in enumerate(headers):
+            if index in numeric_columns:
+                self.fields[f'filter_min_{index}'] = forms.FloatField(required=False, label=f'{header} Min')
+                self.fields[f'filter_max_{index}'] = forms.FloatField(required=False, label=f'{header} Max')
+            else:
+                self.fields[f'filter_{index}'] = forms.CharField(required=False, label=f'{header} Filter')
+
