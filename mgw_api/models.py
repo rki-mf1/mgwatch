@@ -93,9 +93,10 @@ class Result(models.Model):
     name = models.CharField(max_length=100)
     signature = models.ForeignKey(Signature, on_delete=models.CASCADE)
     file = models.FileField(upload_to=user_directory_path)
-    settings_used = models.JSONField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
     size = models.IntegerField(default=0)
+    settings_used = models.JSONField(null=True, blank=True)
+    created_time = models.DateTimeField(auto_now_add=True)
+    created_date = models.DateField(auto_now_add=True)
     is_watched = models.BooleanField(default=False)
 
     def __str__(self):
@@ -104,3 +105,23 @@ class Result(models.Model):
     def delete(self, *args, **kwargs):
         self.file.delete()
         super().delete(*args, **kwargs)
+
+
+class DateField(models.DateTimeField):
+    def pre_save(self, model_instance, add):
+        value = super().pre_save(model_instance, add)
+        if value:
+            value = value.date()
+            return datetime.combine(value, datetime.min.time())
+        return value
+
+
+class FilterSetting(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    result = models.ForeignKey(Result, on_delete=models.CASCADE)
+    filters = models.JSONField(default=dict)
+    sort_column = models.IntegerField(null=True, blank=True)
+    sort_order = models.CharField(max_length=4, choices=[('asc', 'Ascending'), ('desc', 'Descending')], default='asc')
+
+    def __str__(self):
+        return f"{self.user.username}'s settings for {self.result.name}"

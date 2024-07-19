@@ -16,6 +16,7 @@ urlpatterns = [
     path("settings/", views.settings, name="settings"),
     path("results/", views.list_result, name="list_result"),
     path("results/<int:pk>/", views.result_table, name="result_table"),
+    path('results/<int:pk>/toggle_watch/', views.toggle_watch, name='toggle_watch'),
     path("delete_result/<int:pk>/", views.delete_result, name="delete_result"),
     #path("", views.HomeView.as_view(), name="index"),
     #path("advanced/", views.AdvancedView.as_view(), name="advanced"),
