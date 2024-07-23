@@ -119,9 +119,10 @@ class DateField(models.DateTimeField):
 class FilterSetting(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     result = models.ForeignKey(Result, on_delete=models.CASCADE)
-    filters = models.JSONField(default=dict)
+    filters = models.JSONField(default=dict)  # {column_index: filter_value}
+    range_filters = models.JSONField(default=dict)  # {column_index: [min_value, max_value]}
     sort_column = models.IntegerField(null=True, blank=True)
-    sort_order = models.CharField(max_length=4, choices=[('asc', 'Ascending'), ('desc', 'Descending')], default='asc')
+    sort_reverse = models.BooleanField(default=False)
 
     def __str__(self):
-        return f"{self.user.username}'s settings for {self.result.name}"
+        return f"{self.user.username} - {self.result.name} Filters"

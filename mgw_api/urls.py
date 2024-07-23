@@ -15,16 +15,9 @@ urlpatterns = [
     path("delete_signature/<int:pk>/", views.delete_signature, name="delete_signature"),
     path("settings/", views.settings, name="settings"),
     path("results/", views.list_result, name="list_result"),
-    path("results/<int:pk>/", views.result_table, name="result_table"),
-    path('results/<int:pk>/toggle_watch/', views.toggle_watch, name='toggle_watch'),
-    path("delete_result/<int:pk>/", views.delete_result, name="delete_result"),
-    #path("", views.HomeView.as_view(), name="index"),
-    #path("advanced/", views.AdvancedView.as_view(), name="advanced"),
-    #path("about/", views.AboutView.as_view(), name="about"),
-    #path("contact/", views.ContactView.as_view(), name="contact"),
-    #path("examples/", views.ExamplesView.as_view(), name="examples"),
-    #path("<int:pk>/", views.DetailView.as_view(), name="detail"),               # ex: /polls/5/
-    #path("<int:pk>/results/", views.ResultsView.as_view(), name="results"),     # ex: /polls/5/results/
-    # for specific URLS e.g. module/specifics change to: "specifics/<int:question_id>/"
-    #path("<int:question_id>/vote/", views.vote, name="vote"),                   # ex: /polls/5/vote/
+    path('result/<int:pk>/', views.result_table, name='result_table'),
+    path('result/<int:pk>/update_filters/', views.update_filters, name='update_filters'),
+    path('result/<int:pk>/update_sort/', views.update_sort, name='update_sort'),
+    path('toggle_watch/<int:pk>/', views.toggle_watch, name='toggle_watch'),
+    path('delete_result/<int:pk>/', views.delete_result, name='delete_result'),
 ]
