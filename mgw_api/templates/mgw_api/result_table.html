@@ -4,69 +4,140 @@
 
 {% block content %}
 
-<div class="result-table">
+{% load static %}
+
+{% load custom_filters %}
+
+<div class="result-navigation">
     <h2>{{ result.name }}</h2>
     <a href="{% url 'mgw_api:list_result' %}">Back to Results</a>
     <form id="watch-form" method="post" action="{% url 'mgw_api:toggle_watch' result.pk %}">
         {% csrf_token %}
-        <label>
-            <input type="checkbox" name="is_watched" {% if result.is_watched %}checked{% endif %} onchange="submitWatchForm()">
-            Watched
-        </label>
+        <label><input type="checkbox" name="is_watched" {% if result.is_watched %}checked{% endif %} onchange="submitWatchForm()">Watched</label>
     </form>
     <a href="{% url 'mgw_api:delete_result' result.pk %}?next={% url 'mgw_api:result_table' result.pk %}">Delete this Result</a>
-    
-    <form method="get" id="filter-form">
-        {{ form.as_p }}
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        {% for header in headers %}
-                            <th>
-                                <button type="submit" name="sort_column" value="{{ forloop.counter0 }}"
-                                    formaction="?sort_column={{ forloop.counter0 }}&sort_order={% if request.GET.sort_column == forloop.counter0|stringformat:'d' and request.GET.sort_order == 'asc' %}desc{% else %}asc{% endif %}">
-                                    {{ header }}
-                                    {% if request.GET.sort_column == forloop.counter0|stringformat:'d' %}
-                                        {% if request.GET.sort_order == 'asc' %}▲{% else %}▼{% endif %}
-                                    {% endif %}
-                                </button>
-                            </th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in rows %}
-                        <tr>
-                            {% for cell in row %}
-                                <td>{{ cell }}</td>
-                            {% endfor %}
-                        </tr>
+</div>
+
+<div class="result-table">
+    <table>
+        <thead>
+            <tr>
+                {% for header in headers %}
+                    <th onclick="sortTable({{ forloop.counter0 }})">
+                        {{ header }}
+                        {% if forloop.counter0 == sort_column %}
+                            {% if sort_reverse %}▼{% else %}▲{% endif %}
+                        {% endif %}
+                    </th>
+                {% endfor %}
+            </tr>
+            <tr>
+                {% for header in headers %}
+                    <th>
+                        {% if forloop.counter0|in_list:numeric_columns %}
+                            <input type="text" class="filter-input-min" placeholder="Min" data-column="{{ forloop.counter0 }}" value="{{ filter_form.instance.range_filters|get_min:forloop.counter0|default_if_none:'' }}">
+                            <input type="text" class="filter-input-max" placeholder="Max" data-column="{{ forloop.counter0 }}" value="{{ filter_form.instance.range_filters|get_max:forloop.counter0|default_if_none:'' }}">
+                        {% else %}
+                            <input type="text" class="filter-input" placeholder="Filter" data-column="{{ forloop.counter0 }}" value="{{ filter_form.instance.filters|get_item:forloop.counter0|default_if_none:'' }}" title="Supports regular expressions">
+                        {% endif %}
+                    </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody id="table-body">
+            {% for row in rows %}
+                <tr>
+                    {% for cell in row %}
+                        <td>{{ cell }}</td>
                     {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <button type="submit">Apply Filters</button>
-    </form>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 
 <script>
-function submitWatchForm() {
-    const form = document.getElementById('watch-form');
-    const formData = new FormData(form);
-
-    fetch(form.action, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': '{{ csrf_token }}',
-        },
-        body: formData,
-    }).then(response => {
-        if (!response.ok) {
-            alert('Failed to update the watch status.');
-        }
+    function submitWatchForm() {
+        const form = document.getElementById('watch-form');
+        const formData = new FormData(form);
+    
+        fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+            },
+            body: formData,
+        }).then(response => {
+            if (!response.ok) {
+                alert('Failed to update the watch status.');
+            }
+        });
+    }
+    
+    document.querySelectorAll('.filter-input, .filter-input-min, .filter-input-max').forEach(function(input) {
+        input.addEventListener('input', function() {
+            const column = this.getAttribute('data-column');
+            const min_input = document.querySelector(`.filter-input-min[data-column='${column}']`);
+            const max_input = document.querySelector(`.filter-input-max[data-column='${column}']`);
+    
+            const min_value = min_input ? min_input.value : null;
+            const max_value = max_input ? max_input.value : null;
+            const value = !min_input && !max_input ? this.value : null;
+    
+            fetch("{% url 'mgw_api:update_filters' result.pk %}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ column: column, min_value: min_value, max_value: max_value, value: value })
+            }).then(response => {
+                if (response.ok) {
+                    reloadTableBody();
+                } else {
+                    alert('Failed to update filter settings.');
+                }
+            });
+        });
     });
-}
+
+    function reloadTableBody() {
+        fetch("{% url 'mgw_api:result_table' result.pk %}", {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(response => response.json()).then(data => {
+            const tableBody = document.getElementById('table-body');
+            tableBody.innerHTML = '';
+            data.rows.forEach(row => {
+                const rowElement = document.createElement('tr');
+                row.forEach(cell => {
+                    const cellElement = document.createElement('td');
+                    cellElement.textContent = cell;
+                    rowElement.appendChild(cellElement);
+                });
+                tableBody.appendChild(rowElement);
+            });
+        });
+    }
+
+    function sortTable(column) {
+        fetch("{% url 'mgw_api:update_sort' result.pk %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ column: column })
+        }).then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Failed to update sort settings.');
+            }
+        });
+    }
 </script>
 
 {% endblock %}

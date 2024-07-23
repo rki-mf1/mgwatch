@@ -13,20 +13,22 @@ from django.contrib import messages
 from .forms import SignupForm, LoginForm
 from django.core.paginator import Paginator
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 import json
 #from .forms import UploadFileForm
 
 #from .models import Choice, Question
 
-from .forms import FastaForm, SettingsForm, WatchForm, ResultFilterForm
+from .forms import FastaForm, SettingsForm, WatchForm, FilterSettingForm
 from .models import Fasta, Signature, Settings, Result, FilterSetting
+from .functions import *
 
 import os
+import re
 import sys
 import time
 import subprocess
-import csv
 
 
 ################################################################
@@ -180,65 +182,85 @@ def toggle_watch(request, pk):
 @login_required
 def result_table(request, pk):
     result = get_object_or_404(Result, pk=pk, user=request.user)
-    table_data = []
-    with open(result.file.path, newline="") as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            table_data.append(row)
-    
-    headers = table_data[0]
-    rows = table_data[1:]
+    headers, rows = get_table_data(result)
+    numeric_columns = get_numeric_columns(rows)
+    filter_settings, created = FilterSetting.objects.get_or_create(result=result, user=request.user)
 
-    # Identify numeric columns
-    numeric_columns = set()
-    for row in rows:
-        for index, value in enumerate(row):
-            try:
-                float(value)
-                numeric_columns.add(index)
-            except ValueError:
-                pass
+    # Apply filters
+    for column, value in filter_settings.filters.items():
+        #rows = [row for row in rows if value.lower() in row[int(column)].lower()]
+        regex = re.compile(fr"{value}", re.IGNORECASE)
+        rows = [row for row in rows if regex.search(row[int(column)])]
 
-    # Load or create filter settings
-    filter_settings, created = FilterSetting.objects.get_or_create(user=request.user, result=result)
-    form = ResultFilterForm(headers=headers, numeric_columns=numeric_columns, data=request.GET or filter_settings.filters)
+    # Apply min/max filters
+    for column, range_values in filter_settings.range_filters.items():
+        min_val, max_val = range_values
+        if min_val == "": min_val = None
+        if max_val == "": max_val = None
+        rows = [row for row in rows if (min_val is None or float(row[int(column)]) >= float(min_val)) and (max_val is None or float(row[int(column)]) <= float(max_val))]
 
-    if form.is_valid():
-        # Save filter settings
-        filter_settings.filters = form.cleaned_data
-        filter_settings.sort_column = form.cleaned_data.get('sort_column')
-        filter_settings.sort_order = form.cleaned_data.get('sort_order', 'asc')
-        filter_settings.save()
-
-        # Debugging: Check sort_column and sort_order values
-        sort_column = form.cleaned_data.get('sort_column')
-        sort_order = form.cleaned_data.get('sort_order', 'asc')
-        print(f"sort_column: {sort_column}, sort_order: {sort_order}")
-
-        # Filter and sort rows based on the form inputs
-        for index, header in enumerate(headers):
-            filter_value = form.cleaned_data.get(f'filter_{index}')
-            if filter_value:
-                rows = [row for row in rows if filter_value.lower() in row[index].lower()]
-            if index in numeric_columns:
-                min_value = form.cleaned_data.get(f'filter_min_{index}')
-                max_value = form.cleaned_data.get(f'filter_max_{index}')
-                if min_value is not None:
-                    rows = [row for row in rows if float(row[index]) >= min_value]
-                if max_value is not None:
-                    rows = [row for row in rows if float(row[index]) <= max_value]
-
-        if sort_column is not None:
-            rows.sort(key=lambda x: x[sort_column], reverse=(sort_order == 'desc'))
+    # Apply sorting
+    sort_column = filter_settings.sort_column
+    sort_reverse = filter_settings.sort_reverse
+    if sort_column is not None:
+        rows = sorted(rows, key=lambda x: x[int(sort_column)], reverse=sort_reverse)
 
     watch_form = WatchForm(instance=result)
+    filter_form = FilterSettingForm(instance=filter_settings)
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return JsonResponse({
+            'rows': rows,
+        })
+    
     return render(request, 'mgw_api/result_table.html', {
         'result': result,
         'headers': headers,
         'rows': rows,
-        'form': form,
         'watch_form': watch_form,
+        'filter_form': filter_form,
+        'numeric_columns': numeric_columns,
+        'sort_column': sort_column,
+        'sort_reverse': sort_reverse,
     })
+
+
+@login_required
+@require_POST
+def update_filters(request, pk):
+    result = get_object_or_404(Result, pk=pk, user=request.user)
+    filter_settings, created = FilterSetting.objects.get_or_create(result=result, user=request.user)
+    data = json.loads(request.body)
+    column = data.get('column')
+    min_value = data.get('min_value')
+    max_value = data.get('max_value')
+    value = data.get('value')
+    if min_value is not None or max_value is not None:
+        range_filters = filter_settings.range_filters
+        range_filters[column] = [min_value, max_value]
+        filter_settings.range_filters = range_filters
+    elif value is not None:
+        filters = filter_settings.filters
+        filters[column] = value
+        filter_settings.filters = filters
+    filter_settings.save()
+    return JsonResponse({'status': 'success'})
+
+
+@login_required
+@require_POST
+def update_sort(request, pk):
+    result = get_object_or_404(Result, pk=pk, user=request.user)
+    filter_settings, created = FilterSetting.objects.get_or_create(result=result, user=request.user)
+    data = json.loads(request.body)
+    column = data.get('column')
+    if filter_settings.sort_column == int(column):
+        filter_settings.sort_reverse = not filter_settings.sort_reverse
+    else:
+        filter_settings.sort_column = int(column)
+        filter_settings.sort_reverse = False
+    filter_settings.save()
+    return JsonResponse({'status': 'success'})
 
 
 @login_required

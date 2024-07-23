@@ -4,7 +4,7 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 
-from mgw_api.models import Fasta, Settings, Result
+from mgw_api.models import Fasta, Settings, Result, FilterSetting
 
 
 class FastaForm(forms.ModelForm):
@@ -64,16 +64,19 @@ class WatchForm(forms.ModelForm):
         fields = ['is_watched']
 
 
-class ResultFilterForm(forms.Form):
-    sort_column = forms.IntegerField(required=False, widget=forms.HiddenInput())
-    sort_order = forms.ChoiceField(choices=[('asc', 'Ascending'), ('desc', 'Descending')], required=False, widget=forms.HiddenInput())
+class FilterSettingForm(forms.ModelForm):
+    class Meta:
+        model = FilterSetting
+        fields = ['filters', 'range_filters', 'sort_column', 'sort_reverse']
 
-    def __init__(self, headers, numeric_columns, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for index, header in enumerate(headers):
-            if index in numeric_columns:
-                self.fields[f'filter_min_{index}'] = forms.FloatField(required=False, label=f'{header} Min')
-                self.fields[f'filter_max_{index}'] = forms.FloatField(required=False, label=f'{header} Max')
-            else:
-                self.fields[f'filter_{index}'] = forms.CharField(required=False, label=f'{header} Filter')
-
+        for column, value in self.instance.filters.items():
+            self.fields[f'filter_{column}'] = forms.CharField(initial=value, required=False, label=f'{column} Filter')
+        for column, value in self.instance.filters.items():
+            self.fields[f'filter_{column}'] = forms.CharField(initial=value, required=False, label=f'{column} Filter (supports regex)')
+        
+        for column, range_values in self.instance.range_filters.items():
+            min_val, max_val = range_values
+            self.fields[f'range_min_{column}'] = forms.CharField(initial=min_val, required=False, label=f'{column} Min')
+            self.fields[f'range_max_{column}'] = forms.CharField(initial=max_val, required=False, label=f'{column} Max')
