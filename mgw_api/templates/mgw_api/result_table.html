@@ -1,8 +1,8 @@
 {% extends "mgw_api/base.html" %}
 
-{% block title %}Result Files!{% endblock %}
-
 {% block content %}
+
+{% include "mgw_api/settings.html" %}
 
 {% load static %}
 
@@ -10,7 +10,7 @@
 
 <div class="result-navigation">
     <h2>{{ result.name }}</h2>
-    <a href="{% url 'mgw_api:list_result' %}">Back to Results</a>
+    <a href="{% url 'mgw_api:list_result' %}">Back to Watches</a>
     <form id="watch-form" method="post" action="{% url 'mgw_api:toggle_watch' result.pk %}">
         {% csrf_token %}
         <label><input type="checkbox" name="is_watched" {% if result.is_watched %}checked{% endif %} onchange="submitWatchForm()">Watched</label>
@@ -19,41 +19,43 @@
 </div>
 
 <div class="result-table">
-    <table>
-        <thead>
-            <tr>
-                {% for header in headers %}
-                    <th onclick="sortTable({{ forloop.counter0 }})">
-                        {{ header }}
-                        {% if forloop.counter0 == sort_column %}
-                            {% if sort_reverse %}▼{% else %}▲{% endif %}
-                        {% endif %}
-                    </th>
-                {% endfor %}
-            </tr>
-            <tr>
-                {% for header in headers %}
-                    <th>
-                        {% if forloop.counter0|in_list:numeric_columns %}
-                            <input type="text" class="filter-input-min" placeholder="Min" data-column="{{ forloop.counter0 }}" value="{{ filter_form.instance.range_filters|get_min:forloop.counter0|default_if_none:'' }}">
-                            <input type="text" class="filter-input-max" placeholder="Max" data-column="{{ forloop.counter0 }}" value="{{ filter_form.instance.range_filters|get_max:forloop.counter0|default_if_none:'' }}">
-                        {% else %}
-                            <input type="text" class="filter-input" placeholder="Filter" data-column="{{ forloop.counter0 }}" value="{{ filter_form.instance.filters|get_item:forloop.counter0|default_if_none:'' }}" title="Supports regular expressions">
-                        {% endif %}
-                    </th>
-                {% endfor %}
-            </tr>
-        </thead>
-        <tbody id="table-body">
-            {% for row in rows %}
+    <div class="table-wrapper">
+        <table>
+            <thead id="table-head">
                 <tr>
-                    {% for cell in row %}
-                        <td>{{ cell }}</td>
+                    {% for header in headers %}
+                        <th onclick="sortTable({{ forloop.counter0 }})">
+                            {{ header }}
+                            {% if forloop.counter0 == sort_column %}
+                                {% if sort_reverse %}▼{% else %}▲{% endif %}
+                            {% else %}□{% endif %}
+                        </th>
                     {% endfor %}
                 </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                <tr>
+                    {% for header in headers %}
+                        <th>
+                            {% if forloop.counter0|in_list:numeric_columns %}
+                                <input type="text" class="filter-input-min" placeholder="Min" data-column="{{ forloop.counter0 }}" value="{{ filter_form.instance.range_filters|get_min:forloop.counter0|default_if_none:'' }}" title="Supports regular expressions if not a number">
+                                <input type="text" class="filter-input-max" placeholder="Max" data-column="{{ forloop.counter0 }}" value="{{ filter_form.instance.range_filters|get_max:forloop.counter0|default_if_none:'' }}" title="Supports regular expressions if not a number">
+                            {% else %}
+                                <input type="text" class="filter-input" placeholder="Filter" data-column="{{ forloop.counter0 }}" value="{{ filter_form.instance.filters|get_item:forloop.counter0|default_if_none:'' }}" title="Supports regular expressions">
+                            {% endif %}
+                        </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody id="table-body">
+                {% for row in rows %}
+                    <tr>
+                        {% for cell in row %}
+                            <td>{{ cell }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <script>
@@ -101,6 +103,23 @@
         });
     });
 
+    function sortTable(column) {
+        fetch("{% url 'mgw_api:update_sort' result.pk %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ column: column })
+        }).then(response => {
+            if (response.ok) {
+                reloadTableBody();
+            } else {
+                alert('Failed to update sort settings.');
+            }
+        });
+    }
+
     function reloadTableBody() {
         fetch("{% url 'mgw_api:result_table' result.pk %}", {
             method: 'GET',
@@ -119,23 +138,6 @@
                 });
                 tableBody.appendChild(rowElement);
             });
-        });
-    }
-
-    function sortTable(column) {
-        fetch("{% url 'mgw_api:update_sort' result.pk %}", {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ column: column })
-        }).then(response => {
-            if (response.ok) {
-                location.reload();
-            } else {
-                alert('Failed to update sort settings.');
-            }
         });
     }
 </script>

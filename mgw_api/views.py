@@ -70,40 +70,55 @@ def user_logout(request):
 
 @login_required
 def upload_fasta(request):
+    ## handle settings
+    sourmash_settings, created = Settings.objects.get_or_create(user=request.user)
+    settings_form = SettingsForm(instance=sourmash_settings)
     if request.method == "POST":
-        fasta_form = FastaForm(request.POST, request.FILES)
-        if fasta_form.is_valid():
-            try:
-                uploaded_file = request.FILES["file"]
-                filename = uploaded_file.name
-                name = fasta_form.cleaned_data.get("name")
-                if not name:
-                    name = os.path.splitext(filename)[0]
-                if Fasta.objects.filter(user=request.user, name=name).exists():
-                    messages.error(request, "A file with this name already exists. Please choose a different name or file.")
-                else:
-                    uploaded_file_instance = fasta_form.save(commit=False)
-                    uploaded_file_instance.user = request.user
-                    uploaded_file_instance.name = name
-                    uploaded_file_instance.size = uploaded_file.size
-                    uploaded_file_instance.processed = False
-                    uploaded_file_instance.save()
-                    manage_py_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'manage.py')
-                    subprocess.Popen([sys.executable, manage_py_path, "create_signature"])
-                    messages.success(request, "File submission successful! Processing will happen in the background.")
-                    return redirect('mgw_api:upload_fasta')
-            except Exception as e:
-                messages.error(request, f"Error: file submission failed! ... {e}")
+        if 'kmer' in request.POST or 'database' in request.POST or 'containment' in request.POST:
+            settings_form = SettingsForm(request.POST, instance=sourmash_settings)
+            if settings_form.is_valid():
+                settings_form.save()
+                messages.success(request, 'Settings have been successfully saved.')
+                return redirect("mgw_api:upload_fasta")
+            else:
+                messages.error(request, 'Please correct the errors below.')
         else:
-            for field, errors in fasta_form.errors.items():
-                for error in errors:
-                    if "extension" in error:
-                        messages.error(request, "Invalid file extension!")
-                    elif "start with '>'" in error:
-                        messages.error(request, "Invalid FASTA format!")
+            ## handle upload fasta
+            fasta_form = FastaForm(request.POST, request.FILES)
+            if fasta_form.is_valid():
+                try:
+                    uploaded_file = request.FILES["file"]
+                    filename = uploaded_file.name
+                    name = fasta_form.cleaned_data.get("name")
+                    if not name:
+                        name = os.path.splitext(filename)[0]
+                    if Fasta.objects.filter(user=request.user, name=name).exists():
+                        messages.error(request, "A file with this name already exists. Please choose a different name or file.")
                     else:
-                        messages.error(request, f"{error}")
-    return render(request, "mgw_api/upload_fasta.html", {"fasta_form":FastaForm()})
+                        uploaded_file_instance = fasta_form.save(commit=False)
+                        uploaded_file_instance.user = request.user
+                        uploaded_file_instance.name = name
+                        uploaded_file_instance.size = uploaded_file.size
+                        uploaded_file_instance.processed = False
+                        uploaded_file_instance.save()
+                        manage_py_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'manage.py')
+                        subprocess.Popen([sys.executable, manage_py_path, "create_signature"])
+                        messages.success(request, "File submission successful! Processing will happen in the background.")
+                        return redirect('mgw_api:upload_fasta')
+                except Exception as e:
+                    messages.error(request, f"Error: file submission failed! ... {e}")
+            else:
+                for field, errors in fasta_form.errors.items():
+                    for error in errors:
+                        if "extension" in error:
+                            messages.error(request, "Invalid file extension!")
+                        elif "start with '>'" in error:
+                            messages.error(request, "Invalid FASTA format!")
+                        else:
+                            messages.error(request, f"{error}")
+    else:
+        fasta_form = FastaForm()
+    return render(request, "mgw_api/upload_fasta.html", {"fasta_form": fasta_form, "settings_form": settings_form})
 
 
 @login_required
@@ -163,9 +178,22 @@ def settings(request):
 
 @login_required
 def list_result(request):
+    ## handle settings
+    sourmash_settings, created = Settings.objects.get_or_create(user=request.user)
+    settings_form = SettingsForm(instance=sourmash_settings)
+    if request.method == "POST":
+        if 'kmer' in request.POST or 'database' in request.POST or 'containment' in request.POST:
+            settings_form = SettingsForm(request.POST, instance=sourmash_settings)
+            if settings_form.is_valid():
+                settings_form.save()
+                messages.success(request, 'Settings have been successfully saved.')
+                return redirect("mgw_api:list_result")
+            else:
+                messages.error(request, 'Please correct the errors below.')
+    ## handle list results
     result_files = Result.objects.filter(user=request.user)
     watch_forms = {result.pk:WatchForm(instance=result) for result in result_files}
-    return render(request, 'mgw_api/list_result.html', {'result_files':result_files, 'watch_forms':watch_forms})
+    return render(request, 'mgw_api/list_result.html', {'result_files': result_files, 'watch_forms': watch_forms, 'settings_form': settings_form})
 
 
 @login_required
@@ -181,23 +209,53 @@ def toggle_watch(request, pk):
 
 @login_required
 def result_table(request, pk):
+    ## handle settings
+    sourmash_settings, created = Settings.objects.get_or_create(user=request.user)
+    settings_form = SettingsForm(instance=sourmash_settings)
+    
+    if request.method == "POST":
+        if 'kmer' in request.POST or 'database' in request.POST or 'containment' in request.POST:
+            settings_form = SettingsForm(request.POST, instance=sourmash_settings)
+            if settings_form.is_valid():
+                settings_form.save()
+                messages.success(request, 'Settings have been successfully saved.')
+                return redirect(request.path_info)
+            else:
+                messages.error(request, 'Please correct the errors below.')
+    ## handle result table
     result = get_object_or_404(Result, pk=pk, user=request.user)
     headers, rows = get_table_data(result)
+    headers = [h.replace("_", " ") for h in headers]
     numeric_columns = get_numeric_columns(rows)
     filter_settings, created = FilterSetting.objects.get_or_create(result=result, user=request.user)
+    def apply_regex(r, c, v):
+        try:
+            regex = re.compile(fr"{v}", re.IGNORECASE)
+            return [row for row in r if regex.search(row[int(c)])]
+        except:
+            return r
 
-    # Apply filters
+    def is_float(val):
+        try:
+            float(val)
+            return True
+        except (ValueError, TypeError):
+            return False
+        
+    def apply_compare(m, r, c, v):
+        try:
+            if m * float(r[int(c)]) >= m * float(v): return True
+            else: return False
+        except (ValueError, TypeError):
+            return True
+
     for column, value in filter_settings.filters.items():
-        #rows = [row for row in rows if value.lower() in row[int(column)].lower()]
-        regex = re.compile(fr"{value}", re.IGNORECASE)
-        rows = [row for row in rows if regex.search(row[int(column)])]
-
-    # Apply min/max filters
+        rows = apply_regex(rows, column, value)
     for column, range_values in filter_settings.range_filters.items():
-        min_val, max_val = range_values
-        if min_val == "": min_val = None
-        if max_val == "": max_val = None
-        rows = [row for row in rows if (min_val is None or float(row[int(column)]) >= float(min_val)) and (max_val is None or float(row[int(column)]) <= float(max_val))]
+        for m, value in zip([1,-1], range_values):
+            if value == "": value = None
+            if is_float(value):     rows = [row for row in rows if apply_compare(m, row, column, value)]
+            elif value is not None: rows = apply_regex(rows, column, value)
 
     # Apply sorting
     sort_column = filter_settings.sort_column
@@ -222,6 +280,7 @@ def result_table(request, pk):
         'numeric_columns': numeric_columns,
         'sort_column': sort_column,
         'sort_reverse': sort_reverse,
+        'settings_form': settings_form,
     })
 
 

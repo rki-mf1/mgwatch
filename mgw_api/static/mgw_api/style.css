@@ -142,7 +142,8 @@ ul.nav {
     width: 90%;
     max-width: 1024px;
     margin: 0 auto;
-    padding: 20px;
+    padding-left: 20px;
+    padding-right: 20px;
     background-color: #f9f9f974;
     border: 1px solid #000000;
     border-radius: 5px;
@@ -152,7 +153,7 @@ ul.nav {
 .page-head h1 {
     font-size: 36px;
     color: #000000;
-    margin-bottom: 20px;
+    margin-bottom: 5px;
 }
 
 
@@ -365,7 +366,8 @@ ul.nav {
     width: 90%;
     max-width: 1024px;
     margin: 0 auto;
-    padding: 20px;
+    padding-left: 20px;
+    padding-right: 20px;
     background-color: #f9f9f974;
     border: 1px solid #000000;
     border-radius: 5px;
@@ -379,9 +381,13 @@ ul.nav {
 }
 .settings-section form {
     width: 100%;
+    margin-bottom: 0;
 }
 .settings-section .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 5px;
+    display: inline-block;
+    width: 32%;
+    vertical-align: top;
 }
 .settings-section .form-group label {
     font-weight: bold;
@@ -400,7 +406,7 @@ ul.nav {
     font-size: 12px;
     color: #555;
     margin-top: 5px;
-    margin-bottom: 20px;
+    margin-bottom: 5px;
 }
 .settings-section input[type="submit"] {
     background-color: #000000;
@@ -413,9 +419,47 @@ ul.nav {
     font-size: 16px;
     cursor: pointer;
     border-radius: 5px;
+    margin-top: 10px;
 }
 .settings-section input[type="submit"]:hover {
     background-color: #363636;
+}
+
+.settings-section .settings-message {
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.settings-section .settings-message ul.messages {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+.settings-section .settings-message ul.messages li {
+    font-size: 16px;
+    color: #000000;
+    padding: 0px;
+    border-radius: 5px;
+    margin-bottom: 5px;
+}
+.settings-section .settings-message ul.messages li.info {
+    background-color: #d9edf7;
+    border: 1px solid #bce8f1;
+    color: #31708f;
+}
+.settings-section .settings-message ul.messages li.success {
+    background-color: #dff0d8;
+    border: 1px solid #d6e9c6;
+    color: #3c763d;
+}
+.settings-section .settings-message ul.messages li.warning {
+    background-color: #fcf8e3;
+    border: 1px solid #faebcc;
+    color: #8a6d3b;
+}
+.settings-section .settings-message ul.messages li.error {
+    background-color: #f2dede;
+    border: 1px solid #ebccd1;
+    color: #a94442;
 }
 
 
@@ -615,17 +659,8 @@ ul.nav {
 
 
 .submission-message {
-    font-family: Arial, sans-serif;
-    text-shadow: 1px 1px white;
-    width: 90%;
-    max-width: 1024px;
-    margin: 0 auto;
-    padding: 20px;
-    background-color: #f9f9f974;
-    border: 1px solid #000000;
-    border-radius: 5px;
     margin-top: 5px;
-    margin-bottom: 5px;
+    margin-bottom: 20px;
 }
 .submission-message ul.messages {
     list-style-type: none;
@@ -635,9 +670,9 @@ ul.nav {
 .submission-message ul.messages li {
     font-size: 16px;
     color: #000000;
-    padding: 10px;
+    padding: 0px;
     border-radius: 5px;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
 }
 .submission-message ul.messages li.info {
     background-color: #d9edf7;
@@ -658,4 +693,117 @@ ul.nav {
     background-color: #f2dede;
     border: 1px solid #ebccd1;
     color: #a94442;
+}
+
+
+.result-navigation {
+    font-family: Arial, sans-serif;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    text-align: center;
+}
+.result-navigation h2 {
+    font-size: 24px;
+    color: #000000;
+    margin-bottom: 10px;
+}
+.result-navigation a {
+    color: #ff0000;
+    text-decoration: none;
+    margin-right: 10px;
+}
+.result-navigation a:hover {
+    text-decoration: underline;
+}
+.result-navigation form {
+    display: inline-block;
+    margin-right: 10px;
+}
+.result-navigation form label {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    margin-right: 10px;
+    font-size: 16px;
+    color: #000;
+}
+.result-navigation form label input[type="checkbox"] {
+    margin-right: 5px;
+    transform: scale(1.5);
+    cursor: pointer;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    margin-top: 10px;
+}
+
+.result-table {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.result-table table {
+    width: 100%;
+    max-width: 100%;
+    border-collapse: collapse;
+}
+.result-table th, .result-table td {
+    border: 1px solid #000000;
+    padding: 8px;
+    text-align: left;
+}
+.result-table th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+    color: #000000;
+    cursor: pointer;
+}
+.result-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+.result-table .filter-input,
+.result-table .filter-input-min,
+.result-table .filter-input-max {
+    width: calc(100% - 0px);
+    padding: 5px;
+    margin: 5px 0;
+    border: 1px solid #000000;
+    border-radius: 3px;
+    box-sizing: border-box;
+}
+.pagination {
+    margin-top: 20px;
+    text-align: center;
+}
+.pagination .step-links {
+    display: inline-block;
+    padding: 0;
+}
+.pagination .step-links a {
+    margin: 0 5px;
+    text-decoration: none;
+    color: #000000;
+}
+.pagination .step-links a:hover {
+    text-decoration: underline;
+}
+.pagination .current {
+    margin: 0 5px;
+    font-weight: bold;
 }

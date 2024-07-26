@@ -7,7 +7,7 @@
     <meta name="author" content="Daniel Desirò" />
     <meta name="description" content="MetagenomeWatch (MGW) provides a metagenome search engine ablte to search through petabyte scale databases in real time." />
 
-    <title>{% block title %}Django - File Uploads{% endblock %}</title>
+    <title>MetagenomeWatch</title>
 
     {% load static %}
 
@@ -15,6 +15,8 @@
 
     <div class="account-navigation">
         {% if request.user.is_authenticated %}
+            <a href="{% url 'mgw_api:upload_fasta' %}">Search</a>
+            <a href="{% url 'mgw_api:list_result' %}">Watches</a>
             {{ request.user.username }}
             <a href="{% url 'mgw_api:logout' %}">Logout</a>
         {% else %}
@@ -22,19 +24,20 @@
             <a href="{% url 'mgw_api:signup' %}">Signup</a>
         {% endif %}
     </div>
-
-    <ul class="nav">
-        <li><a href="{% url 'mgw_api:upload_fasta' %}" class="active">Uploads & Help</a></li>
-        <li><a href="{% url 'mgw_api:list_signature' %}" class="active">Genomes & Search</a></li>
-        <li><a href="{% url 'mgw_api:list_result' %}" class="active">Results & Watches</a></li>
-        <li><a href="{% url 'mgw_api:settings' %}" class="active">Settings</a></li>
-    </ul>
 </head>
 
 <body>
-    <div id="sidebar">
+    <header>
+        <div class="page-head">
+            <h2>Welcome to MetagenomeWatch!</h2>
+        </div>
+    </header>
+    <main>
         {% block content %}{% endblock %}
-    </div>
+    </main>
+    <footer>
+        <p>&copy; MetagenomeWatch</p>
+    </footer>
 </body>
 
 </html>

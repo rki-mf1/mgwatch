@@ -1,53 +1,46 @@
-{% extends "mgw_api/base.html" %}
-
-{% block title %}Settings{% endblock %}
-
-{% block content %}
-
 <div class="settings-section">
     <h2>Settings</h2>
 
-    <form method="post" enctype="multipart/form-data" id="settings-form">
-        {% csrf_token %}
-        
-        <div class="form-group">
-            <label for="id_kmer">Select k-mers:</label>
-            <div class="options">{{ settings_form.kmer }}</div>
-            <small>Select at least one k-mer</small>
-        </div>
+    <div class="settings-form">
+        <form method="post" enctype="multipart/form-data" id="settings-form">
+            {% csrf_token %}
 
-        <div class="form-group">
-            <label for="id_database">Select databases:</label>
-            <div class="options">{{ settings_form.database }}</div>
-            <small>Select at least one database</small>
-        </div>
+            <div class="form-group">
+                <label for="id_kmer">Select k-mers:</label>
+                <div class="options">{{ settings_form.kmer }}</div>
+                <small>Select at least one k-mer</small>
+            </div>
 
-        <div class="form-group">
-            <label for="id_containment">Containment threshold:</label>
-            <div class="options">{{ settings_form.containment }}</div>
-            <small>Enter a value between 0.0 and 1.0</small>
-        </div>
+            <div class="form-group">
+                <label for="id_database">Select databases:</label>
+                <div class="options">{{ settings_form.database }}</div>
+                <small>Select at least one database</small>
+            </div>
 
-        <div>
-            <input type="submit" value="Save changes">
-        </div>
-    </form>
+            <div class="form-group">
+                <label for="id_containment">Containment threshold:</label>
+                <div class="options">{{ settings_form.containment }}</div>
+                <small>Enter a value between 0.0 and 1.0</small>
+            </div>
+
+            <div class="submission-message">
+                {% if messages %}
+                    <ul class="messages">
+                        {% for message in messages %}
+                            <li {% if message.tags %} class=" {{ message.tags }} "{% endif %}>
+                                {{ message }}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+        </form>
+    </div>
 </div>
 
-<div class="submission-message">
-    {% if messages %}
-        <ul class="messages">
-            {% for message in messages %}
-                <li {% if message.tags %} class=" {{ message.tags }} "{% endif %}>
-                    {{ message }}
-                </li>
-            {% endfor %}
-        </ul>
-    {% endif %}
-</div>
 
 <script>
-    document.getElementById('settings-form').addEventListener('submit', function(event) {
+    function validateForm(event) {
         const kmerCheckboxes = document.querySelectorAll('input[name="kmer"]:checked');
         const databaseCheckboxes = document.querySelectorAll('input[name="database"]:checked');
         const submissionMessageDiv = document.querySelector('.submission-message');
@@ -61,10 +54,20 @@
             errorMessage += '<li class="error">Please select at least one database.</li>';
         }
         if (errorMessage) {
-            event.preventDefault();
+            if (event) event.preventDefault();
             submissionMessageDiv.innerHTML = `<ul class="messages">${errorMessage}</ul>`;
+            return false;
         }
+        return true;
+    }
+
+    document.getElementById('settings-form').addEventListener('submit', validateForm);
+
+    document.querySelectorAll('#id_kmer, #id_database, #id_containment').forEach(function(element) {
+        element.addEventListener('change', function() {
+            if (validateForm()) {
+                document.getElementById('settings-form').submit();
+            }
+        });
     });
 </script>
-
-{% endblock %}
