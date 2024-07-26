@@ -1,12 +1,8 @@
 {% extends "mgw_api/base.html" %}
 
-{% block title %}Welcome to MetagenomeWatch!{% endblock %}
-
 {% block content %}
 
-<div class="page-head">
-    <h1>Welcome to MetagenomeWatch!</h1>
-</div>
+{% include "mgw_api/settings.html" %}
 
 <div class="upload-section">
     <h2>Upload Genome</h2>
@@ -16,18 +12,6 @@
         <div>{{ fasta_form.file }}</div>
         <input type="submit" value="Submit">
     </form>
-</div>
-
-<div class="submission-message">
-    {% if messages %}
-        <ul class="messages">
-            {% for message in messages %}
-                <li {% if message.tags %} class=" {{ message.tags }} "{% endif %}>
-                    {{ message }}
-                </li>
-            {% endfor %}
-        </ul>
-    {% endif %}
 </div>
 
 <div class="help-section">
@@ -41,7 +25,6 @@
     </ol>
     <p>If you have any questions or require further assistance, please feel free to contact our development team. Happy searching!</p>
 </div>
-
 
 <script>
     document.getElementById('upload-form').addEventListener('submit', function(event) {
