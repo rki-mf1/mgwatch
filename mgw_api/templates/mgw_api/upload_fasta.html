@@ -4,9 +4,9 @@
 
 {% include "mgw_api/settings.html" %}
 
-<div class="upload-section">
+<div class="upload-section" id="upload-section">
     <h2>Upload Genome</h2>
-    <form method="post" enctype="multipart/form-data">
+    <form id="upload-form" method="post" enctype="multipart/form-data">
         {% csrf_token %}
         <div>{{ fasta_form.name }}</div>
         <div>{{ fasta_form.file }}</div>
@@ -14,23 +14,97 @@
     </form>
 </div>
 
-<div class="help-section">
-    <h2>How to Get Started</h2>
-    <p>Welcome to MetagenomeWatch! To get started, simply upload a Fasta file with your favourite genomes. All entries will then be converted into signatures in the background. Depending on the size of the genome, this may take some time. The converted genomes are then available in the "Genomes & Search" section. Here you can then submit your genome for a metagenome search in the Sequencing Read Archive database. Your search results are then available in the "Results & Watches" section, where you can set up a watch for your search query. This monitoring enables an automatic search when the database is updated. Here is a brief overview of the different sections:</p>
-    <ol>
-      <li><strong>Uploads & Help:</strong> Select a Fasta file with a genome of interest and upload it.</li>
-      <li><strong>Genomes & Search:</strong> Start a search in the Sequencing Read Archive database.</li>
-      <li><strong>Results & Watches:</strong> Check your results and set watches.</li>
-      <li><strong>Settings:</strong> Set up search settings.</li>
-    </ol>
-    <p>If you have any questions or require further assistance, please feel free to contact our development team. Happy searching!</p>
-</div>
+<!-- <div class="help-section"> -->
+<!--     <h2>How to Get Started</h2> -->
+<!--     <p>Welcome to MetagenomeWatch! To get started, simply upload a Fasta file with your favourite genomes. All entries will then be converted into signatures in the background. Depending on the size of the genome, this may take some time. The converted genomes are then available in the "Genomes & Search" section. Here you can then submit your genome for a metagenome search in the Sequencing Read Archive database. Your search results are then available in the "Results & Watches" section, where you can set up a watch for your search query. This monitoring enables an automatic search when the database is updated. Here is a brief overview of the different sections:</p> -->
+<!--     <ol> -->
+<!--       <li><strong>Uploads & Help:</strong> Select a Fasta file with a genome of interest and upload it.</li> -->
+<!--       <li><strong>Genomes & Search:</strong> Start a search in the Sequencing Read Archive database.</li> -->
+<!--       <li><strong>Results & Watches:</strong> Check your results and set watches.</li> -->
+<!--       <li><strong>Settings:</strong> Set up search settings.</li> -->
+<!--     </ol> -->
+<!--     <p>If you have any questions or require further assistance, please feel free to contact our development team. Happy searching!</p> -->
+<!-- </div> -->
 
 <script>
     document.getElementById('upload-form').addEventListener('submit', function(event) {
+        event.preventDefault();
+        const form = event.target;
+        const formData = new FormData(form);
+
+        // Hide the upload section and show the waiting message
+        document.getElementById('upload-section').style.display = 'none';
         const submissionMessageDiv = document.querySelector('.submission-message');
-        submissionMessageDiv.innerHTML = '';
+        submissionMessageDiv.style.display = 'block';
+        submissionMessageDiv.innerHTML = '<ul class="messages"><li class="info">Searching for matches, please wait. Do not close or reload the page. This process might take a few minutes.</li></ul>';
+
+        // Make an AJAX request to submit the form
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Network (1) response was not ok. Status: ${response.status} - ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Start polling for processing status
+                const fastaId = data.fasta_id;
+                const checkStatus = () => {
+                    fetch(`/mgw_api/check_status/${fastaId}/`, {
+                        method: 'GET',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`Network (2) response was not ok. Status: ${response.status} - ${response.statusText}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.status === 'Complete' && data.result_pk) {
+                            // Redirect to the result table view
+                            window.location.href = `/mgw_api/result/${data.result_pk}/`;
+                        } else if (data.status.startsWith('Error')) {
+                            submissionMessageDiv.innerHTML = `<ul class="messages"><li class="error">An error (1) occurred: ${data.status}</li></ul>`;
+                            document.getElementById('upload-section').style.display = 'block';
+                        } else {
+                            // Continue polling
+                            setTimeout(checkStatus, 5000);
+                        }
+                    })
+                    .catch(error => {
+                        submissionMessageDiv.innerHTML = `<ul class="messages"><li class="error">An error (2) occurred: ${error.message}</li></ul>`;
+                        document.getElementById('upload-section').style.display = 'block';
+                    });
+                };
+                checkStatus();
+            } else {
+                // Handle errors
+                submissionMessageDiv.innerHTML = `<ul class="messages"><li class="error">An error (3) occurred: ${data.error}</li></ul>`;
+                document.getElementById('upload-section').style.display = 'block';
+            }
+        })
+        .catch(error => {
+            submissionMessageDiv.innerHTML = `<ul class="messages"><li class="error">An error (4) occurred: ${error.message}</li></ul>`;
+            document.getElementById('upload-section').style.display = 'block';
+        });
     });
 </script>
+
+<!-- <script> -->
+<!--     document.getElementById('upload-form').addEventListener('submit', function(event) { -->
+<!--         const submissionMessageDiv = document.querySelector('.submission-message'); -->
+<!--         submissionMessageDiv.innerHTML = ''; -->
+<!--     }); -->
+<!-- </script> -->
 
 {% endblock %}

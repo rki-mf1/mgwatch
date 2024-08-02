@@ -20,4 +20,5 @@ urlpatterns = [
     path('result/<int:pk>/update_sort/', views.update_sort, name='update_sort'),
     path('toggle_watch/<int:pk>/', views.toggle_watch, name='toggle_watch'),
     path('delete_result/<int:pk>/', views.delete_result, name='delete_result'),
+    path('check_status/<int:fasta_id>/', views.check_processing_status, name='check_status'),
 ]

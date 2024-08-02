@@ -39,7 +39,9 @@ class Fasta(models.Model):
     upload_date = models.DateTimeField(auto_now_add=True)
     size = models.IntegerField()
     processed = models.BooleanField(default=False)
-
+    status = models.CharField(max_length=255, default="Pending")
+    result_pk = models.IntegerField(null=True, blank=True)
+    
     def __str__(self):
         return self.name or self.file.name
 

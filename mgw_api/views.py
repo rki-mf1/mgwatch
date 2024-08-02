@@ -1,7 +1,7 @@
 # mgw_api/views.py
 
 from django.db.models import F
-from django.http import HttpResponse, Http404, HttpResponseRedirect
+from django.http import HttpResponse, Http404, HttpResponseRedirect, JsonResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.auth.decorators import login_required
 from django.template import loader
@@ -14,8 +14,8 @@ from .forms import SignupForm, LoginForm
 from django.core.paginator import Paginator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from django.http import JsonResponse
 import json
+import asyncio
 #from .forms import UploadFileForm
 
 #from .models import Choice, Question
@@ -29,6 +29,7 @@ import re
 import sys
 import time
 import subprocess
+import threading
 
 
 ################################################################
@@ -70,19 +71,20 @@ def user_logout(request):
 
 @login_required
 def upload_fasta(request):
-    ## handle settings
     sourmash_settings, created = Settings.objects.get_or_create(user=request.user)
     settings_form = SettingsForm(instance=sourmash_settings)
     if request.method == "POST":
+        ## handle settings
         if 'kmer' in request.POST or 'database' in request.POST or 'containment' in request.POST:
             settings_form = SettingsForm(request.POST, instance=sourmash_settings)
             if settings_form.is_valid():
                 settings_form.save()
                 messages.success(request, 'Settings have been successfully saved.')
-                return redirect("mgw_api:upload_fasta")
+                return redirect(reverse("mgw_api:upload_fasta"))
             else:
                 messages.error(request, 'Please correct the errors below.')
-        else:
+        ## handle upload
+        if 'name' in request.POST or 'file' in request.POST:
             ## handle upload fasta
             fasta_form = FastaForm(request.POST, request.FILES)
             if fasta_form.is_valid():
@@ -93,33 +95,50 @@ def upload_fasta(request):
                     if not name:
                         name = os.path.splitext(filename)[0]
                     if Fasta.objects.filter(user=request.user, name=name).exists():
-                        messages.error(request, "A file with this name already exists. Please choose a different name or file.")
+                        #messages.error(request, "A file with this name already exists. Please choose a different name or file.")
+                        return JsonResponse({'success': False, 'error': "A file with this name already exists. Please choose a different name or file."})
                     else:
                         uploaded_file_instance = fasta_form.save(commit=False)
                         uploaded_file_instance.user = request.user
                         uploaded_file_instance.name = name
                         uploaded_file_instance.size = uploaded_file.size
                         uploaded_file_instance.processed = False
+                        uploaded_file_instance.status = "Processing"
                         uploaded_file_instance.save()
-                        manage_py_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'manage.py')
-                        subprocess.Popen([sys.executable, manage_py_path, "create_signature"])
-                        messages.success(request, "File submission successful! Processing will happen in the background.")
-                        return redirect('mgw_api:upload_fasta')
+                        thread = threading.Thread(target=run_create_signature_and_search, args=(request.user.id, name, uploaded_file_instance.id))
+                        thread.start()
+                        ##manage_py_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'manage.py')
+                        #subprocess.Popen([sys.executable, manage_py_path, "create_signature", str(request.user.id), name])
+                        ##subprocess.Popen([sys.executable, manage_py_path, "create_signature", str(request.user.id), name]).wait()
+                        ##subprocess.Popen([sys.executable, manage_py_path, "create_search", str(request.user.id), name]).wait()
+                        ##result = Result.objects.filter(signature__fasta__name=name, signature__user=request.user).latest('created_date')
+                        #messages.success(request, "File submission successful! Processing will happen in the background.")
+                        #return redirect('mgw_api:upload_fasta')
+                        ##return JsonResponse({'success': True, 'redirect_url': reverse('mgw_api:result_table', kwargs={'pk': result.pk})})
+                        return JsonResponse({'success': True, 'message': 'File submission successful! Processing will happen in the background.', 'fasta_id': uploaded_file_instance.id})
                 except Exception as e:
-                    messages.error(request, f"Error: file submission failed! ... {e}")
+                    #messages.error(request, f"Error: file submission failed! ... {e}")
+                    return JsonResponse({'success': False, 'error': f"Error: file submission failed! ... {e}"})
             else:
-                for field, errors in fasta_form.errors.items():
-                    for error in errors:
-                        if "extension" in error:
-                            messages.error(request, "Invalid file extension!")
-                        elif "start with '>'" in error:
-                            messages.error(request, "Invalid FASTA format!")
-                        else:
-                            messages.error(request, f"{error}")
+                #for field, errors in fasta_form.errors.items():
+                #    for error in errors:
+                #        if "extension" in error:
+                #            messages.error(request, "Invalid file extension!")
+                #        elif "start with '>'" in error:
+                #            messages.error(request, "Invalid FASTA format!")
+                #        else:
+                #            messages.error(request, f"{error}")
+                errors = fasta_form.errors.as_json()
+                return JsonResponse({'success': False, 'error': errors})
     else:
         fasta_form = FastaForm()
     return render(request, "mgw_api/upload_fasta.html", {"fasta_form": fasta_form, "settings_form": settings_form})
 
+@login_required
+def check_processing_status(request, fasta_id):
+    fasta = get_object_or_404(Fasta, id=fasta_id, user=request.user)
+    messages.error(request, f"#### TEST X {fasta_id} {request.user} {fasta.status} ####")
+    return JsonResponse({'status': fasta.status})
 
 @login_required
 def list_signature(request):
@@ -148,6 +167,7 @@ def process_signature(request, pk):
             signature.submitted = True
             signature.save()
             manage_py_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'manage.py')
+            subprocess.Popen([sys.executable, manage_py_path, "create_search", str(request.user.id), signature.name])
             subprocess.Popen([sys.executable, manage_py_path, "create_search"])
             messages.success(request, "Signature submission successful! Processing will happen in the background.")
         except Exception as e:
@@ -163,7 +183,7 @@ def settings(request):
         if settings_form.is_valid():
             settings_form.save()
             messages.success(request, 'Settings have been successfully saved.')
-            return redirect("mgw_api:settings")
+            return redirect(reverse("mgw_api:settings"))
         else:
             messages.error(request, 'Please correct the errors below.')
     else:
@@ -187,7 +207,7 @@ def list_result(request):
             if settings_form.is_valid():
                 settings_form.save()
                 messages.success(request, 'Settings have been successfully saved.')
-                return redirect("mgw_api:list_result")
+                return redirect(reverse("mgw_api:list_result"))
             else:
                 messages.error(request, 'Please correct the errors below.')
     ## handle list results
@@ -214,74 +234,56 @@ def result_table(request, pk):
     settings_form = SettingsForm(instance=sourmash_settings)
     
     if request.method == "POST":
+        ## handle settings
         if 'kmer' in request.POST or 'database' in request.POST or 'containment' in request.POST:
             settings_form = SettingsForm(request.POST, instance=sourmash_settings)
             if settings_form.is_valid():
                 settings_form.save()
                 messages.success(request, 'Settings have been successfully saved.')
-                return redirect(request.path_info)
+                return redirect(reverse("mgw_api:result_table", kwargs={"pk":pk}))
             else:
                 messages.error(request, 'Please correct the errors below.')
-    ## handle result table
-    result = get_object_or_404(Result, pk=pk, user=request.user)
-    headers, rows = get_table_data(result)
-    headers = [h.replace("_", " ") for h in headers]
-    numeric_columns = get_numeric_columns(rows)
-    filter_settings, created = FilterSetting.objects.get_or_create(result=result, user=request.user)
-    def apply_regex(r, c, v):
-        try:
-            regex = re.compile(fr"{v}", re.IGNORECASE)
-            return [row for row in r if regex.search(row[int(c)])]
-        except:
-            return r
+    else:
+        ## handle result table
+        result = get_object_or_404(Result, pk=pk, user=request.user)
+        headers, rows = get_table_data(result)
+        headers = [h.replace("_", " ") for h in headers]
+        numeric_columns = get_numeric_columns(rows)
+        filter_settings, created = FilterSetting.objects.get_or_create(result=result, user=request.user)
 
-    def is_float(val):
-        try:
-            float(val)
-            return True
-        except (ValueError, TypeError):
-            return False
-        
-    def apply_compare(m, r, c, v):
-        try:
-            if m * float(r[int(c)]) >= m * float(v): return True
-            else: return False
-        except (ValueError, TypeError):
-            return True
+        for column, value in filter_settings.filters.items():
+            rows = apply_regex(rows, column, value)
+        for column, range_values in filter_settings.range_filters.items():
+            for m, value in zip([1,-1], range_values):
+                if value == "": value = None
+                if is_float(value):     rows = [row for row in rows if apply_compare(m, row, column, value)]
+                elif value is not None: rows = apply_regex(rows, column, value)
 
-    for column, value in filter_settings.filters.items():
-        rows = apply_regex(rows, column, value)
-    for column, range_values in filter_settings.range_filters.items():
-        for m, value in zip([1,-1], range_values):
-            if value == "": value = None
-            if is_float(value):     rows = [row for row in rows if apply_compare(m, row, column, value)]
-            elif value is not None: rows = apply_regex(rows, column, value)
+        # Apply sorting
+        sort_column = filter_settings.sort_column
+        sort_reverse = filter_settings.sort_reverse
+        if sort_column is not None:
+            rows = sorted(rows, key=lambda x: x[int(sort_column)], reverse=sort_reverse)
 
-    # Apply sorting
-    sort_column = filter_settings.sort_column
-    sort_reverse = filter_settings.sort_reverse
-    if sort_column is not None:
-        rows = sorted(rows, key=lambda x: x[int(sort_column)], reverse=sort_reverse)
+        watch_form = WatchForm(instance=result)
+        filter_form = FilterSettingForm(instance=filter_settings)
 
-    watch_form = WatchForm(instance=result)
-    filter_form = FilterSettingForm(instance=filter_settings)
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({
+                'rows': rows,
+            })
 
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return JsonResponse({
+        return render(request, 'mgw_api/result_table.html', {
+            'result': result,
+            'headers': headers,
             'rows': rows,
+            'watch_form': watch_form,
+            'filter_form': filter_form,
+            'numeric_columns': numeric_columns,
+            'sort_column': sort_column,
+            'sort_reverse': sort_reverse,
+            'settings_form': settings_form,
         })
-    
-    return render(request, 'mgw_api/result_table.html', {
-        'result': result,
-        'headers': headers,
-        'rows': rows,
-        'watch_form': watch_form,
-        'filter_form': filter_form,
-        'numeric_columns': numeric_columns,
-        'sort_column': sort_column,
-        'sort_reverse': sort_reverse,
-        'settings_form': settings_form,
-    })
 
 
 @login_required

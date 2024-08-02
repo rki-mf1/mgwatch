@@ -807,3 +807,17 @@ ul.nav {
     margin: 0 5px;
     font-weight: bold;
 }
+
+footer {
+    width: 100%;
+    text-align: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    font-family: Arial, sans-serif;
+    color: #000000;
+    padding: 10px 0;
+    background-color: transparent;
+    border-top: none;
+    z-index: 1000;
+}
