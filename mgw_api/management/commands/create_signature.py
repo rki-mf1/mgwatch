@@ -4,6 +4,8 @@ from django.core.management.base import BaseCommand
 from mgw_api.models import Fasta, Signature
 from django.conf import settings
 
+
+from datetime import datetime
 import subprocess
 import os
 
@@ -18,8 +20,9 @@ class Command(BaseCommand):
         name = kwargs['name']
         fasta = Fasta.objects.get(user_id=user_id, name=name, processed=False)
         try:
+            date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
             user_path = os.path.dirname(fasta.file.path)
-            signature_file = os.path.join(user_path, f"signature_{fasta.name}.sig.gz")
+            signature_file = os.path.join(user_path, f"signature_{fasta.name}-{date}.sig.gz")
             self.stdout.write(self.style.SUCCESS(signature_file))
             result = self.calculate_signatures(fasta.file.path, signature_file)
             if result.returncode != 0:

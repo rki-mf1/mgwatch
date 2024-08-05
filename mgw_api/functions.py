@@ -13,13 +13,6 @@ import re
 import sys
 import os
 
-def process_pending_files():
-    pending_files = Fasta.objects.filter(processed=False)
-    for fasta in pending_files:
-        # Simulate file processing
-        time.sleep(20)  # test
-        fasta.processed = True
-        fasta.save()
 
 def get_table_data(result):
     table_data = []

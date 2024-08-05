@@ -95,7 +95,6 @@ def upload_fasta(request):
                     if not name:
                         name = os.path.splitext(filename)[0]
                     if Fasta.objects.filter(user=request.user, name=name).exists():
-                        #messages.error(request, "A file with this name already exists. Please choose a different name or file.")
                         return JsonResponse({'success': False, 'error': "A file with this name already exists. Please choose a different name or file."})
                     else:
                         uploaded_file_instance = fasta_form.save(commit=False)
@@ -107,38 +106,22 @@ def upload_fasta(request):
                         uploaded_file_instance.save()
                         thread = threading.Thread(target=run_create_signature_and_search, args=(request.user.id, name, uploaded_file_instance.id))
                         thread.start()
-                        ##manage_py_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'manage.py')
-                        #subprocess.Popen([sys.executable, manage_py_path, "create_signature", str(request.user.id), name])
-                        ##subprocess.Popen([sys.executable, manage_py_path, "create_signature", str(request.user.id), name]).wait()
-                        ##subprocess.Popen([sys.executable, manage_py_path, "create_search", str(request.user.id), name]).wait()
-                        ##result = Result.objects.filter(signature__fasta__name=name, signature__user=request.user).latest('created_date')
-                        #messages.success(request, "File submission successful! Processing will happen in the background.")
-                        #return redirect('mgw_api:upload_fasta')
-                        ##return JsonResponse({'success': True, 'redirect_url': reverse('mgw_api:result_table', kwargs={'pk': result.pk})})
                         return JsonResponse({'success': True, 'message': 'File submission successful! Processing will happen in the background.', 'fasta_id': uploaded_file_instance.id})
                 except Exception as e:
-                    #messages.error(request, f"Error: file submission failed! ... {e}")
                     return JsonResponse({'success': False, 'error': f"Error: file submission failed! ... {e}"})
             else:
-                #for field, errors in fasta_form.errors.items():
-                #    for error in errors:
-                #        if "extension" in error:
-                #            messages.error(request, "Invalid file extension!")
-                #        elif "start with '>'" in error:
-                #            messages.error(request, "Invalid FASTA format!")
-                #        else:
-                #            messages.error(request, f"{error}")
                 errors = fasta_form.errors.as_json()
                 return JsonResponse({'success': False, 'error': errors})
     else:
         fasta_form = FastaForm()
     return render(request, "mgw_api/upload_fasta.html", {"fasta_form": fasta_form, "settings_form": settings_form})
 
+
 @login_required
 def check_processing_status(request, fasta_id):
     fasta = get_object_or_404(Fasta, id=fasta_id, user=request.user)
-    messages.error(request, f"#### TEST X {fasta_id} {request.user} {fasta.status} ####")
-    return JsonResponse({'status': fasta.status})
+    return JsonResponse({'status': fasta.status, 'fasta_id':fasta_id, 'result_pk':fasta.result_pk})
+
 
 @login_required
 def list_signature(request):
@@ -150,11 +133,13 @@ def list_signature(request):
 def delete_signature(request, pk):
     signature = get_object_or_404(Signature, pk=pk, user=request.user)
     fasta = get_object_or_404(Fasta, pk=signature.fasta.pk, user=request.user)
+    next_url = request.GET.get('next', 'mgw_api:list_result')
+    messages.success(request, next_url)
     if request.method == "POST":
         signature.delete()
         fasta.delete()
-        return redirect("mgw_api:list_signature")
-    return render(request, 'mgw_api/confirm_delete_signature.html', {'signature': signature})
+        return redirect("mgw_api:list_result")
+    return render(request, 'mgw_api/confirm_delete_signature.html', {'signature': signature, 'next_url': next_url})
 
 
 @login_required
@@ -211,10 +196,13 @@ def list_result(request):
             else:
                 messages.error(request, 'Please correct the errors below.')
     ## handle list results
-    result_files = Result.objects.filter(user=request.user)
-    watch_forms = {result.pk:WatchForm(instance=result) for result in result_files}
-    return render(request, 'mgw_api/list_result.html', {'result_files': result_files, 'watch_forms': watch_forms, 'settings_form': settings_form})
+    signatures = Signature.objects.filter(user=request.user).prefetch_related('result_set')
+    return render(request, 'mgw_api/list_result.html', {'signatures': signatures, 'settings_form': settings_form})
 
+#watch_forms = {result.pk:WatchForm(instance=result) for result in result_files}
+#result_files = Result.objects.filter(user=request.user)
+#return render(request, 'mgw_api/list_result.html', {'result_files': result_files, 'watch_forms': watch_forms, 'settings_form': settings_form})
+    
 
 @login_required
 def toggle_watch(request, pk):
@@ -328,6 +316,7 @@ def update_sort(request, pk):
 def delete_result(request, pk):
     result = get_object_or_404(Result, pk=pk, user=request.user)
     next_url = request.GET.get('next', 'mgw_api:list_result')
+    messages.success(request, next_url)
     if request.method == "POST":
         result.delete()
         return redirect("mgw_api:list_result")

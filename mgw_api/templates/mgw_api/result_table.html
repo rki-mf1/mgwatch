@@ -59,6 +59,11 @@
 </div>
 
 <script>
+    function handleError(message) {
+        submissionMessageDiv.style.display = 'block';
+        submissionMessageDiv.innerHTML = `<ul class="messages"><li class="error">An error occurred: ${message}</li></ul>`;
+    }
+
     function submitWatchForm() {
         const form = document.getElementById('watch-form');
         const formData = new FormData(form);
@@ -71,11 +76,13 @@
             body: formData,
         }).then(response => {
             if (!response.ok) {
-                alert('Failed to update the watch status.');
+                handleError('Failed to update the watch status.');
             }
+        }).catch(error => {
+            handleError(error.message);
         });
     }
-    
+
     document.querySelectorAll('.filter-input, .filter-input-min, .filter-input-max').forEach(function(input) {
         input.addEventListener('input', function() {
             const column = this.getAttribute('data-column');
@@ -97,8 +104,10 @@
                 if (response.ok) {
                     reloadTableBody();
                 } else {
-                    alert('Failed to update filter settings.');
+                    handleError('Failed to update filter settings.');
                 }
+            }).catch(error => {
+                handleError(error.message);
             });
         });
     });
@@ -115,8 +124,10 @@
             if (response.ok) {
                 reloadTableBody();
             } else {
-                alert('Failed to update sort settings.');
+                handleError('Failed to update sort settings.');
             }
+        }).catch(error => {
+            handleError(error.message);
         });
     }
 
@@ -138,6 +149,8 @@
                 });
                 tableBody.appendChild(rowElement);
             });
+        }).catch(error => {
+            handleError(error.message);
         });
     }
 </script>
