@@ -10,6 +10,7 @@ from django.core.validators import FileExtensionValidator
 from django.core.exceptions import ValidationError
 
 import re
+from datetime import datetime
 
 
 def validate_fasta_content(file):
@@ -26,7 +27,8 @@ def validate_fasta_content(file):
 
 
 def user_directory_path(instance, filename):
-    return f"user_{instance.user.id}/{filename}"
+    date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    return f"user_{instance.user.id}/{filename}-{date}"
 
 
 class Fasta(models.Model):

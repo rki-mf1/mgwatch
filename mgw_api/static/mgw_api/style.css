@@ -233,8 +233,7 @@ ul.nav {
     background-color: #363636;
 }
 
-
-.signature-list {
+.signature-list, .result-list {
     font-family: Arial, sans-serif;
     text-shadow: 1px 1px white;
     width: 90%;
@@ -247,38 +246,38 @@ ul.nav {
     margin-top: 5px;
     margin-bottom: 5px;
 }
-.signature-list h2 {
+.signature-list h2, .result-list h2 {
     font-size: 24px;
     color: #000000;
     margin-bottom: 10px;
 }
-.signature-list table {
+.signature-list table, .result-list table {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 10px;
 }
-.signature-list th, .signature-list td {
+.signature-list th, .signature-list td, .result-list th, .result-list td {
     border: 1px solid #000000;
     padding: 8px;
     text-align: left;
 }
-.signature-list th {
+.signature-list th, .result-list th {
     background-color: #f0f0f0;
     font-weight: bold;
     color: #000000;
 }
-.signature-list tbody tr:nth-child(even) {
+.signature-list tbody tr:nth-child(even), .result-list tbody tr:nth-child(even) {
     background-color: #f9f9f9;
 }
-.signature-list a {
+.signature-list a, .result-list a {
     color: #ff0000;
     text-shadow: none;
     text-decoration: none;
 }
-.signature-list a:hover {
+.signature-list a:hover, .result-list a:hover {
     text-decoration: underline;
 }
-.signature-list button {
+.signature-list button, .result-list button {
     background-color: #000000;
     text-shadow: none;
     color: white;
@@ -292,70 +291,7 @@ ul.nav {
     cursor: pointer;
     border-radius: 3px;
 }
-.signature-list button[type="submit"]:hover {
-    background-color: #363636;
-}
-
-
-.result-list {
-    font-family: Arial, sans-serif;
-    text-shadow: 1px 1px white;
-    width: 90%;
-    max-width: 1024px;
-    margin: 0 auto;
-    padding: 20px;
-    background-color: #f9f9f974;
-    border: 1px solid #000000;
-    border-radius: 5px;
-    margin-top: 5px;
-    margin-bottom: 5px;
-}
-.result-list h2 {
-    font-size: 24px;
-    color: #000000;
-    margin-bottom: 10px;
-}
-.result-list table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 10px;
-}
-.result-list th, .result-list td {
-    border: 1px solid #000000;
-    padding: 8px;
-    text-align: left;
-}
-.result-list th {
-    background-color: #f0f0f0;
-    font-weight: bold;
-    color: #000000;
-}
-.result-list tbody tr:nth-child(even) {
-    background-color: #f9f9f9;
-}
-.result-list a {
-    color: #ff0000;
-    text-shadow: none;
-    text-decoration: none;
-}
-.result-list a:hover {
-    text-decoration: underline;
-}
-.result-list button {
-    background-color: #000000;
-    text-shadow: none;
-    color: white;
-    border: none;
-    padding: 5px 10px;
-    text-align: center;
-    text-decoration: none;
-    display: inline-block;
-    font-size: 14px;
-    margin: 4px 2px;
-    cursor: pointer;
-    border-radius: 3px;
-}
-.result-list button[type="submit"]:hover {
+.signature-list button[type="submit"]:hover, .result-list button[type="submit"]:hover {
     background-color: #363636;
 }
 
@@ -820,4 +756,135 @@ footer {
     background-color: transparent;
     border-top: none;
     z-index: 1000;
+}
+
+.waiting-message {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.waiting-message ul.messages {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+.waiting-message ul.messages li.info {
+    font-size: 18px;
+    color: #000000;
+    margin-bottom: 10px;
+}
+
+.signature-list {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 90%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f974;
+    border: 1px solid #000000;
+    border-radius: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.signature-list h2 {
+    font-size: 24px;
+    color: #000000;
+    margin-bottom: 10px;
+}
+.signature-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #000000;
+}
+.signature-name h3 {
+    font-size: 20px;
+    color: #000000;
+    margin: 0;
+}
+.signature-actions {
+    display: flex;
+    gap: 10px;
+}
+.signature-actions .button,
+.signature-actions button {
+    background-color: #000000;
+    text-shadow: none;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+    margin: 4px 2px;
+    cursor: pointer;
+    border-radius: 3px;
+}
+.signature-actions .button:hover,
+.signature-actions button[type="submit"]:hover {
+    background-color: #363636;
+}
+.result-list {
+    font-family: Arial, sans-serif;
+    text-shadow: 1px 1px white;
+    width: 100%;
+    margin-top: 10px;
+    border: 1px solid #000000;
+    border-collapse: collapse;
+}
+.result-list th, .result-list td {
+    border: 1px solid #000000;
+    padding: 8px;
+    text-align: left;
+}
+.result-list th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+    color: #000000;
+}
+.result-list tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+.result-list a {
+    color: #ff0000;
+    text-shadow: none;
+    text-decoration: none;
+}
+.result-list a:hover {
+    text-decoration: underline;
+}
+.result-list button {
+    background-color: #000000;
+    text-shadow: none;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+    margin: 4px 2px;
+    cursor: pointer;
+    border-radius: 3px;
+}
+.result-list button[type="submit"]:hover {
+    background-color: #363636;
+}
+.no-signatures {
+    text-align: center;
+    padding: 20px;
+    font-size: 18px;
+    color: #ff0000;
 }
