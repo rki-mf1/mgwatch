@@ -134,7 +134,6 @@ def delete_signature(request, pk):
     signature = get_object_or_404(Signature, pk=pk, user=request.user)
     fasta = get_object_or_404(Fasta, pk=signature.fasta.pk, user=request.user)
     next_url = request.GET.get('next', 'mgw_api:list_result')
-    messages.success(request, next_url)
     if request.method == "POST":
         signature.delete()
         fasta.delete()
@@ -316,7 +315,6 @@ def update_sort(request, pk):
 def delete_result(request, pk):
     result = get_object_or_404(Result, pk=pk, user=request.user)
     next_url = request.GET.get('next', 'mgw_api:list_result')
-    messages.success(request, next_url)
     if request.method == "POST":
         result.delete()
         return redirect("mgw_api:list_result")

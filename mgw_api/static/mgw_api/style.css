@@ -18,68 +18,6 @@ body {
     background-attachment: fixed;
 }
 
-a {
-    color: black;
-    text-decoration: none;
-}
-
-a:hover {
-    color: rgb(255, 255, 255);
-    text-decoration: none;
-}
-
-.button {
-    border: none;
-    color: white;
-    padding: 16px 32px;
-    text-align: center;
-    text-decoration: none;
-    display: inline-block;
-    font-size: 16px;
-    margin: 4px 2px;
-    transition-duration: 0.4s;
-    cursor: pointer;
-}
-
-.button1 {
-    background-color: white;
-    color: black;
-    border: 2px solid #04AA6D;
-}
-
-.button1:hover {
-    background-color: #04AA6D;
-    color: white;
-}
-
-.button2 {
-    background-color: white;
-    color: black;
-    border: 2px solid #008CBA;
-}
-
-.button2:hover {
-    background-color: #008CBA;
-    color: white;
-}
-
-th {
-    cursor: pointer;
-}
-
-.hidden {
-    display: none;
-}
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -232,6 +170,10 @@ ul.nav {
 .upload-section input[type="submit"]:hover {
     background-color: #363636;
 }
+.drag-over {
+    border: 2px dashed #000000;
+}
+
 
 .signature-list, .result-list {
     font-family: Arial, sans-serif;
@@ -645,23 +587,28 @@ ul.nav {
     margin-bottom: 5px;
     text-align: center;
 }
+
 .result-navigation h2 {
     font-size: 24px;
     color: #000000;
     margin-bottom: 10px;
 }
+
 .result-navigation a {
     color: #ff0000;
     text-decoration: none;
     margin-right: 10px;
 }
+
 .result-navigation a:hover {
     text-decoration: underline;
 }
+
 .result-navigation form {
     display: inline-block;
     margin-right: 10px;
 }
+
 .result-navigation form label {
     display: inline-flex;
     align-items: center;
@@ -670,15 +617,11 @@ ul.nav {
     font-size: 16px;
     color: #000;
 }
+
 .result-navigation form label input[type="checkbox"] {
     margin-right: 5px;
     transform: scale(1.5);
     cursor: pointer;
-}
-
-.table-wrapper {
-    overflow-x: auto;
-    margin-top: 10px;
 }
 
 .result-table {
@@ -694,25 +637,33 @@ ul.nav {
     margin-top: 5px;
     margin-bottom: 5px;
 }
+
 .result-table table {
     width: 100%;
     max-width: 100%;
     border-collapse: collapse;
+    table-layout: auto;
 }
+
 .result-table th, .result-table td {
     border: 1px solid #000000;
     padding: 8px;
     text-align: left;
 }
+
 .result-table th {
     background-color: #f0f0f0;
     font-weight: bold;
     color: #000000;
     cursor: pointer;
+    min-width: 100px; /* Adjust this value based on your needs */
+    white-space: nowrap; /* Prevent header text from wrapping */
 }
+
 .result-table tbody tr:nth-child(even) {
     background-color: #f9f9f9;
 }
+
 .result-table .filter-input,
 .result-table .filter-input-min,
 .result-table .filter-input-max {
@@ -723,6 +674,18 @@ ul.nav {
     border-radius: 3px;
     box-sizing: border-box;
 }
+
+.result-table .filter-input-min,
+.result-table .filter-input-max {
+    display: block;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    margin-top: 10px;
+}
+
+
 .pagination {
     margin-top: 20px;
     text-align: center;
@@ -816,7 +779,9 @@ footer {
 .signature-actions {
     display: flex;
     gap: 10px;
+    align-items: center; /* Align items vertically centered */
 }
+
 .signature-actions .button,
 .signature-actions button {
     background-color: #000000;
@@ -832,9 +797,22 @@ footer {
     cursor: pointer;
     border-radius: 3px;
 }
+
 .signature-actions .button:hover,
 .signature-actions button[type="submit"]:hover {
     background-color: #363636;
+}
+
+.delete-link {
+    color: #ff0000; /* Red color for the link */
+    text-shadow: none;
+    text-decoration: none;
+    font-size: 14px;
+    padding: 5px 10px; /* Add padding to match the button */
+}
+
+.delete-link:hover {
+    text-decoration: underline;
 }
 .result-list {
     font-family: Arial, sans-serif;

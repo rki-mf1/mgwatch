@@ -12,10 +12,12 @@ class FastaForm(forms.ModelForm):
         model = Fasta
         fields = ("name", "file")
         widgets = {
-            "file": forms.FileInput(attrs={"accept":".fa,.fasta,.fsa,.FASTA,.fna"})
+            "name": forms.TextInput(attrs={
+                "placeholder": "Drop or rename a file here ...",
+                "style": "width: calc(100% - 0px); box-sizing: border-box; height: 40px; font-size: 16px; padding-left: 10px;"
+            }),
+            "file": forms.FileInput(attrs={"accept": ".fa,.fasta,.fsa,.FASTA,.fna"})
         }
-    #title = forms.CharField(max_length=50)
-    #file = forms.FileField()
 
 
 class SignupForm(UserCreationForm):
@@ -44,7 +46,7 @@ class SettingsForm(forms.ModelForm):
         initial=[21]
     )
     database = forms.MultipleChoiceField(
-        choices=[("SRA", "SRA database"), ("OTHER", "Other database")],
+        choices=[("SRA", "SRA database"), ("RKI", "RKI database")],
         widget=forms.CheckboxSelectMultiple,
         initial=["SRA"]
     )

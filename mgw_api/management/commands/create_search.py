@@ -8,6 +8,7 @@ from datetime import datetime
 from itertools import product
 import subprocess
 import os
+import csv
 
 
 class Command(BaseCommand):
@@ -22,32 +23,40 @@ class Command(BaseCommand):
         dt = now.strftime("%d.%m.%Y %H:%M:%S")
         log = f"{dt} - create_search - "
         signature = Signature.objects.get(user_id=user_id, name=name, submitted=True)
+        result_pks = list()
         try:
             uset = Settings.objects.get(user=user_id).to_dict()
-            result_pks = []
+            c = uset["containment"]
+            file_list = []
+            kx, dbx = uset["kmer"], uset["database"]
             for k,db in product(uset["kmer"], uset["database"]):
                 # Search signatures in rocksdb
                 date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
                 index_path = os.path.join(settings.EXTERNAL_DATA_DIR, db, "index", f"{db}-{k}.rocksdb")
                 user_path = os.path.dirname(signature.file.path)
-                result_file = os.path.join(user_path, f"result_{signature.name}-{db}-{k}-{date}.csv")
+                result_file = os.path.join(user_path, f"result_{signature.name}.{db}-{k}-{date}.csv")
                 self.stdout.write(self.style.SUCCESS(result_file))
                 result = self.search_index(result_file, signature.file.path, index_path, k, uset["containment"])
                 if result.returncode != 0:
                     raise Exception(f"Searching failed with exit code {result.returncode}: {result.stderr}")
-                # Save result to django model
-                relative_path = os.path.relpath(result_file, settings.MEDIA_ROOT)
-                self.stdout.write(self.style.SUCCESS(relative_path))
-                result_model = Result(user=signature.user, signature=signature, name=signature.name)
-                result_model.file.name = relative_path
-                result_model.size = result_model.file.size
-                result_model.settings_used = uset
-                result_model.save()
-                self.stdout.write(self.style.SUCCESS(f"Created at {result_model.created_date}'"))
-                ## Update the processed status
-                #self.stdout.write(self.style.SUCCESS(f"Successfully processed file '{fasta.name}'"))
-                #self.stdout.write(self.style.SUCCESS(f"{log}Searching signature in database successful."))
-                result_pks.append(result_model.pk)
+                file_list.append((k,db,c,result_file))
+            combined_file = os.path.join(user_path, f"result_{signature.name}.{date}.csv")
+            self.combine_results(file_list, combined_file)
+            # Save result to django model
+            relative_path = os.path.relpath(combined_file, settings.MEDIA_ROOT)
+            self.stdout.write(self.style.SUCCESS(relative_path))
+            result_model = Result(user=signature.user, signature=signature, name=signature.name)
+            result_model.file.name = relative_path
+            result_model.size = result_model.file.size
+            result_model.kmer = kx
+            result_model.database = dbx
+            result_model.containment = c
+            result_model.save()
+            self.stdout.write(self.style.SUCCESS(f"Created at {result_model.created_date}'"))
+            ## Update the processed status
+            #self.stdout.write(self.style.SUCCESS(f"Successfully processed file '{fasta.name}'"))
+            #self.stdout.write(self.style.SUCCESS(f"{log}Searching signature in database successful."))
+            result_pks.append(result_model.pk)
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"{log}Error processing search '{signature.name}': {e}"))
         signature.submitted = False
@@ -60,5 +69,29 @@ class Command(BaseCommand):
         result = subprocess.run(cmd, capture_output=True, text=True)
         return result # returncode: 0 = success, 2 = fail
     
-    def combine_results(self, k, db):
-        pass
+    def combine_results(self, file_list, combined_file):
+        header, table_data = "", list()
+        for k, db, c, file in file_list:
+            header, t_data = self.read_table(file, k, db, c)
+            table_data = table_data + t_data
+            if os.path.exists(file): os.remove(file)
+        with open(combined_file, 'w', newline="") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(header)
+            for row in table_data:
+                writer.writerow(row)
+    
+    def read_table(self, file, k, db, c):
+        table_data = list()
+        with open(file, newline="") as csvfile:
+            reader = csv.reader(csvfile)
+            for i,row in enumerate(reader):
+                if not i: row = row + ["k-mer", "database", "containment_threshold"]
+                else:     row = row + [f"{k}", f"{db}", f"{c}"]
+                table_data.append(row)
+        return table_data[0], table_data[1:]
+
+
+
+## added result combination functionality
+## todo: fix result_list search
