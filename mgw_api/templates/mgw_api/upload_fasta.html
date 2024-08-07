@@ -27,6 +27,37 @@
  </div>
 
 <script>
+    // Update name field with chosen file name
+    const fileInput = document.querySelector('input[type="file"]');
+    const nameInput = document.querySelector('input[name="name"]');
+
+    fileInput.addEventListener('change', function() {
+        if (fileInput.files.length > 0) {
+            nameInput.value = fileInput.files[0].name;
+        }
+    });
+
+    // Allow dropping a file on the name field
+    nameInput.addEventListener('dragover', function(event) {
+        event.preventDefault();
+        nameInput.classList.add('drag-over');
+    });
+
+    nameInput.addEventListener('dragleave', function(event) {
+        nameInput.classList.remove('drag-over');
+    });
+
+    nameInput.addEventListener('drop', function(event) {
+        event.preventDefault();
+        nameInput.classList.remove('drag-over');
+
+        const files = event.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            nameInput.value = files[0].name;
+        }
+    });
+    
     document.getElementById('upload-form').addEventListener('submit', function(event) {
         event.preventDefault();
         const form = event.target;

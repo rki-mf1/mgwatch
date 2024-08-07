@@ -2,8 +2,6 @@
 
 {% block content %}
 
-{% include "mgw_api/settings.html" %}
-
 {% load static %}
 
 {% load custom_filters %}
@@ -26,6 +24,7 @@
                     {% for header in headers %}
                         <th onclick="sortTable({{ forloop.counter0 }})">
                             {{ header }}
+                            <span onclick="sortTable({{ forloop.counter0 }}); event.stopPropagation();">
                             {% if forloop.counter0 == sort_column %}
                                 {% if sort_reverse %}▼{% else %}▲{% endif %}
                             {% else %}□{% endif %}
@@ -112,22 +111,45 @@
         });
     });
 
+    let currentSortColumn = null;
+    let currentSortReverse = false;
     function sortTable(column) {
+        if (currentSortColumn === column) {
+            currentSortReverse = !currentSortReverse;
+        } else {
+            currentSortColumn = column;
+            currentSortReverse = false;
+        }
+    
         fetch("{% url 'mgw_api:update_sort' result.pk %}", {
             method: 'POST',
             headers: {
                 'X-CSRFToken': '{{ csrf_token }}',
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ column: column })
+            body: JSON.stringify({ column: column, sort_reverse: currentSortReverse })
         }).then(response => {
             if (response.ok) {
-                reloadTableBody();
+                response.json().then(data => {
+                    updateSortIcons(column, currentSortReverse);
+                    reloadTableBody();
+                });
             } else {
                 handleError('Failed to update sort settings.');
             }
         }).catch(error => {
             handleError(error.message);
+        });
+    }
+
+    function updateSortIcons(sortedColumn, sortReverse) {
+        const headers = document.querySelectorAll('#table-head th span');
+        headers.forEach((header, index) => {
+            if (index === sortedColumn) {
+                header.innerHTML = sortReverse ? '▼' : '▲';
+            } else {
+                header.innerHTML = '□';
+            }
         });
     }
 

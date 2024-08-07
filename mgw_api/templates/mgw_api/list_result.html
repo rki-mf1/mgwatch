@@ -13,7 +13,7 @@
             </div>
             <div class="signature-actions">
                 {% if not signature.result_set.exists %}
-                    <td><a href="{% url 'mgw_api:delete_signature' signature.pk %}?next={% url 'mgw_api:list_result' %}">delete</a></td>
+                <a href="{% url 'mgw_api:delete_signature' signature.pk %}?next={% url 'mgw_api:list_result' %}" class="delete-link">delete</a>
                 {% endif %}
                 <form action="{% url 'mgw_api:process_signature' signature.pk %}" method="post" style="display:inline;">
                     {% csrf_token %}
@@ -27,8 +27,10 @@
                 <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Signature</th>
                         <th>Date</th>
+                        <th>K-mers</th>
+                        <th>Databases</th>
+                        <th>Containment</th>
                         <th>Size (KB)</th>
                         <th>Watched</th>
                         <th>Delete</th>
@@ -38,8 +40,10 @@
                     {% for result in signature.result_set.all %}
                         <tr>
                             <td><a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.name }}</a></td>
-                            <td>{{ result.signature.name }}</td>
                             <td>{{ result.created_date }}</td>
+                            <td>{{ result.kmer }}</td>
+                            <td>{{ result.database }}</td>
+                            <td>{{ result.containment }}</td>
                             <td>{{ result.file.size|filesizeformat }}</td>
                             <td>
                                 <form id="watch-form-{{ result.pk }}" method="post" action="{% url 'mgw_api:toggle_watch' result.pk %}">
