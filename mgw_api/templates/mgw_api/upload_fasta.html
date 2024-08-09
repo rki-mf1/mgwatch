@@ -27,7 +27,6 @@
  </div>
 
 <script>
-    // Update name field with chosen file name
     const fileInput = document.querySelector('input[type="file"]');
     const nameInput = document.querySelector('input[name="name"]');
 
@@ -37,7 +36,6 @@
         }
     });
 
-    // Allow dropping a file on the name field
     nameInput.addEventListener('dragover', function(event) {
         event.preventDefault();
         nameInput.classList.add('drag-over');
@@ -119,15 +117,5 @@
         });
     });
 </script>
-
-<!-- <script> -->
-<!--     document.getElementById('upload-form').addEventListener('submit', function(event) { -->
-<!--         const submissionMessageDiv = document.querySelector('.submission-message'); -->
-<!--         submissionMessageDiv.innerHTML = ''; -->
-<!--     }); -->
-<!-- </script> -->
-
-
-
 
 {% endblock %}

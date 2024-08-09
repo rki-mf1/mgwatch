@@ -7,11 +7,16 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
 import subprocess
+from django.core.management import call_command
+from .management.commands.return_command import CommandWithReturnValue
+
+
 
 import csv
 import re
 import sys
 import os
+import io
 
 
 def get_table_data(result):
@@ -57,22 +62,21 @@ def apply_compare(modifier, rows, column, value):
 
 def run_create_signature_and_search(user_id, name, fasta_id):
     try:
-        manage_py_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'manage.py')
+        #manage_py_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'manage.py')
+        #result = subprocess.run([sys.executable, manage_py_path, "create_search", str(user_id), name], capture_output=True, text=True, check=True)
         fasta = Fasta.objects.get(id=fasta_id)
-        subprocess.run([sys.executable, manage_py_path, "create_signature", str(user_id), name], check=True)
-        result = subprocess.run([sys.executable, manage_py_path, "create_search", str(user_id), name], capture_output=True, text=True, check=True)
-        print(result)
-        result_pks = []
-        for line in result.stdout.split('\n'):
-            if line.startswith("Result PKs:"):
-                result_pks = line.split(':')[1].strip().strip('[]').split(', ')
-        if result_pks:
-            result_pk = int(result_pks[0])
+        call_command('create_signature', user_id, name)
+        output = io.StringIO()
+        call_command('create_search', user_id, name, stdout=output)
+        output.seek(0)
+        match = re.search(r'RESULT_PK:\s*(\d+)', output.getvalue())
+        result_pk = int(match.group(1)) if match else None
+        if result_pk:
             fasta.result_pk = result_pk
             fasta.processed = True
             fasta.status = "Complete"
             fasta.save()
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         print(f"Error during background processing: {e}")
         fasta.status = f"Error: {e}"
         fasta.save()
