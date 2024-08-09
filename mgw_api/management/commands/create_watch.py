@@ -1,4 +1,4 @@
-# mgw_api/management/commands/create_signature.py
+# mgw_api/management/commands/create_watch.py
 
 from django.core.management.base import BaseCommand
 from mgw_api.models import Fasta, Signature, Result, Settings
@@ -23,13 +23,13 @@ class Command(BaseCommand):
         dt = now.strftime("%d.%m.%Y %H:%M:%S")
         log = f"{dt} - create_search - "
         signature = Signature.objects.get(user_id=user_id, name=name, submitted=True)
-        result_pk = None
+        result_pks = list()
         try:
             uset = Settings.objects.get(user=user_id).to_dict()
             c = uset["containment"]
             file_list = []
             kx, dbx = uset["kmer"], uset["database"]
-            for k, db in product(uset["kmer"], uset["database"]):
+            for k,db in product(uset["kmer"], uset["database"]):
                 # Search signatures in rocksdb
                 date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
                 index_path = os.path.join(settings.EXTERNAL_DATA_DIR, db, "index", f"{db}-{k}.rocksdb")
@@ -39,7 +39,7 @@ class Command(BaseCommand):
                 result = self.search_index(result_file, signature.file.path, index_path, k, uset["containment"])
                 if result.returncode != 0:
                     raise Exception(f"Searching failed with exit code {result.returncode}: {result.stderr}")
-                file_list.append((k, db, c, result_file))
+                file_list.append((k,db,c,result_file))
             combined_file = os.path.join(user_path, f"result_{signature.name}.{date}.csv")
             self.combine_results(file_list, combined_file, signature.name)
             # Save result to django model
@@ -49,24 +49,20 @@ class Command(BaseCommand):
             result_model.file.name = relative_path
             result_model.size = result_model.file.size
             result_model.kmer = kx
-            print("TA")
             result_model.database = dbx
             result_model.containment = c
             result_model.save()
-            print("TB")
-            self.stdout.write(self.style.SUCCESS(f"Created at {result_model.created_date}"))
-            print("TC")
-            result_pk = result_model.pk
-            print("TD")
+            self.stdout.write(self.style.SUCCESS(f"Created at {result_model.created_date}'"))
+            ## Update the processed status
+            #self.stdout.write(self.style.SUCCESS(f"Successfully processed file '{fasta.name}'"))
+            #self.stdout.write(self.style.SUCCESS(f"{log}Searching signature in database successful."))
+            result_pks.append(result_model.pk)
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"{log}Error processing search '{signature.name}': {e}"))
-        print("TE")
         signature.submitted = False
         signature.save()
-        print("TF")
-        self.stdout.write(self.style.SUCCESS(f"RESULT_PK: {result_pk}"))
-        print("TG")
-        
+        if result_pks:
+            self.stdout.write(f"Result PKs: {result_pks}")
 
     def search_index(self, result_file, sketch_file, index_path, k, containment):
         cmd = ["sourmash", "scripts", "manysearch", "--ksize", f"{k}", "--moltype", "DNA", "--scaled", "1000", "--cores", "20", "--threshold", f"{containment}", "--output", result_file, sketch_file, index_path]

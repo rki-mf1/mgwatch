@@ -247,10 +247,13 @@ def result_table(request, pk):
                 elif value is not None: rows = apply_regex(rows, column, value)
 
         # Apply sorting
+        def human_sort_key(text):
+            return [int(c) if c.isdigit() else c.lower() for c in re.split('(\d+)', str(text))]
+    
         sort_column = filter_settings.sort_column
         sort_reverse = filter_settings.sort_reverse
         if sort_column is not None:
-            rows = sorted(rows, key=lambda x: x[int(sort_column)], reverse=sort_reverse)
+            rows = sorted(rows, key=lambda x: human_sort_key(x[int(sort_column)]), reverse=sort_reverse)
 
         watch_form = WatchForm(instance=result)
         filter_form = FilterSettingForm(instance=filter_settings)
