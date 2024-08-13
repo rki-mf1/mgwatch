@@ -140,6 +140,14 @@ LOGIN_REDIRECT_URL = "/mgw_api/index/"
 LOGOUT_REDIRECT_URL = "/mgw_api/login/"
 LOGIN_URL = "/mgw_api/login/"
 
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'localhost'
+EMAIL_PORT = 1025
+EMAIL_USE_TLS = False # set to True if not local
+EMAIL_USE_SSL = False # set to True if not local
+DEFAULT_FROM_EMAIL = 'MetagenomeWatch@rki.de'
+
 ###########################################################
 # Django Authentication using LDAP Users
 # Django Login with LDAP users

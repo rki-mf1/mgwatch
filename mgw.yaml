@@ -13,5 +13,7 @@ dependencies:
   - conda-forge::urllib3=2.2.2
   - conda-forge::pyyaml=6.0.1
   - conda-forge::python-crontab=3.2.0
-  - bioconda::sourmash=4.8.10
+  - conda-forge::sourmash-minimal=4.8.11
   - conda-forge::sourmash_plugin_branchwater=0.9.5
+  - conda-forge::screen=4.8.0
+  - conda-forge::aiosmtpd=1.4.6

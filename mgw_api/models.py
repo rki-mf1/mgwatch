@@ -61,8 +61,6 @@ class Signature(models.Model):
     size = models.IntegerField(default=0)
     submitted = models.BooleanField(default=False)
     settings_used = models.JSONField(null=True, blank=True)
-    status = models.CharField(max_length=255, default="Pending")
-    result_pk = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
         return self.name

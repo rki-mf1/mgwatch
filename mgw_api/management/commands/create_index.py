@@ -2,6 +2,7 @@
 import os
 import shutil
 from django.core.management.base import BaseCommand
+from django.core.management import call_command
 from django.conf import settings
 
 from datetime import datetime
@@ -15,6 +16,7 @@ class Command(BaseCommand):
         now = datetime.now()
         dt = now.strftime("%d.%m.%Y %H:%M:%S")
         log = f"{dt} - create_index - "
+        call_command('create_watch')
         try:
             kmers = [21,31,51]
             database = "SRA"
@@ -30,6 +32,7 @@ class Command(BaseCommand):
                 self.move_files(new_files, dir_paths, td, rs)
                 self.update_manifest(new_files, sig_files, manifest)
                 self.stdout.write(self.style.SUCCESS(f"{log}Updated index and moved new signatures."))
+                call_command('create_watch')
             else:
                 self.stdout.write(self.style.SUCCESS(f"{log}No new files to process in {dir_paths['updates']}."))
         except Exception as e:

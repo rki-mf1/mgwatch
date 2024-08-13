@@ -104,7 +104,7 @@ def upload_fasta(request):
                         uploaded_file_instance.processed = False
                         uploaded_file_instance.status = "Processing"
                         uploaded_file_instance.save()
-                        thread = threading.Thread(target=run_create_signature_and_search, args=(request.user.id, name, uploaded_file_instance.id))
+                        thread = threading.Thread(target=run_create_signature_and_search, args=(request.user.id, name, uploaded_file_instance.id, True))
                         thread.start()
                         return JsonResponse({'success': True, 'message': 'File submission successful! Processing will happen in the background.', 'fasta_id': uploaded_file_instance.id})
                 except Exception as e:
@@ -194,14 +194,24 @@ def list_result(request):
                 return redirect(reverse("mgw_api:list_result"))
             else:
                 messages.error(request, 'Please correct the errors below.')
-    ## handle list results
+        if 'signature_id' in request.POST:
+            try:
+                signature_id = request.POST.get('signature_id')
+                signature = get_object_or_404(Signature, id=signature_id, user=request.user)
+                signature.submitted = True
+                signature.save()
+                fasta = signature.fasta
+                fasta.processed = False
+                fasta.status = "Processing"
+                fasta.save()
+                thread = threading.Thread(target=run_create_signature_and_search, args=(request.user.id, fasta.name, fasta.id, False))
+                thread.start()
+                return JsonResponse({'success': True, 'message': 'Signature submission successful! Processing will happen in the background.', 'fasta_id': fasta.id})
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': f"Error: file submission failed! ... {e}"})
     signatures = Signature.objects.filter(user=request.user).prefetch_related('result_set')
     return render(request, 'mgw_api/list_result.html', {'signatures': signatures, 'settings_form': settings_form})
 
-#watch_forms = {result.pk:WatchForm(instance=result) for result in result_files}
-#result_files = Result.objects.filter(user=request.user)
-#return render(request, 'mgw_api/list_result.html', {'result_files': result_files, 'watch_forms': watch_forms, 'settings_form': settings_form})
-    
 
 @login_required
 def toggle_watch(request, pk):
@@ -248,7 +258,7 @@ def result_table(request, pk):
 
         # Apply sorting
         def human_sort_key(text):
-            return [int(c) if c.isdigit() else c.lower() for c in re.split('(\d+)', str(text))]
+            return [int(c) if c.isdigit() else c.lower() for c in re.split('\\d+)', str(text))]
     
         sort_column = filter_settings.sort_column
         sort_reverse = filter_settings.sort_reverse
