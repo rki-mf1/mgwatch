@@ -1,7 +1,7 @@
 # mgw_api/functions.py
 
 import time  # Simulate a time-consuming task
-from .models import Fasta, Settings
+from .models import Fasta, Settings, Signature
 from .forms import SettingsForm
 from django.contrib import messages
 from django.shortcuts import redirect
@@ -60,12 +60,10 @@ def apply_compare(modifier, rows, column, value):
     except (ValueError, TypeError):
         return True
 
-def run_create_signature_and_search(user_id, name, fasta_id):
+def run_create_signature_and_search(user_id, name, fasta_id, do_sketching):
     try:
-        #manage_py_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'manage.py')
-        #result = subprocess.run([sys.executable, manage_py_path, "create_search", str(user_id), name], capture_output=True, text=True, check=True)
         fasta = Fasta.objects.get(id=fasta_id)
-        call_command('create_signature', user_id, name)
+        if do_sketching: call_command('create_signature', user_id, name)
         output = io.StringIO()
         call_command('create_search', user_id, name, stdout=output)
         output.seek(0)

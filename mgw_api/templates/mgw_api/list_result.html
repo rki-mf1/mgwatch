@@ -4,7 +4,7 @@
 
 {% include "mgw_api/settings.html" %}
 
-<div class="signature-list">
+<div class="signature-list", id="upload-section">
     <h2>Genomes and Results</h2>
     {% for signature in signatures %}
         <div class="signature-header">
@@ -15,8 +15,9 @@
                 {% if not signature.result_set.exists %}
                 <a href="{% url 'mgw_api:delete_signature' signature.pk %}?next={% url 'mgw_api:list_result' %}" class="delete-link">delete</a>
                 {% endif %}
-                <form action="{% url 'mgw_api:process_signature' signature.pk %}" method="post" style="display:inline;">
+                <form class="search-form" method="post" action="{% url 'mgw_api:list_result' %}">
                     {% csrf_token %}
+                    <input type="hidden" name="signature_id" value="{{ signature.pk }}">
                     <button type="submit">search</button>
                 </form>
             </div>
@@ -62,8 +63,15 @@
     {% endfor %}
 </div>
 
+<div class="waiting-message" id="waiting-message" style="display: none;">
+    <ul class="messages">
+        <li class="info">Searching for matches, please wait. Do not close or reload the page. This process might take a few minutes.</li>
+    </ul>
+</div>
+
 <script>
     function handleError(message) {
+        const submissionMessageDiv = document.querySelector('.submission-message');
         submissionMessageDiv.style.display = 'block';
         submissionMessageDiv.innerHTML = `<ul class="messages"><li class="error">An error occurred: ${message}</li></ul>`;
     }
@@ -84,6 +92,76 @@
             }
         });
     }
+
+    function pollStatus(fastaId) {
+        const url = `{% url 'mgw_api:check_status' 0 %}`.replace('0', fastaId);
+
+        function checkStatus() {
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'Complete') {
+                        window.location.href = `{% url 'mgw_api:result_table' 0 %}`.replace('0', data.result_pk);
+                    } else if (data.status.startsWith('Error')) {
+                        handleError(data.status);
+                        document.getElementById('upload-section').style.display = 'block';
+                        document.getElementById('waiting-message').style.display = 'none';
+                    } else {
+                        setTimeout(checkStatus, 5000);
+                    }
+                }).catch(error => {
+                    handleError('An unexpected error occurred while checking the status.');
+                    document.getElementById('upload-section').style.display = 'block';
+                    document.getElementById('waiting-message').style.display = 'none';
+                });
+        }
+
+        checkStatus();
+    }
+
+    function handleFormSubmission(event, headers = {}) {
+        event.preventDefault();
+        const form = event.target;
+        const formData = new FormData(form);
+    
+        const uploadSection = document.getElementById('upload-section');
+        const waitingMessage = document.getElementById('waiting-message');
+    
+        uploadSection.style.display = 'none';
+        waitingMessage.style.display = 'block';
+    
+        fetch(form.action, {
+            method: 'POST',
+            headers: headers,
+            body: formData,
+        }).then(response => {
+            if (!response.ok) {
+                handleError(`Network response was not ok. Status: ${response.status} - ${response.statusText}`);
+            }
+            return response.json();
+        }).then(data => {
+            if (data.success) {
+                pollStatus(data.fasta_id);
+            } else {
+                handleError(data.error || 'An unexpected error occurred.');
+                uploadSection.style.display = 'block';
+                waitingMessage.style.display = 'none';
+            }
+        }).catch(error => {
+            handleError('An unexpected error occurred.');
+            uploadSection.style.display = 'block';
+            waitingMessage.style.display = 'none';
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.search-form').forEach(form => {
+            form.addEventListener('submit', function (event) {
+                const headers = { 'X-CSRFToken': '{{ csrf_token }}' };
+                handleFormSubmission(event, headers);
+            });
+        });
+    });
 </script>
 
 {% endblock %}

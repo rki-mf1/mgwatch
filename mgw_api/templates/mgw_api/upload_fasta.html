@@ -27,55 +27,84 @@
  </div>
 
 <script>
-    const fileInput = document.querySelector('input[type="file"]');
-    const nameInput = document.querySelector('input[name="name"]');
+    document.addEventListener('DOMContentLoaded', function () {
+        const fileInput = document.querySelector('input[type="file"]');
+        const nameInput = document.querySelector('input[name="name"]');
 
-    fileInput.addEventListener('change', function() {
-        if (fileInput.files.length > 0) {
-            nameInput.value = fileInput.files[0].name;
-        }
-    });
+        fileInput.addEventListener('change', function() {
+            if (fileInput.files.length > 0) {
+                nameInput.value = fileInput.files[0].name;
+            }
+        });
 
-    nameInput.addEventListener('dragover', function(event) {
-        event.preventDefault();
-        nameInput.classList.add('drag-over');
-    });
+        nameInput.addEventListener('dragover', function(event) {
+            event.preventDefault();
+            nameInput.classList.add('drag-over');
+        });
 
-    nameInput.addEventListener('dragleave', function(event) {
-        nameInput.classList.remove('drag-over');
-    });
+        nameInput.addEventListener('dragleave', function(event) {
+            nameInput.classList.remove('drag-over');
+        });
 
-    nameInput.addEventListener('drop', function(event) {
-        event.preventDefault();
-        nameInput.classList.remove('drag-over');
+        nameInput.addEventListener('drop', function(event) {
+            event.preventDefault();
+            nameInput.classList.remove('drag-over');
 
-        const files = event.dataTransfer.files;
-        if (files.length > 0) {
-            fileInput.files = files;
-            nameInput.value = files[0].name;
-        }
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                nameInput.value = files[0].name;
+            }
+        });
     });
     
-    document.getElementById('upload-form').addEventListener('submit', function(event) {
+    function handleError(message) {
+        const submissionMessageDiv = document.querySelector('.submission-message');
+        submissionMessageDiv.style.display = 'block';
+        submissionMessageDiv.innerHTML = `<ul class="messages"><li class="error">An error occurred: ${message}</li></ul>`;
+    }
+
+    function pollStatus(fastaId) {
+        const url = `{% url 'mgw_api:check_status' 0 %}`.replace('0', fastaId);
+
+        function checkStatus() {
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'Complete') {
+                        window.location.href = `{% url 'mgw_api:result_table' 0 %}`.replace('0', data.result_pk);
+                    } else if (data.status.startsWith('Error')) {
+                        handleError(data.status);
+                        document.getElementById('upload-section').style.display = 'block';
+                        document.getElementById('waiting-message').style.display = 'none';
+                    } else {
+                        setTimeout(checkStatus, 5000);
+                    }
+                }).catch(error => {
+                    handleError('An unexpected error occurred while checking the status.');
+                    document.getElementById('upload-section').style.display = 'block';
+                    document.getElementById('waiting-message').style.display = 'none';
+                });
+        }
+
+        checkStatus();
+    }
+
+    function handleFormSubmission(event, headers = {}) {
         event.preventDefault();
         const form = event.target;
         const formData = new FormData(form);
-        // hide upload and show submission message
-        document.getElementById('upload-section').style.display = 'none';
-        document.getElementById('waiting-message').style.display = 'block';
-        // handle potential errors
-        const handleError = (message) => {
-            document.querySelector('.submission-message').innerHTML = `<ul class="messages"><li class="error">An error occurred: ${message}</li></ul>`;
-            document.getElementById('upload-section').style.display = 'block';
-            document.getElementById('waiting-message').style.display = 'none';
-        };
-        // AJAX request to submit form
+    
+        const uploadSection = document.getElementById('upload-section');
+        const waitingMessage = document.getElementById('waiting-message');
+    
+        uploadSection.style.display = 'none';
+        waitingMessage.style.display = 'block';
+    
         fetch(form.action, {
             method: 'POST',
+            headers: headers,
             body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-            },
         }).then(response => {
             if (!response.ok) {
                 handleError(`Network response was not ok. Status: ${response.status} - ${response.statusText}`);
@@ -83,37 +112,24 @@
             return response.json();
         }).then(data => {
             if (data.success) {
-                // Start polling for processing status
-                const fastaId = data.fasta_id;
-                const checkStatus = () => {
-                    fetch(`/mgw_api/check_status/${fastaId}/`, {
-                        method: 'GET',
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest',
-                        },
-                    }).then(response => {
-                        if (!response.ok) {
-                            handleError(`Network response was not ok. Status: ${response.status} - ${response.statusText}`);
-                        }
-                        return response.json();
-                    }).then(data => {
-                        if (data.status === 'Complete' && data.result_pk) {
-                            window.location.href = `/mgw_api/result/${data.result_pk}/`;
-                        } else if (data.status.startsWith('Error')) {
-                            handleError(data.status);
-                        } else {
-                            setTimeout(checkStatus, 5000);
-                        }
-                    }).catch(error => {
-                        handleError(error.message);
-                    });
-                };
-                checkStatus();
+                pollStatus(data.fasta_id);
             } else {
-                handleError(data.error);
+                handleError(data.error || 'An unexpected error occurred.');
+                uploadSection.style.display = 'block';
+                waitingMessage.style.display = 'none';
             }
         }).catch(error => {
-            handleError(error.message);
+            handleError('An unexpected error occurred.');
+            uploadSection.style.display = 'block';
+            waitingMessage.style.display = 'none';
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('upload-form');
+        form.addEventListener('submit', function (event) {
+            const headers = { 'X-Requested-With': 'XMLHttpRequest' };
+            handleFormSubmission(event, headers);
         });
     });
 </script>

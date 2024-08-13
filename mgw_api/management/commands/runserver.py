@@ -3,29 +3,31 @@
 import os
 import sys
 import signal
-import subprocess
 from django.contrib.staticfiles.management.commands.runserver import Command as StaticRunServerCommand
-import time
+from django.core.management import call_command
 
-
-def start_cron_jobs(manage_py_path, command_path):
-    print(manage_py_path)
-    print(command_path)
-    subprocess.call([sys.executable, os.path.join(command_path, f"manage_crons.py"), "start", manage_py_path])
-
-def stop_cron_jobs(manage_py_path, command_path, *args):
-    subprocess.call([sys.executable, os.path.join(command_path, f"manage_crons.py"), "stop", manage_py_path])
-    sys.exit(1)
 
 class Command(StaticRunServerCommand):
     def run(self, **options):
-        # get manage.py location
-        manage_py_path = os.path.abspath("manage.py")
-        command_path = os.path.dirname(os.path.abspath(__file__))
-        # stop cron jobs on exit
-        signal.signal(signal.SIGINT, lambda signal, frame: stop_cron_jobs(manage_py_path, command_path, signal, frame))
-        signal.signal(signal.SIGTERM, lambda signal, frame: stop_cron_jobs(manage_py_path, command_path, signal, frame))
-        # start cron jobs on server start
-        start_cron_jobs(manage_py_path, command_path)
-        # call server
+        self.manage_py_path = os.path.abspath("manage.py")
+        if os.environ.get('RUN_MAIN') != 'true':
+            # Start cron jobs
+            print("Starting cron jobs...")
+            call_command('create_crons', 'start', self.manage_py_path)
+            # Start the mail server
+            print("Starting mail server...")
+            call_command('create_mail', 'start')
+
+        # Stop cron jobs and mail server on exit
+        signal.signal(signal.SIGINT, self.stop_services)
+        signal.signal(signal.SIGTERM, self.stop_services)
+        
+        # Call Django's runserver
         super().run(**options)
+
+    def stop_services(self, signum, frame):
+        print("Stopping cron jobs...")
+        call_command('create_crons', 'stop', self.manage_py_path)
+        print("Stopping mail server...")
+        call_command('create_mail', 'stop')
+        sys.exit(0)
