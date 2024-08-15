@@ -20,26 +20,24 @@ class Command(BaseCommand):
         results = Result.objects.filter(is_watched=True)
         for result in results:
             try:
-                self.stdout.write(self.style.SUCCESS(f"TEST 1"))
                 signature = Signature.objects.get(user_id=result.user.id, name=result.name)
-                self.stdout.write(self.style.SUCCESS(f"TEST 2"))
-                #### TODO: FIX ERROR HERE
-                new_result = self.search_watch(signature)
-                self.stdout.write(self.style.SUCCESS(f"TEST 3"))
+                signature.submitted = True
+                signature.save()
+                new_result = self.search_watch(signature.name, signature.user.id, result.pk)
                 is_equal = self.compare_results(result, new_result)
-                self.stdout.write(self.style.SUCCESS(f"TEST 4"))
-                if is_equal: new_result.delete()
-                else:        self.send_notification(result.user, result, new_result)
-                self.stdout.write(self.style.SUCCESS(f"TEST 5"))
-                self.stdout.write(self.style.SUCCESS(f"Successfully processed file '{result.name}'"))
+                if is_equal:
+                    new_result.delete()
+                    new_message = "without finding new Metagenomes"
+                else:
+                    self.send_notification(result.user, result, new_result)
+                    new_message = "with new Metagenomes"
+                self.stdout.write(self.style.SUCCESS(f"Successfully processed file '{result.name}' {new_message}"))
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"Error processing file '{result.name}': {e}"))
 
-    def search_watch(self, signature):
-        user_id = signature.user.id
-        name = signature.name
+    def search_watch(self, name, user_id, watch_pk):
         output = io.StringIO()
-        call_command('create_search', user_id, name, stdout=output)
+        call_command('create_search', user_id, name, watch_pk, stdout=output)
         match = re.search(r'RESULT_PK:\s*(\d+)', output.getvalue())
         result_pk = int(match.group(1)) if match else None
         new_result = Result.objects.get(pk=result_pk, user_id=user_id)
@@ -52,13 +50,14 @@ class Command(BaseCommand):
         #diff = df1.compare(df2)
         return is_equal
 
-    def send_notification(user, result, new_result):
+    def send_notification(self, user, result, new_result):
+        self.stdout.write(self.style.SUCCESS(f"Writing Mail ..."))
         result_page = f"http://localhost:8080/mgw_api/result/{new_result.pk}/"
         subject = f"MetagenomeWatch: Found new Genomes for {new_result.name}!"
         message = f"""
         Dear {user.username},
 
-        Your watch that was created on {result.created_date} has successfully found new results with your query!
+        Your watch that was created on {result.date} has successfully found new results with your query!
 
         Query: {new_result.name}
         K-mer: {new_result.kmer}
@@ -68,9 +67,10 @@ class Command(BaseCommand):
 
         Thank you for using MetagenomeWatch!
 
-        Best withes,
+        Best wishes,
         The MetagenomeWatch Team
         """
         from_email = settings.DEFAULT_FROM_EMAIL
         to_email = user.email
+        self.stdout.write(self.style.SUCCESS(f"Send Mail ..."))
         send_mail(subject, message, from_email, [to_email], fail_silently=False,)

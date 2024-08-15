@@ -63,12 +63,14 @@ def apply_compare(modifier, rows, column, value):
 def run_create_signature_and_search(user_id, name, fasta_id, do_sketching):
     try:
         fasta = Fasta.objects.get(id=fasta_id)
+        print(f"WTF: {fasta_id}")
         if do_sketching: call_command('create_signature', user_id, name)
         output = io.StringIO()
-        call_command('create_search', user_id, name, stdout=output)
+        call_command('create_search', user_id, name, "False", stdout=output)
         output.seek(0)
         match = re.search(r'RESULT_PK:\s*(\d+)', output.getvalue())
         result_pk = int(match.group(1)) if match else None
+        print(f"WTF: {result_pk}")
         if result_pk:
             fasta.result_pk = result_pk
             fasta.processed = True
@@ -78,3 +80,6 @@ def run_create_signature_and_search(user_id, name, fasta_id, do_sketching):
         print(f"Error during background processing: {e}")
         fasta.status = f"Error: {e}"
         fasta.save()
+
+def human_sort_key(text):
+    return [int(c) if c.isdigit() else c.lower() for c in re.split('\\d+)', str(text))]

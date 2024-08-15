@@ -8,6 +8,7 @@ from aiosmtpd.controller import Controller
 import threading
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import smtplib
 
 class Command(BaseCommand):
     help = "Start or stop the mail server"
@@ -35,29 +36,9 @@ class Command(BaseCommand):
                     f.write(envelope.content.decode('utf8', errors='replace'))
                     f.write('\nEnd of message\n\n')
                 return '250 Message accepted for delivery'
-
         mail_path = os.path.dirname(os.path.abspath(__file__))
         log_file_path = os.path.join(mail_path, "mail.log")
         self.handler = CustomHandler(log_file_path)
-        ########################################################################
-        #class CustomHandler:
-        #    async def handle_DATA(self, server, session, envelope):
-        #        # Create the email message
-        #        msg = MIMEMultipart()
-        #        msg['From'] = envelope.mail_from
-        #        msg['To'] = ', '.join(envelope.rcpt_tos)
-        #        msg['Subject'] = 'SMTP Mail Server Message'
-        #        msg.attach(MIMEText(envelope.content.decode('utf8', errors='replace'), 'plain'))
-        #        try:
-        #            with smtplib.SMTP('localhost', 25) as server:
-        #                server.sendmail(envelope.mail_from, envelope.rcpt_tos, msg.as_string())
-        #                print('Email sent successfully')
-        #        except Exception as e:
-        #            print(f'Failed to send email: {e}')
-        #        return '250 Message accepted for delivery'
-
-        #self.handler = CustomHandler()
-        ########################################################################
         self.controller = Controller(self.handler, hostname='localhost', port=1025)
         self.thread = threading.Thread(target=self.controller.start)
         self.thread.start()

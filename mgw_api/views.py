@@ -209,7 +209,9 @@ def list_result(request):
                 return JsonResponse({'success': True, 'message': 'Signature submission successful! Processing will happen in the background.', 'fasta_id': fasta.id})
             except Exception as e:
                 return JsonResponse({'success': False, 'error': f"Error: file submission failed! ... {e}"})
-    signatures = Signature.objects.filter(user=request.user).prefetch_related('result_set')
+    signatures = (Signature.objects.filter(user=request.user).prefetch_related('result_set').order_by('-date', '-time'))
+    for signature in signatures:
+        signature.sorted_results = signature.result_set.all().order_by('-date', '-time')
     return render(request, 'mgw_api/list_result.html', {'signatures': signatures, 'settings_form': settings_form})
 
 
@@ -256,10 +258,6 @@ def result_table(request, pk):
                 if is_float(value):     rows = [row for row in rows if apply_compare(m, row, column, value)]
                 elif value is not None: rows = apply_regex(rows, column, value)
 
-        # Apply sorting
-        def human_sort_key(text):
-            return [int(c) if c.isdigit() else c.lower() for c in re.split('\\d+)', str(text))]
-    
         sort_column = filter_settings.sort_column
         sort_reverse = filter_settings.sort_reverse
         if sort_column is not None:
