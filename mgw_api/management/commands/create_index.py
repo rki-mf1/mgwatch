@@ -16,7 +16,10 @@ class Command(BaseCommand):
         now = datetime.now()
         dt = now.strftime("%d.%m.%Y %H:%M:%S")
         log = f"{dt} - create_index - "
+        ########################################################################
+        # TODO: remove this one after testing:
         call_command('create_watch')
+        ########################################################################
         try:
             kmers = [21,31,51]
             database = "SRA"

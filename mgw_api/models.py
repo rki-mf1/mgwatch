@@ -58,6 +58,7 @@ class Signature(models.Model):
     fasta = models.ForeignKey(Fasta, null=True, on_delete=models.SET_NULL)
     file = models.FileField(upload_to=user_directory_path)
     date = models.DateTimeField(auto_now_add=True)
+    time = models.TimeField(auto_now_add=True)
     size = models.IntegerField(default=0)
     submitted = models.BooleanField(default=False)
     settings_used = models.JSONField(null=True, blank=True)
@@ -101,8 +102,8 @@ class Result(models.Model):
     kmer = models.JSONField(default=list)
     database = models.JSONField(default=list)
     containment = models.FloatField(default=0.10)
-    created_time = models.DateTimeField(auto_now_add=True)
-    created_date = models.DateField(auto_now_add=True)
+    date = models.DateField(auto_now_add=True)
+    time = models.DateTimeField(auto_now_add=True)
     is_watched = models.BooleanField(default=False)
 
     def __str__(self):

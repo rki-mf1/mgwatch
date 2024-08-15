@@ -8,7 +8,22 @@ for i in "${!mamba_envs[@]}"
 do
     if mamba info --envs | grep -q ${mamba_envs[i]}; then echo "# Mamba environment ${mamba_envs[i]} already exists."; else mamba env create --file ${mamba_envs[i]}.yaml; fi
 done
-
+#for i in "${!mamba_envs[@]}"
+#do
+#    if mamba info --envs | grep -q ${mamba_envs[i]}; then 
+#        echo "# Mamba environment ${mamba_envs[i]} already exists."
+#        mamba env export -n ${mamba_envs[i]} --no-builds > temp_${mamba_envs[i]}.yaml
+#        if diff -q <(grep -v "^prefix: " temp_${mamba_envs[i]}.yaml) <(grep -v "^prefix: " "${mamba_envs[i]}.yaml"); then
+#            echo "# The environment ${mamba_envs[i]} is up to date."
+#        else
+#            echo "# The environment ${mamba_envs[i]} needs to be updated."
+#            mamba env update -n ${mamba_envs[i]} --file "${yaml_file}"
+#        fi
+#        rm temp_${mamba_envs[i]}.yaml
+#    else
+#        mamba env create --file ${mamba_envs[i]}.yaml
+#    fi
+#done
 
 ################################################################
 ## main

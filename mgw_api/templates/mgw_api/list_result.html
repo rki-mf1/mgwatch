@@ -38,10 +38,10 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for result in signature.result_set.all %}
+                    {% for result in signature.sorted_results.all %}
                         <tr>
                             <td><a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.name }}</a></td>
-                            <td>{{ result.created_date }}</td>
+                            <td>{{ result.date }} {{ result.time|date:"H:i:s" }}</td>
                             <td>{{ result.kmer }}</td>
                             <td>{{ result.database }}</td>
                             <td>{{ result.containment }}</td>

@@ -15,54 +15,53 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('user_id', type=int, help='ID of the user')
         parser.add_argument('name', type=str, help='Name of the fasta file')
-        parser.add_argument('--kmer', type=int, help='Override the current kmer setting')
-        parser.add_argument('--database', type=str, help='Override the current database setting')
-        parser.add_argument('--containment', type=int, help='Override the current containment setting')
+        parser.add_argument('watch', type=str, help='Either False or result pk')
     
     def handle(self, *args, **kwargs):
-        user_id = kwargs['user_id']
-        name = kwargs['name']
+        user_id, name, watch = kwargs['user_id'], kwargs['name'], kwargs['watch']
+        search_set = Settings.objects.get(user=user_id) if watch == "False" else Result.objects.get(pk=int(watch))
+        kmer, database, containment = search_set.kmer, search_set.database, search_set.containment
         now = datetime.now()
         dt = now.strftime("%d.%m.%Y %H:%M:%S")
         log = f"{dt} - create_search - "
         result_pk = None
-        try:
-            signature = Signature.objects.get(user_id=user_id, name=name, submitted=True)
-            uset = Settings.objects.get(user=user_id).to_dict()
-            file_list = []
-            kx = kwargs.get('kmer') if kwargs.get('kmer') is not None else uset["kmer"]
-            dbx = kwargs.get('database') if kwargs.get('database') is not None else uset["database"]
-            c = kwargs.get('containment') if kwargs.get('containment') is not None else uset["containment"]
-            for k, db in product(uset["kmer"], uset["database"]):
-                # Search signatures in rocksdb
-                date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-                index_path = os.path.join(settings.EXTERNAL_DATA_DIR, db, "index", f"{db}-{k}.rocksdb")
-                user_path = os.path.dirname(signature.file.path)
-                result_file = os.path.join(user_path, f"result_{signature.name}.{db}-{k}-{date}.csv")
-                self.stdout.write(self.style.SUCCESS(result_file))
-                result = self.search_index(result_file, signature.file.path, index_path, k, c)
-                if result.returncode != 0:
-                    raise Exception(f"Searching failed with exit code {result.returncode}: {result.stderr}")
-                file_list.append((k, db, c, result_file))
-            combined_file = os.path.join(user_path, f"result_{signature.name}.{date}.csv")
-            self.combine_results(file_list, combined_file, signature.name)
-            # Save result to django model
-            relative_path = os.path.relpath(combined_file, settings.MEDIA_ROOT)
-            self.stdout.write(self.style.SUCCESS(relative_path))
-            result_model = Result(user=signature.user, signature=signature, name=signature.name)
-            result_model.file.name = relative_path
-            result_model.size = result_model.file.size
-            result_model.kmer = kx
-            result_model.database = dbx
-            result_model.containment = c
-            result_model.save()
-            self.stdout.write(self.style.SUCCESS(f"Created at {result_model.created_date}"))
-            result_pk = result_model.pk
-            signature.submitted = False
-            signature.save()
-            self.stdout.write(self.style.SUCCESS(f"RESULT_PK: {result_pk}"))
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"{log}Error processing search '{signature.name}': {e}"))
+        test_path = os.path.dirname(os.path.abspath(__file__))
+        log_file_path = os.path.join(test_path, "test.log")
+        with open(log_file_path, "a") as logf:
+            try:
+                signature = Signature.objects.get(user_id=user_id, name=name, submitted=True)
+                file_list = []
+                logf.write(f"Debug Search: kmer = {kmer}, database = {database}, containment = {containment}\n")
+                for k, db in product(kmer, database):
+                    date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+                    index_path = os.path.join(settings.EXTERNAL_DATA_DIR, db, "index", f"{db}-{k}.rocksdb")
+                    user_path = os.path.dirname(signature.file.path)
+                    result_file = os.path.join(user_path, f"result_{signature.name}.{db}-{k}-{date}.csv")
+                    self.stdout.write(self.style.SUCCESS(result_file))
+                    result = self.search_index(result_file, signature.file.path, index_path, k, containment)
+                    if result.returncode != 0:
+                        raise Exception(f"Searching failed with exit code {result.returncode}: {result.stderr}")
+                    file_list.append((k, db, containment, result_file))
+                combined_file = os.path.join(user_path, f"result_{signature.name}.{date}.csv")
+                self.combine_results(file_list, combined_file, signature.name)
+                # Save result to django model
+                relative_path = os.path.relpath(combined_file, settings.MEDIA_ROOT)
+                self.stdout.write(self.style.SUCCESS(relative_path))
+                result_model = Result(user=signature.user, signature=signature, name=signature.name)
+                result_model.file.name = relative_path
+                result_model.size = result_model.file.size
+                result_model.kmer = kmer
+                result_model.database = database
+                result_model.containment = containment
+                result_model.save()
+                self.stdout.write(self.style.SUCCESS(f"Created at {result_model.date}"))
+                result_pk = result_model.pk
+                signature.submitted = False
+                signature.save()
+                logf.write(f"Debug Search: result_pk = {result_pk}\n")
+                self.stdout.write(self.style.SUCCESS(f"RESULT_PK: {result_pk}"))
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"{log}Error processing search '{signature.name}': {e}"))
 
     def search_index(self, result_file, sketch_file, index_path, k, containment):
         cmd = ["sourmash", "scripts", "manysearch", "--ksize", f"{k}", "--moltype", "DNA", "--scaled", "1000", "--cores", "20", "--threshold", f"{containment}", "--output", result_file, sketch_file, index_path]
