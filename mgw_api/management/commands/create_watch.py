@@ -10,7 +10,6 @@ from datetime import datetime
 from itertools import product
 import subprocess
 import os
-import csv
 import io
 import re
 import pandas as pd
