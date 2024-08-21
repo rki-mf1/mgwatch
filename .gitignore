@@ -10,6 +10,7 @@ test.py
 cronlog.log
 testfile.log
 home.html
+db.sqlite3
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
