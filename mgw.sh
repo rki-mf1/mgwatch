@@ -34,10 +34,13 @@ function main() {
     environment="mgw"
     server=""
     ################################################################
-    if [[ "$MIGRATE" == "m" ]]; then
-        echo "# Do Migrations."
+    if [[ "$MIGRATE" == "mm" ]]; then
+        echo "# Make MGW model migrations."
         command="makemigrations"
         mgw_server environment command server
+    fi
+    if [[ "$MIGRATE" == "m" || "$MIGRATE" == "mm" ]]; then
+        echo "# Migrate MGW models."
         command="migrate"
         mgw_server environment command server
     fi
