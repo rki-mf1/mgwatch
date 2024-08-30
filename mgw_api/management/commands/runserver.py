@@ -5,6 +5,7 @@ import sys
 import signal
 from django.contrib.staticfiles.management.commands.runserver import Command as StaticRunServerCommand
 from django.core.management import call_command
+from django.conf import settings
 
 
 class Command(StaticRunServerCommand):
@@ -17,6 +18,14 @@ class Command(StaticRunServerCommand):
             # Start the mail server
             print("Starting mail server...")
             call_command('create_mail', 'start')
+            # Start the mongodb server
+            print("Starting mongodb server...")
+            call_command('create_mongodb', 'start')
+            # Create initial metadata
+            init_flag = os.path.join(settings.EXTERNAL_DATA_DIR, "SRA", "metadata", "initial_setup.txt")
+            if not os.path.exists(init_flag):
+                print("Creating initial metadata...")
+                call_command('create_metadata')
 
         # Stop cron jobs and mail server on exit
         signal.signal(signal.SIGINT, self.stop_services)
@@ -30,4 +39,6 @@ class Command(StaticRunServerCommand):
         call_command('create_crons', 'stop', self.manage_py_path)
         print("Stopping mail server...")
         call_command('create_mail', 'stop')
+        print("Stopping mongodb server...")
+        call_command('create_mongodb', 'stop')
         sys.exit(0)

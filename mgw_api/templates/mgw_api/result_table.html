@@ -47,8 +47,14 @@
             <tbody id="table-body">
                 {% for row in rows %}
                     <tr>
-                        {% for cell in row %}
-                            <td>{{ cell }}</td>
+                        {% for cell, header in row|zip_lists:headers %}
+                            <td>
+                                {% if header == "sra link" or header == "biosample link" %}
+                                    <a href="{{ cell }}" target="_blank">{{ cell|last_part_of_url }}</a>
+                                {% else %}
+                                    {{ cell }}
+                                {% endif %}
+                            </td>
                         {% endfor %}
                     </tr>
                 {% endfor %}

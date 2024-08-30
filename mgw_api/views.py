@@ -16,6 +16,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json
 import asyncio
+
 #from .forms import UploadFileForm
 
 #from .models import Choice, Question
@@ -30,7 +31,7 @@ import sys
 import time
 import subprocess
 import threading
-
+import pymongo as pm
 
 ################################################################
 ## account management
@@ -246,6 +247,8 @@ def result_table(request, pk):
         ## handle result table
         result = get_object_or_404(Result, pk=pk, user=request.user)
         headers, rows = get_table_data(result)
+        headers, rows = get_metadata(headers, rows)
+        
         headers = [h.replace("_", " ") for h in headers]
         numeric_columns = get_numeric_columns(rows)
         filter_settings, created = FilterSetting.objects.get_or_create(result=result, user=request.user)
