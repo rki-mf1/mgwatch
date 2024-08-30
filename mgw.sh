@@ -30,10 +30,20 @@ done
 MIGRATE=${1:-false}
 
 function main() {
-
+    ################################################################
+    echo "# Setting environment variables."
+    source vars.env
+    export SECRET_KEY
+    export EMAIL_HOST_PASSWORD
+    export EMAIL_HOST
+    export EMAIL_PORT
+    export EMAIL_USE_TLS
+    export EMAIL_HOST_USER
+    export DEFAULT_FROM_EMAIL
+    
+    ################################################################
     environment="mgw"
     server=""
-    ################################################################
     if [[ "$MIGRATE" == "mm" ]]; then
         echo "# Make MGW model migrations."
         command="makemigrations"

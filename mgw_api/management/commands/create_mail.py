@@ -37,7 +37,7 @@ class Command(BaseCommand):
                     f.write('\nEnd of message\n\n')
                 return '250 Message accepted for delivery'
         mail_path = os.path.dirname(os.path.abspath(__file__))
-        log_file_path = os.path.join(mail_path, "mail.log")
+        log_file_path = os.path.join(mail_path, "log_mail.log")
         self.handler = CustomHandler(log_file_path)
         self.controller = Controller(self.handler, hostname='localhost', port=1025)
         self.thread = threading.Thread(target=self.controller.start)

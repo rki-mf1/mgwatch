@@ -6,17 +6,17 @@ from mgw_api.models import Fasta, Signature, Result, Settings
 from django.conf import settings
 from django.core.mail import send_mail
 
-from datetime import datetime
-from itertools import product
-import subprocess
 import os
 import io
 import re
 import pandas as pd
+from django.urls import reverse
+from datetime import datetime
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         results = Result.objects.filter(is_watched=True)
+        self.write_log(f"Starting watches for a total of {len(results)} watched results.")
         for result in results:
             try:
                 signature = Signature.objects.get(user_id=result.user.id, name=result.name)
@@ -33,6 +33,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f"Successfully processed file '{result.name}' {new_message}"))
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"Error processing file '{result.name}': {e}"))
+        self.write_log(f"Running watches finished.")
 
     def search_watch(self, name, user_id, watch_pk):
         output = io.StringIO()
@@ -50,13 +51,13 @@ class Command(BaseCommand):
         return is_equal
 
     def send_notification(self, user, result, new_result):
-        self.stdout.write(self.style.SUCCESS(f"Writing Mail ..."))
-        result_page = f"http://localhost:8080/mgw_api/result/{new_result.pk}/"
+        self.stdout.write(self.style.SUCCESS("Preparing to send email..."))
+        result_page = self.request.build_absolute_uri(reverse('result_table', args=[new_result.pk]))
         subject = f"MetagenomeWatch: Found new Genomes for {new_result.name}!"
         message = f"""
         Dear {user.username},
 
-        Your watch that was created on {result.date} has successfully found new results with your query!
+        Your watch that was created on {result.date.strftime('%Y-%m-%d')} has successfully found new results with your query!
 
         Query: {new_result.name}
         K-mer: {new_result.kmer}
@@ -70,6 +71,13 @@ class Command(BaseCommand):
         The MetagenomeWatch Team
         """
         from_email = settings.DEFAULT_FROM_EMAIL
-        to_email = user.email
-        self.stdout.write(self.style.SUCCESS(f"Send Mail ..."))
-        send_mail(subject, message, from_email, [to_email], fail_silently=False,)
+        recipient_list = [user.email]
+        send_mail(subject, message, from_email, recipient_list, fail_silently=False,)
+        self.stdout.write(self.style.SUCCESS("Email sent successfully! ✔️"))
+
+    def write_log(self, message):
+        logfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log_watch.log")
+        now = datetime.now()
+        dt = now.strftime("%d.%m.%Y %H:%M:%S")
+        with open(logfile, "a") as logf:
+            logf.write(f"{dt} - Status: {message}\n")
