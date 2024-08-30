@@ -6,6 +6,7 @@ from django.core.management import call_command
 from django.conf import settings
 
 from datetime import datetime
+import multiprocessing as mp
 import subprocess
 import glob
 import pickle
@@ -16,16 +17,12 @@ class Command(BaseCommand):
         now = datetime.now()
         dt = now.strftime("%d.%m.%Y %H:%M:%S")
         log = f"{dt} - create_index - "
-        ########################################################################
-        # TODO: remove this one after testing:
-        call_command('create_watch')
-        ########################################################################
         try:
-            kmers = [21,31,51]
+            kmers = [21, 31, 51]
             database = "SRA"
-            sig_list = os.path.join(settings.EXTERNAL_DATA_DIR, database, f"sig-list.txt")
-            manifest = os.path.join(settings.EXTERNAL_DATA_DIR, database, f"manifest.pcl")
-            dir_paths = self.handle_dirs(database)
+            sig_list = os.path.join(settings.EXTERNAL_DATA_DIR, database, "metagenomes", f"sig-list.txt")
+            manifest = os.path.join(settings.EXTERNAL_DATA_DIR, database, "metagenomes", f"manifest.pcl")
+            dir_paths = self.handle_dirs(database, ["updates", "index", "signatures", "failed"])
             sig_files = self.get_manifest(manifest, dir_paths)
             new_files = self.check_updates(sig_files, dir_paths)
             if new_files:
@@ -35,21 +32,20 @@ class Command(BaseCommand):
                 self.move_files(new_files, dir_paths, td, rs)
                 self.update_manifest(new_files, sig_files, manifest)
                 self.stdout.write(self.style.SUCCESS(f"{log}Updated index and moved new signatures."))
-                call_command('create_watch')
+                #call_command('create_watch')
             else:
                 self.stdout.write(self.style.SUCCESS(f"{log}No new files to process in {dir_paths['updates']}."))
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"{log}Error processing directory '{settings.EXTERNAL_DATA_DIR}': {e}"))
 
-    def handle_dirs(self, database):
-        dir_names = ["updates", "index", "signatures", "failed"]
-        dir_paths = {n:os.path.join(settings.EXTERNAL_DATA_DIR, database, n) for n in dir_names}
-        ## check data directories
+    def handle_dirs(self, database, dir_names):
+        dir_paths = {n:os.path.join(settings.EXTERNAL_DATA_DIR, database, "metagenomes", n) for n in dir_names}
         for dir_path in dir_paths.values():
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
+                os.chmod(dir_path, 0o700)
         return dir_paths
-
+    
     def get_manifest(self, manifest, dir_paths):
         if not os.path.exists(manifest):
             sig_files = [os.path.basename(f) for f in glob.glob(os.path.join(dir_paths["signatures"], "*.sig.gz"))]
@@ -84,7 +80,8 @@ class Command(BaseCommand):
 
     def update_index(self, dir_paths, sig_list, database, k):
         idx = os.path.join(dir_paths["index"], f"{database}-{k}.rocksdb")
-        cmd = ["sourmash", "scripts", "index", "--ksize", f"{k}", sig_list, "--moltype", "DNA", "--scaled", "1000", "--cores", "20", "--output", idx]
+        cpus = min(8, int(mp.cpu_count()*0.8))
+        cmd = ["sourmash", "scripts", "index", "--ksize", f"{k}", sig_list, "--moltype", "DNA", "--scaled", "1000", "--cores", f"{cpus}", "--output", idx]
         result = subprocess.run(cmd, capture_output=True, text=True)
         return result # returncode: 0 = success, 255 = fail
 

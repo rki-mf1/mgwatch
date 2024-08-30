@@ -19,6 +19,7 @@ class Command(BaseCommand):
         user_id = kwargs['user_id']
         name = kwargs['name']
         fasta = Fasta.objects.get(user_id=user_id, name=name, processed=False)
+        self.write_log(f"Creating a signature for {fasta.name}.")
         try:
             date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
             user_path = os.path.dirname(fasta.file.path)
@@ -46,3 +47,10 @@ class Command(BaseCommand):
         cmd = ["sourmash", "sketch", "dna", "--param-string", pstring, "--output", sig_file, fasta_file]
         result = subprocess.run(cmd, capture_output=True, text=True)
         return result # returncode: 0 = success, 2 = fail
+
+    def write_log(self, message):
+        logfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log_signature.log")
+        now = datetime.now()
+        dt = now.strftime("%d.%m.%Y %H:%M:%S")
+        with open(logfile, "a") as logf:
+            logf.write(f"{dt} - Status: {message}\n")

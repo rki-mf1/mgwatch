@@ -3,14 +3,17 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.12.4
-  - conda-forge::django=5.0.6
-  - conda-forge::django-debug-toolbar=4.4.2
+  - python=3.12.5
+  - conda-forge::django=5.1.0
+  - conda-forge::django-debug-toolbar=4.4.6
   - conda-forge::pillow=10.4.0
   - conda-forge::pandas=2.2.2
   - conda-forge::pymongo=4.8.0
-  - conda-forge::urllib3=2.2.2
-  - conda-forge::pyyaml=6.0.1
+  - conda-forge::mongodb=6.0.16
+  - conda-forge::awscli=2.17.37
+  - conda-forge::pyarrow=17.0.0
+  - conda-forge::numpy=2.1.0
+  - conda-forge::pyyaml=6.0.2
   - conda-forge::python-crontab=3.2.0
   - conda-forge::sourmash-minimal=4.8.11
   - conda-forge::sourmash_plugin_branchwater=0.9.5

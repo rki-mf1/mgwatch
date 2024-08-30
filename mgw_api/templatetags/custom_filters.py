@@ -26,3 +26,13 @@ def is_numeric(column_index, rows):
 @register.filter
 def in_list(value, the_list):
     return value in the_list
+
+@register.filter
+def last_part_of_url(value):
+    if value and isinstance(value, str):
+        return value.rstrip('/').split('/')[-1]
+    return value
+
+@register.filter
+def zip_lists(a, b):
+    return zip(a, b)
