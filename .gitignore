@@ -6,11 +6,8 @@
 /media/*
 *.~lock.*
 dump.rdb
-test.py
-cronlog.log
-testfile.log
-home.html
 db.sqlite3
+vars.env
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

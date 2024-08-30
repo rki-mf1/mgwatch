@@ -21,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-em&y0o^!@ha-kujz4qch11-a*qy8t3peg8@%+=(_+-bnwzr2%z'
+SECRET_KEY = os.environ.get('SECRET_KEY', '')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -141,15 +141,13 @@ LOGOUT_REDIRECT_URL = "/mgw_api/login/"
 LOGIN_URL = "/mgw_api/login/"
 
 ################################################################################
-# TODO: change to real mail
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'localhost'                            # set to RKI smtp
-EMAIL_PORT = 1025                                   # set ti RKI port
-EMAIL_USE_TLS = False                               # set to True if not local
-EMAIL_USE_SSL = False                               # set to True if not local
-#EMAIL_HOST_USER = 'mgwatch@rki.de'
-#EMAIL_HOST_PASSWORD = 'your_email_password'         # set to mgw mail password
-DEFAULT_FROM_EMAIL = 'mgwatch@rki.de'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '1025'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'False') == 'True'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'test@mail.de')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'test@mail.de')
 ################################################################################
 
 

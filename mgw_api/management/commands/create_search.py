@@ -9,6 +9,8 @@ from itertools import product
 import subprocess
 import os
 import csv
+import multiprocessing as mp
+import glob
 
 
 class Command(BaseCommand):
@@ -25,46 +27,52 @@ class Command(BaseCommand):
         dt = now.strftime("%d.%m.%Y %H:%M:%S")
         log = f"{dt} - create_search - "
         result_pk = None
-        test_path = os.path.dirname(os.path.abspath(__file__))
-        log_file_path = os.path.join(test_path, "test.log")
-        with open(log_file_path, "a") as logf:
-            try:
-                signature = Signature.objects.get(user_id=user_id, name=name, submitted=True)
-                file_list = []
-                logf.write(f"Debug Search: kmer = {kmer}, database = {database}, containment = {containment}\n")
-                for k, db in product(kmer, database):
-                    date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-                    index_path = os.path.join(settings.EXTERNAL_DATA_DIR, db, "index", f"{db}-{k}.rocksdb")
+        try:
+            signature = Signature.objects.get(user_id=user_id, name=name, submitted=True)
+            self.write_log(f"Searching signature {signature.name}.")
+            file_list = []
+            for k, db in product(kmer, database):
+                if db == "RKI" or k != "21": continue
+                date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+                for idx, index_path in enumerate(self.get_indices(k, db)):
                     user_path = os.path.dirname(signature.file.path)
-                    result_file = os.path.join(user_path, f"result_{signature.name}.{db}-{k}-{date}.csv")
-                    self.stdout.write(self.style.SUCCESS(result_file))
+                    result_file = os.path.join(user_path, f"result_{signature.name}.{db}-{k}-{idx}-{date}.csv")
                     result = self.search_index(result_file, signature.file.path, index_path, k, containment)
                     if result.returncode != 0:
+                        self.write_log(f"Search failed with exit code {result.returncode}: {result.stderr}.")
                         raise Exception(f"Searching failed with exit code {result.returncode}: {result.stderr}")
                     file_list.append((k, db, containment, result_file))
-                combined_file = os.path.join(user_path, f"result_{signature.name}.{date}.csv")
-                self.combine_results(file_list, combined_file, signature.name)
-                # Save result to django model
-                relative_path = os.path.relpath(combined_file, settings.MEDIA_ROOT)
-                self.stdout.write(self.style.SUCCESS(relative_path))
-                result_model = Result(user=signature.user, signature=signature, name=signature.name)
-                result_model.file.name = relative_path
-                result_model.size = result_model.file.size
-                result_model.kmer = kmer
-                result_model.database = database
-                result_model.containment = containment
-                result_model.save()
-                self.stdout.write(self.style.SUCCESS(f"Created at {result_model.date}"))
-                result_pk = result_model.pk
-                signature.submitted = False
-                signature.save()
-                logf.write(f"Debug Search: result_pk = {result_pk}\n")
-                self.stdout.write(self.style.SUCCESS(f"RESULT_PK: {result_pk}"))
-            except Exception as e:
-                self.stdout.write(self.style.ERROR(f"{log}Error processing search '{signature.name}': {e}"))
+            combined_file = os.path.join(user_path, f"result_{signature.name}.{date}.csv")
+            self.combine_results(file_list, combined_file, signature.name)
+            # Save result to django model
+            relative_path = os.path.relpath(combined_file, settings.MEDIA_ROOT)
+            self.stdout.write(self.style.SUCCESS(relative_path))
+            result_model = Result(user=signature.user, signature=signature, name=signature.name)
+            result_model.file.name = relative_path
+            result_model.size = result_model.file.size
+            result_model.kmer = kmer
+            result_model.database = database
+            result_model.containment = containment
+            result_model.save()
+            self.stdout.write(self.style.SUCCESS(f"Created at {result_model.date}"))
+            result_pk = result_model.pk
+            signature.submitted = False
+            signature.save()
+            self.write_log(f"Search finished with result_pk = {result_pk}.")
+            self.stdout.write(self.style.SUCCESS(f"RESULT_PK: {result_pk}"))
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f"{log}Error processing search '{signature.name}': {e}"))
+
+    def get_indices(self, k, db):
+        index_dir = os.path.join(settings.EXTERNAL_DATA_DIR, f"{db}", "metagenomes", "index")
+        new_files = glob.glob(os.path.join(index_dir, f"wort-{db.lower()}-{k}-db*.rocksdb"))
+        self.write_log(new_files)
+        return new_files
 
     def search_index(self, result_file, sketch_file, index_path, k, containment):
-        cmd = ["sourmash", "scripts", "manysearch", "--ksize", f"{k}", "--moltype", "DNA", "--scaled", "1000", "--cores", "20", "--threshold", f"{containment}", "--output", result_file, sketch_file, index_path]
+        cpus = min(8, int(mp.cpu_count()*0.8))
+        cmd = ["sourmash", "scripts", "manysearch", "--ksize", f"{k}", "--moltype", "DNA", "--scaled", "1000", "--cores", f"{cpus}", "--threshold", f"{containment}", "--output", result_file, sketch_file, index_path]
+        self.write_log(" ".join(cmd))
         result = subprocess.run(cmd, capture_output=True, text=True)
         return result # returncode: 0 = success, 2 = fail
     
@@ -88,7 +96,9 @@ class Command(BaseCommand):
             table_data = [[query_name] + row[1:] + [f"{k}", f"{db}", f"{c}"] for row in reader]
         return header, table_data
 
-
-
-## added result combination functionality
-## todo: fix result_list search
+    def write_log(self, message):
+        logfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log_search.log")
+        now = datetime.now()
+        dt = now.strftime("%d.%m.%Y %H:%M:%S")
+        with open(logfile, "a") as logf:
+            logf.write(f"{dt} - Status: {message}\n")

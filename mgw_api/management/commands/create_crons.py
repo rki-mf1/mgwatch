@@ -1,11 +1,10 @@
-# mgw_api/management/commands/manage_crons.py
+# mgw_api/management/commands/create_crons.py
 
 import sys
 import os
 import subprocess
 from crontab import CronTab
-from django.core.management.base import BaseCommand, CommandError
-from django.core.management import call_command
+from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
@@ -34,10 +33,10 @@ class Command(BaseCommand):
         cron_jobs, env_name = list(), "mgw"
         conda_path = self.get_conda_path()
         cron_path = os.path.dirname(os.path.abspath(__file__))
-        log_file_path = os.path.join(cron_path, "cronlog.log")
-        for script in ["create_index",]:
+        log_file_path = os.path.join(cron_path, "log_crons.log")
+        for script in ["create_daily",]:
             python_command = f"{conda_path} run -n {env_name} {sys.executable} {manage_py_path} {script} >> {log_file_path} 2>&1"
-            cron_jobs.append({"schedule":"0 * * * *", "command":f"{python_command}"})
+            cron_jobs.append({"schedule":"0 1 * * *", "command":f"{python_command}"})
         ##0 - At minute 0 | 1 - At 1 AM | * - Every day of the month | * - Every month | 6 - On Saturday
         return cron_jobs
     
