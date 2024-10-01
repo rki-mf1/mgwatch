@@ -10,23 +10,42 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import environ
 from pathlib import Path
 import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Initialise environment variables
+env = environ.Env(
+    DEBUG=(bool, False),
+    SECRET_KEY=str,
+    ALLOWED_HOSTS=(str, None),
+    CSRF_TRUSTED_ORIGINS=(str, None),
+    TIME_ZONE=(str, "Europe/Berlin"),
+    EXTERNAL_DATA_DIR=(Path, BASE_DIR / ".." / "mgw-data"),
+    EMAIL_HOST=(str, None),
+    EMAIL_PORT=(int, 1025),
+    EMAIL_USE_TLS=(bool, True),
+    EMAIL_HOST_USER=(str, None),
+    EMAIL_HOST_PASSWORD=(str, None),
+    DEFAULT_FROM_EMAIL=(str, 'test@mail.de'),
+)
+
+environ.Env.read_env(BASE_DIR / 'vars.env')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', '')
+SECRET_KEY = env("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env("DEBUG")
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env("ALLOWED_HOSTS", "").split(",")
+CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS", "").split(",")
 
 
 # Application definition
@@ -108,7 +127,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'GMT'
+TIME_ZONE = env("TIME_ZONE")
 
 USE_I18N = True
 
@@ -128,7 +147,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_ROOT = BASE_DIR / 'media'
 MEDIA_URL = '/media/'
 
-EXTERNAL_DATA_DIR = os.path.join(os.path.dirname(BASE_DIR), "mgw-data")
+EXTERNAL_DATA_DIR = env("EXTERNAL_DATA_DIR")
 
 if DEBUG:
     MIDDLEWARE += ('debug_toolbar.middleware.DebugToolbarMiddleware',)
@@ -141,13 +160,14 @@ LOGOUT_REDIRECT_URL = "/mgw_api/login/"
 LOGIN_URL = "/mgw_api/login/"
 
 ################################################################################
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'localhost')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '1025'))
-EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'False') == 'True'
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'test@mail.de')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'test@mail.de')
+EMAIL_HOST = env("EMAIL_HOST")
+if EMAIL_HOST:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_PORT = env("EMAIL_PORT")
+    EMAIL_USE_TLS = env("EMAIL_USE_TLS")
+    EMAIL_HOST_USER = env("EMAIL_HOST_USER")
+    EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
+    DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL")
 ################################################################################
 
 
