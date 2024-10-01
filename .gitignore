@@ -1,4 +1,5 @@
 # Project tests
+/mgw-data/
 /branchwater/
 /mgw_api/test/
 /Dockerfile

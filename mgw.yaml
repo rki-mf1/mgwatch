@@ -6,6 +6,7 @@ dependencies:
   - python=3.12.5
   - conda-forge::django=5.1.0
   - conda-forge::django-debug-toolbar=4.4.6
+  - conda-forge::django-environ=0.11.2
   - conda-forge::pillow=10.4.0
   - conda-forge::pandas=2.2.2
   - conda-forge::pymongo=4.8.0
