@@ -13,6 +13,8 @@
         {% csrf_token %}
         <label><input type="checkbox" name="is_watched" {% if result.is_watched %}checked{% endif %} onchange="submitWatchForm()">Watched</label>
     </form>
+    <a href="{% url 'mgw_api:download_full_table' result.pk %}">Download (all)</a>
+    <a href="{% url 'mgw_api:download_filtered_table' result.pk %}">Download (filtered)</a>
     <a href="{% url 'mgw_api:delete_result' result.pk %}?next={% url 'mgw_api:result_table' result.pk %}">Delete this Result</a>
 </div>
 
@@ -62,6 +64,7 @@
         </table>
     </div>
 </div>
+
 
 <script>
     function handleError(message) {
@@ -170,13 +173,23 @@
             tableBody.innerHTML = '';
             data.rows.forEach(row => {
                 const rowElement = document.createElement('tr');
-                row.forEach(cell => {
+                row.forEach((cell, index) => {
                     const cellElement = document.createElement('td');
-                    cellElement.textContent = cell;
+                    const header = data.headers[index].toLowerCase();
+                    if (header === 'sra link' || header === 'biosample link') {
+                        const linkElement = document.createElement('a');
+                        linkElement.href = cell;
+                        linkElement.target = '_blank';
+                        linkElement.textContent = cell.split('/').pop();
+                        cellElement.appendChild(linkElement);
+                    } else {
+                        cellElement.textContent = cell;
+                    }
                     rowElement.appendChild(cellElement);
                 });
                 tableBody.appendChild(rowElement);
             });
+            createCountryAndLLMap(data);
         }).catch(error => {
             handleError(error.message);
         });
