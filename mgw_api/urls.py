@@ -21,4 +21,6 @@ urlpatterns = [
     path('toggle_watch/<int:pk>/', views.toggle_watch, name='toggle_watch'),
     path('delete_result/<int:pk>/', views.delete_result, name='delete_result'),
     path('check_status/<int:fasta_id>/', views.check_processing_status, name='check_status'),
+    path('download/full/<int:pk>/', views.download_full_table, name='download_full_table'),
+    path('download/filtered/<int:pk>/', views.download_filtered_table, name='download_filtered_table')
 ]
