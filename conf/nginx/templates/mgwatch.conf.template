@@ -1,8 +1,15 @@
 server {
   listen ${NGINX_PORT};
 
+  # Static files
+  location /static/ {
+    alias /static/;
+    autoindex off;
+  }
+
   # Django
-  location ~ ^/(mgw_api|admin|__debug__)/ {
+  #location ~ ^/(mgw_api|admin|__debug__)/ {
+  location / {
     proxy_pass http://mgwatch-django:9080;
     proxy_set_header Host $host:$server_port;
     proxy_set_header X-Real-IP $remote_addr;
@@ -13,13 +20,6 @@ server {
     proxy_send_timeout 600;
     proxy_read_timeout 600;
   }
-
-  ## Frontend
-  #location / {
-  #  root /frontend;
-  #  index index.html;
-  #  try_files $uri $uri/ /index.html;
-  #}
 
   error_page   500 502 503 504  /50x.html;
   location = /50x.html {

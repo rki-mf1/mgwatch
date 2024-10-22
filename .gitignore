@@ -78,6 +78,7 @@ coverage.xml
 # Django stuff:
 *.log
 staticfiles/
+static/
 media/
 local_settings.py
 

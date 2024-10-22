@@ -47,6 +47,7 @@ DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env("ALLOWED_HOSTS", "").split(",")
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS", "").split(",")
 
+STATIC_ROOT = os.path.join(BASE_DIR, "static")
 
 # Application definition
 
