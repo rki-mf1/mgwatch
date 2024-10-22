@@ -21,3 +21,5 @@ dependencies:
   - conda-forge::screen=4.8.0
   - conda-forge::aiosmtpd=1.4.6
   - conda-forge::python-ldap=3.4.3
+  - pip:
+    - django-auth-ldap==5.0.0
