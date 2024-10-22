@@ -172,14 +172,6 @@ if EMAIL_HOST:
 
 ################################################################################
 ## LDAP
-## no conda available for django-auth-ldap
-## do the following:
-# 1. mamba env create --file "mgw.yaml"
-# 2. mamba activate mgw
-# 3. pip install django-auth-ldap
-# 4. mamba deactivate
-# django-auth-ldap should now be installed inside the mgw env
-
 import ldap
 from django_auth_ldap.config import LDAPSearch, GroupOfNamesType
 
