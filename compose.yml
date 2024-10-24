@@ -1,27 +1,26 @@
 services:
 
-  mgwatch-django:
+  mgwatch-backend:
     image: mgwatch:local
-    container_name: mgwatch-django
-    restart: unless-stopped
+    container_name: mgwatch-backend
     volumes:
-      - ${DATA_DIR}/mgw-data:/code/mgw-data
-      - ${DATA_DIR}/mgw-db:/code/db
+      - ${EXTERNAL_DATA_DIR}/backend-data:/data
+    entrypoint: /bin/sh -c
+    command: [ "conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:9080 mgw.wsgi:application" ]
+    restart: unless-stopped
     depends_on:
       mgwatch-mongodb:
         condition: service_started
-    entrypoint: /bin/sh -c
-    command: [ "conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:9080 mgw.wsgi:application" ]
 
   mgwatch-mongodb:
     image: mongo:6.0.18
     container_name: mgwatch-mongodb
-    restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example1
     volumes:
-      - ${DATA_DIR}/mongodb:/data/db
+      - ${EXTERNAL_DATA_DIR}/mongodb:/data/db
+    restart: unless-stopped
 
   mgwatch-proxy:
     image: $DOCKER_NGINX_IMAGE
@@ -29,11 +28,12 @@ services:
     volumes:
       - ./conf/nginx/templates:/etc/nginx/templates
       # Not sure how we need to set this up
-      - ./static:/static
-      - ./media:/media
+      - ${EXTERNAL_DATA_DIR}/nginx/static:/static
+      - ${EXTERNAL_DATA_DIR}/nginx/media:/media
     environment:
       - NGINX_PORT=8000
     ports:
       - "127.0.0.1:8000:8000"
+    restart: unless-stopped
     depends_on:
-      - mgwatch-django
+      - mgwatch-backend

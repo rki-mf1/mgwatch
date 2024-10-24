@@ -24,7 +24,7 @@ env = environ.Env(
     ALLOWED_HOSTS=(str, None),
     CSRF_TRUSTED_ORIGINS=(str, None),
     TIME_ZONE=(str, "Europe/Berlin"),
-    EXTERNAL_DATA_DIR=(Path, BASE_DIR / ".." / "mgw-data"),
+    DATA_DIR=(Path, BASE_DIR / ".." / "mgw-data"),
     EMAIL_HOST=(str, None),
     EMAIL_PORT=(int, 1025),
     EMAIL_USE_TLS=(bool, True),
@@ -47,7 +47,7 @@ DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env("ALLOWED_HOSTS", "").split(",")
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS", "").split(",")
 
-STATIC_ROOT = os.path.join(BASE_DIR, "static")
+STATIC_ROOT = BASE_DIR / "static"
 
 # Application definition
 
@@ -92,14 +92,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'mgw.wsgi.application'
 
+DATA_DIR = env("DATA_DIR")
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
+DB_DIR = DATA_DIR / "db"
+DB_DIR.mkdir(parents=True, exist_ok=True)
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db' / 'db.sqlite3',
+        'NAME': DB_DIR / 'db.sqlite3',
     }
 }
 
@@ -147,8 +150,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MEDIA_ROOT = BASE_DIR / 'media'
 MEDIA_URL = '/media/'
-
-EXTERNAL_DATA_DIR = env("EXTERNAL_DATA_DIR")
 
 if DEBUG:
     MIDDLEWARE += ('debug_toolbar.middleware.DebugToolbarMiddleware',)
