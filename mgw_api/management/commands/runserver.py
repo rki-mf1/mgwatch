@@ -19,7 +19,7 @@ class Command(StaticRunServerCommand):
             print("Starting mail server...")
             call_command('create_mail', 'start')
             # Create initial metadata
-            init_flag = os.path.join(settings.EXTERNAL_DATA_DIR, "SRA", "metadata", "initial_setup.txt")
+            init_flag = os.path.join(settings.DATA_DIR, "SRA", "metadata", "initial_setup.txt")
             if not os.path.exists(init_flag):
                 print("Creating initial metadata...")
                 call_command('create_metadata')

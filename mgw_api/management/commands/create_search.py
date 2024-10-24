@@ -64,7 +64,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f"{log}Error processing search '{signature.name}': {e}"))
 
     def get_indices(self, k, db):
-        index_dir = os.path.join(settings.EXTERNAL_DATA_DIR, f"{db}", "metagenomes", "index")
+        index_dir = os.path.join(settings.DATA_DIR, f"{db}", "metagenomes", "index")
         new_files = glob.glob(os.path.join(index_dir, f"wort-{db.lower()}-{k}-db*.rocksdb"))
         self.write_log(new_files)
         return new_files
