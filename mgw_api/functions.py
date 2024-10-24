@@ -6,6 +6,7 @@ from .forms import SettingsForm
 from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.conf import settings
 import subprocess
 from django.core.management import call_command
 from .management.commands.return_command import CommandWithReturnValue
@@ -104,7 +105,7 @@ def get_metadata(headers, rows):
     return new_headers, new_rows
 
 def search_mongodb(headers, rows):
-    mongo = pm.MongoClient("mongodb://localhost:27017/")
+    mongo = pm.MongoClient(settings.MONGO_URI)
     db = mongo["sradb"]
     collection = db["sradb_list"]
     qidx = headers.index("match_name")

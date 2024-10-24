@@ -97,7 +97,7 @@ class Command(BaseCommand):
         self.finish_mongo()
 
     def clean_mongo(self, collection):
-        mongo = pm.MongoClient("mongodb://localhost:27017/")
+        mongo = pm.MongoClient(settings.MONGO_URI)
         db = mongo["sradb"]
         if collection in db.list_collection_names(): db[collection].drop()
         mongo.close()
@@ -106,14 +106,14 @@ class Command(BaseCommand):
         df = pd.read_parquet(os.path.join(parquet_dir_path, file))
         cpus = min(1, int(mp.cpu_count()*0.8))
         res_list = self.multi_parsing(df.to_dict(orient='records'), self.process_row, cpus, *[column_list, jattr_list], shuffle=False)
-        mongo = pm.MongoClient("mongodb://localhost:27017/")
+        mongo = pm.MongoClient(settings.MONGO_URI)
         db = mongo["sradb"]
         for meta_list in res_list:
             db["sradb_temp"].insert_many(meta_list)
         mongo.close()
 
     def finish_mongo(self):
-        mongo = pm.MongoClient("mongodb://localhost:27017/")
+        mongo = pm.MongoClient(settings.MONGO_URI)
         db = mongo["sradb"]
         db["sradb_temp"].rename("sradb_list")
         collection_stats = db.command("collstats", "sradb_list")
