@@ -25,6 +25,7 @@ env = environ.Env(
     CSRF_TRUSTED_ORIGINS=(str, None),
     TIME_ZONE=(str, "Europe/Berlin"),
     DATA_DIR=(Path, BASE_DIR / ".." / "mgw-data"),
+    MONGO_URI=(str, None),
     EMAIL_HOST=(str, None),
     EMAIL_PORT=(int, 1025),
     EMAIL_USE_TLS=(bool, True),
@@ -40,6 +41,9 @@ environ.Env.read_env(BASE_DIR / 'vars.env')
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY")
+
+# MongoDB used for SRA metadata
+MONGO_URI = env("MONGO_URI")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG")
