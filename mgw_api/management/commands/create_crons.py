@@ -26,7 +26,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f"Error starting cron jobs: {e}"))
 
     def get_conda_path(self):
-        conda_path = subprocess.check_output(["which", "mamba"], text=True).strip()
+        conda_path = subprocess.check_output(["which", "conda"], text=True).strip()
         return conda_path
 
     def get_cron_jobs(self, manage_py_path):
