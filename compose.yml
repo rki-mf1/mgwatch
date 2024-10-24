@@ -5,8 +5,9 @@ services:
     container_name: mgwatch-backend
     volumes:
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
+      - ${EXTERNAL_DATA_DIR}/nginx/static:/static
     entrypoint: /bin/sh -c
-    command: [ "conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:9080 mgw.wsgi:application" ]
+    command: [ "conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:9080 mgw.wsgi:application" ]
     restart: unless-stopped
     depends_on:
       mgwatch-mongodb:

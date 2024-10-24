@@ -53,7 +53,7 @@ class Command(BaseCommand):
         gc.collect()
 
     def handle_dirs(self, database, dir_names):
-        dir_paths = {n:os.path.join(settings.EXTERNAL_DATA_DIR, database, "metadata", n) for n in dir_names}
+        dir_paths = {n:os.path.join(settings.DATA_DIR, database, "metadata", n) for n in dir_names}
         for dir_path in dir_paths.values():
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
@@ -196,7 +196,7 @@ class Command(BaseCommand):
             logf.write(f"{dt} - Status: {message}\n")
 
     def set_initial_flag(self):
-        init_flag = os.path.join(settings.EXTERNAL_DATA_DIR, "SRA", "metadata", "initial_setup.txt")
+        init_flag = os.path.join(settings.DATA_DIR, "SRA", "metadata", "initial_setup.txt")
         with open(init_flag, "w") as initf:
             initf.write(f"")
 
