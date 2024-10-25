@@ -44,7 +44,7 @@ services:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=example1
     volumes:
-      - ${EXTERNAL_DATA_DIR}/mongodb:/data/db
+      - ${MONGODB_DATA_DIR}:/data/db
     restart: unless-stopped
 
   mgwatch-proxy:
