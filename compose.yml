@@ -14,7 +14,7 @@ services:
         condition: service_started
 
   mgwatch-mongodb:
-    image: mongo:6.0.18
+    image: $DOCKER_MONGODB_IMAGE
     container_name: mgwatch-mongodb
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
