@@ -37,9 +37,9 @@ class Command(BaseCommand):
         for script in ["create_daily",]:
             python_command = f"{conda_path} run -n {env_name} {sys.executable} {manage_py_path} {script} >> {log_file_path} 2>&1"
             cron_jobs.append({"schedule":"0 1 * * *", "command":f"{python_command}"})
-        ##0 - At minute 0 | 1 - At 1 AM | * - Every day of the month | * - Every month | 6 - On Saturday
+        # 0 - At minute 0 | 1 - At 1 AM | * - Every day of the month | * - Every month | 6 - On Saturday
         return cron_jobs
-    
+
     def start_cron_jobs(self, cron_jobs):
         cron = CronTab(user=True)
         for job in cron_jobs:
