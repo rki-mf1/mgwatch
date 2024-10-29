@@ -110,7 +110,7 @@ class Command(BaseCommand):
         for data in pf.iter_batches(columns = column_list + ["jattr"]):
             df = data.to_pandas()
             res_list = self.multi_parsing(df.to_dict(orient='records'), self.process_row, cpus, *[column_list, jattr_list], shuffle=False)
-            mongo = pm.MongoClient("mongodb://localhost:27017/")
+            mongo = pm.MongoClient(settings.MONGO_URI)
             db = mongo["sradb"]
             for meta_list in res_list:
                 db["sradb_temp"].insert_many(meta_list)
