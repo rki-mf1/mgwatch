@@ -16,6 +16,7 @@ import json
 import subprocess
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 import pymongo as pm
 import multiprocessing as mp
 from datetime import datetime
@@ -103,14 +104,17 @@ class Command(BaseCommand):
         mongo.close()
 
     def add_to_mongo(self, parquet_dir_path, file, column_list, jattr_list):
-        df = pd.read_parquet(os.path.join(parquet_dir_path, file))
-        cpus = min(1, int(mp.cpu_count()*0.8))
-        res_list = self.multi_parsing(df.to_dict(orient='records'), self.process_row, cpus, *[column_list, jattr_list], shuffle=False)
-        mongo = pm.MongoClient(settings.MONGO_URI)
-        db = mongo["sradb"]
-        for meta_list in res_list:
-            db["sradb_temp"].insert_many(meta_list)
-        mongo.close()
+        pf = pq.ParquetFile(os.path.join(parquet_dir_path, file))
+        cpus = max(1, int(mp.cpu_count()*0.8))
+        # Default batch size for iter_batches() is 64k records
+        for data in pf.iter_batches(columns = column_list + ["jattr"]):
+            df = data.to_pandas()
+            res_list = self.multi_parsing(df.to_dict(orient='records'), self.process_row, cpus, *[column_list, jattr_list], shuffle=False)
+            mongo = pm.MongoClient("mongodb://localhost:27017/")
+            db = mongo["sradb"]
+            for meta_list in res_list:
+                db["sradb_temp"].insert_many(meta_list)
+            mongo.close()
 
     def finish_mongo(self):
         mongo = pm.MongoClient(settings.MONGO_URI)

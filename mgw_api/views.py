@@ -14,6 +14,7 @@ from .forms import SignupForm, LoginForm
 from django.core.paginator import Paginator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.http import HttpResponse
 import json
 import asyncio
 
@@ -32,6 +33,7 @@ import time
 import subprocess
 import threading
 import pymongo as pm
+import csv
 
 ################################################################
 ## account management
@@ -270,8 +272,15 @@ def result_table(request, pk):
         filter_form = FilterSettingForm(instance=filter_settings)
 
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            geo_loc_name_country_calc_index = headers.index('geo loc name country calc')
+            lat_lon_index = headers.index('lat lon')
+            geo_loc_data = [row[geo_loc_name_country_calc_index] for row in rows]
+            lat_lon_data = [row[lat_lon_index] for row in rows]
             return JsonResponse({
+                'headers': headers,
                 'rows': rows,
+                'geo_loc_data': geo_loc_data,
+                'lat_lon_data': lat_lon_data,
             })
 
         return render(request, 'mgw_api/result_table.html', {
@@ -333,3 +342,45 @@ def delete_result(request, pk):
         result.delete()
         return redirect("mgw_api:list_result")
     return render(request, 'mgw_api/confirm_delete_result.html', {'result': result, 'next_url': next_url})
+
+
+@login_required
+def download_full_table(request, pk):
+    result = get_object_or_404(Result, pk=pk, user=request.user)
+    headers, rows = get_table_data(result)
+    headers, rows = get_metadata(headers, rows)
+    filename = f"{result.name}-MGwatch_complete.tsv".replace(' ', '_')
+    response = HttpResponse(content_type='text/tab-separated-values')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response, delimiter='\t')
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+    return response
+
+
+@login_required
+def download_filtered_table(request, pk):
+    result = get_object_or_404(Result, pk=pk, user=request.user)
+    headers, rows = get_table_data(result)
+    headers, rows = get_metadata(headers, rows)
+    filter_settings = get_object_or_404(FilterSetting, result=result, user=request.user)
+    for column, value in filter_settings.filters.items():
+        rows = apply_regex(rows, column, value)
+    for column, range_values in filter_settings.range_filters.items():
+        for m, value in zip([1, -1], range_values):
+            if value == "": value = None
+            if is_float(value): rows = [row for row in rows if apply_compare(m, row, column, value)]
+            elif value is not None: rows = apply_regex(rows, column, value)
+    sort_column = filter_settings.sort_column
+    sort_reverse = filter_settings.sort_reverse
+    if sort_column is not None:
+        rows = sorted(rows, key=lambda x: human_sort_key(x[int(sort_column)]), reverse=sort_reverse)
+    filename = f"{result.name}-MGwatch_filtered.tsv".replace(' ', '_')
+    response = HttpResponse(content_type='text/tab-separated-values')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response, delimiter='\t')
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+    return response
