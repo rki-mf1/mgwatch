@@ -54,7 +54,7 @@ class Command(BaseCommand):
         gc.collect()
 
     def handle_dirs(self, database, dir_names):
-        dir_paths = {n:os.path.join(settings.EXTERNAL_DATA_DIR, database, "metadata", n) for n in dir_names}
+        dir_paths = {n:os.path.join(settings.DATA_DIR, database, "metadata", n) for n in dir_names}
         for dir_path in dir_paths.values():
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
@@ -98,7 +98,7 @@ class Command(BaseCommand):
         self.finish_mongo()
 
     def clean_mongo(self, collection):
-        mongo = pm.MongoClient("mongodb://localhost:27017/")
+        mongo = pm.MongoClient(settings.MONGO_URI)
         db = mongo["sradb"]
         if collection in db.list_collection_names(): db[collection].drop()
         mongo.close()
@@ -110,14 +110,14 @@ class Command(BaseCommand):
         for data in pf.iter_batches(columns = column_list + ["jattr"]):
             df = data.to_pandas()
             res_list = self.multi_parsing(df.to_dict(orient='records'), self.process_row, cpus, *[column_list, jattr_list], shuffle=False)
-            mongo = pm.MongoClient("mongodb://localhost:27017/")
+            mongo = pm.MongoClient(settings.MONGO_URI)
             db = mongo["sradb"]
             for meta_list in res_list:
                 db["sradb_temp"].insert_many(meta_list)
             mongo.close()
 
     def finish_mongo(self):
-        mongo = pm.MongoClient("mongodb://localhost:27017/")
+        mongo = pm.MongoClient(settings.MONGO_URI)
         db = mongo["sradb"]
         db["sradb_temp"].rename("sradb_list")
         collection_stats = db.command("collstats", "sradb_list")
@@ -200,7 +200,7 @@ class Command(BaseCommand):
             logf.write(f"{dt} - Status: {message}\n")
 
     def set_initial_flag(self):
-        init_flag = os.path.join(settings.EXTERNAL_DATA_DIR, "SRA", "metadata", "initial_setup.txt")
+        init_flag = os.path.join(settings.DATA_DIR, "SRA", "metadata", "initial_setup.txt")
         with open(init_flag, "w") as initf:
             initf.write(f"")
 

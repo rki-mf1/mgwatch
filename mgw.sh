@@ -1,66 +1,30 @@
 #!/usr/bin/env bash
 
-################################################################
-#mamba
-mamba_envs=("mgw")
-if command -v mamba &> /dev/null; then
-  echo "# Mamba is installed."
-else
-  echo "# Mamba is not installed."
-  echo "# Please download and install Miniforge3:"
-  echo '#     curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"'
-  echo '#     bash Miniforge3-$(uname)-$(uname -m).sh'
-  exit 1
-fi
+set -e
 
-for i in "${!mamba_envs[@]}"; do
-  if mamba info --envs | grep -q "^${mamba_envs[i]}\s"; then
-    echo "# Mamba environment ${mamba_envs[i]} already exists."
-    echo "# You might want to update it anyway:"
-    echo "# $ conda env update -n ${mamba_envs[i]} -f ${mamba_envs[i]}.yaml --prune"
-  else
-    mamba env create --file "${mamba_envs[i]}.yaml"
-  fi
+# Disable creating migrations and migrating, by default
+# Note: in bash 0 = true, 1 = false
+BUILD_CONTAINER=1
+CREATE_MIGRATIONS=1
+MIGRATE=1
+
+while getopts "bcmh" opt; do
+  case $opt in
+    b) BUILD_CONTAINER=0 ;;
+    c) CREATE_MIGRATIONS=0 ;;
+    m) MIGRATE=0 ;;
+    h)
+      echo "./mgw.sh [-b] [-c] [-m]"
+      echo " -b     build backend docker container"
+      echo " -c     create (=make) migrations"
+      echo " -m     migrate"
+      exit 0
+      ;;
+  esac
 done
 
-################################################################
-## main
-MIGRATE=${1:-false}
-
-function main() {
-    ################################################################
-    environment="mgw"
-    server=""
-    if [[ "$MIGRATE" == "mm" ]]; then
-        echo "# Make MGW model migrations."
-        command="makemigrations"
-        mgw_server environment command server
-    fi
-    if [[ "$MIGRATE" == "m" || "$MIGRATE" == "mm" ]]; then
-        echo "# Migrate MGW models."
-        command="migrate"
-        mgw_server environment command server
-    fi
-    
-    ################################################################
-    echo "# Start MGW server."
-    command="runserver"
-    server="localhost:8080"
-    mgw_server environment command server
-}
-
-
-################################################################
-## functions
-function mgw_server() {
-    local -n arg_one=$1
-    local -n arg_two=$2
-    local -n arg_tre=$3
-    mamba run --live-stream -n ${arg_one} \
-    python manage.py ${arg_two} ${arg_tre}
-}
-
-
-################################################################
-## call
-main
+./scripts/dc-dev.sh down --remove-orphans
+[[ BUILD_CONTAINER ]] && ./scripts/build-docker.sh
+./scripts/dc-dev.sh up -d
+[[ CREATE_MIGRATIONS ]] && ./scripts/backend-manage.sh makemigrations
+[[ MIGRATE ]] && ./scripts/backend-manage.sh migrate

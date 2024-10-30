@@ -1,8 +1,10 @@
 # Project tests
+cruft/
+work/
+work-mongo/
 /mgw-data/
 /branchwater/
 /mgw_api/test/
-/Dockerfile
 /xdb.sqbpro
 /media/*
 *.~lock.*
@@ -77,6 +79,7 @@ coverage.xml
 # Django stuff:
 *.log
 staticfiles/
+static/
 media/
 local_settings.py
 

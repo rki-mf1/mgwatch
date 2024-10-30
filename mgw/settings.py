@@ -24,7 +24,8 @@ env = environ.Env(
     ALLOWED_HOSTS=(str, None),
     CSRF_TRUSTED_ORIGINS=(str, None),
     TIME_ZONE=(str, "Europe/Berlin"),
-    EXTERNAL_DATA_DIR=(Path, BASE_DIR / ".." / "mgw-data"),
+    DATA_DIR=(Path, BASE_DIR / ".." / "mgw-data"),
+    MONGO_URI=(str, None),
     EMAIL_HOST=(str, None),
     EMAIL_PORT=(int, 1025),
     EMAIL_USE_TLS=(bool, True),
@@ -41,12 +42,16 @@ environ.Env.read_env(BASE_DIR / 'vars.env')
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY")
 
+# MongoDB used for SRA metadata
+MONGO_URI = env("MONGO_URI")
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG")
 
 ALLOWED_HOSTS = env("ALLOWED_HOSTS", "").split(",")
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS", "").split(",")
 
+STATIC_ROOT = "/static"
 
 # Application definition
 
@@ -91,14 +96,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'mgw.wsgi.application'
 
+DATA_DIR = env("DATA_DIR")
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
+DB_DIR = DATA_DIR / "db"
+DB_DIR.mkdir(parents=True, exist_ok=True)
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': DB_DIR / 'db.sqlite3',
     }
 }
 
@@ -137,17 +145,15 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = DATA_DIR / 'media'
 MEDIA_URL = '/media/'
-
-EXTERNAL_DATA_DIR = env("EXTERNAL_DATA_DIR")
 
 if DEBUG:
     MIDDLEWARE += ('debug_toolbar.middleware.DebugToolbarMiddleware',)
