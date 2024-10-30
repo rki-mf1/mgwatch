@@ -5,5 +5,5 @@ e.g.
 ```
 $ cd ~/src/mgwatch
 $ ./scripts/build-docker.sh
-$ ./scripts/backend-manage.sh create_metadata
+$ ./scripts/dev-manage.sh create_metadata
 ```

@@ -1,6 +1,7 @@
 # Project tests
 cruft/
 work/
+work-mongo/
 /mgw-data/
 /branchwater/
 /mgw_api/test/
