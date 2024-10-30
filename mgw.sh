@@ -14,7 +14,7 @@ while getopts "bcmh" opt; do
     c) CREATE_MIGRATIONS=0 ;;
     m) MIGRATE=0 ;;
     h)
-      echo "./mgw.sh [-c] [-m]"
+      echo "./mgw.sh [-b] [-c] [-m]"
       echo " -b     build backend docker container"
       echo " -c     create (=make) migrations"
       echo " -m     migrate"
