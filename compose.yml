@@ -1,0 +1,65 @@
+services:
+
+  mgwatch-backend:
+    image: mgwatch:local
+    container_name: mgwatch-backend
+    volumes:
+      - ${EXTERNAL_DATA_DIR}/backend-data:/data
+      - ${EXTERNAL_DATA_DIR}/nginx/static:/static
+      # Persist mgwatch cron jobs
+      - ${EXTERNAL_DATA_DIR}/backend-crontabs:/var/spool/cron/crontabs
+    environment:
+      - TZ=$TZ
+    entrypoint: /bin/sh -c
+    command: [ "conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:9080 mgw.wsgi:application" ]
+    restart: unless-stopped
+    depends_on:
+      mgwatch-mongodb:
+        condition: service_started
+
+  # This container just handles running cron jobs set up by the above backend
+  # container
+  mgwatch-cron:
+    image: mgwatch:local
+    container_name: mgwatch-cron
+    volumes:
+      - ${EXTERNAL_DATA_DIR}/backend-data:/data
+      - ${EXTERNAL_DATA_DIR}/nginx/static:/static
+      # Persist mgwatch cron jobs
+      - ${EXTERNAL_DATA_DIR}/backend-crontabs:/var/spool/cron/crontabs
+    environment:
+      - TZ=$TZ
+    entrypoint: /bin/sh -c
+    command: [ "/usr/sbin/cron -f" ]
+    restart: unless-stopped
+    depends_on:
+      mgwatch-backend:
+        condition: service_started
+
+  mgwatch-mongodb:
+    image: $DOCKER_MONGODB_IMAGE
+    container_name: mgwatch-mongodb
+    environment:
+      - TZ=$TZ
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example1
+    volumes:
+      - ${MONGODB_DATA_DIR}:/data/db
+    restart: unless-stopped
+
+  mgwatch-proxy:
+    image: $DOCKER_NGINX_IMAGE
+    container_name: mgwatch-proxy
+    volumes:
+      - ./conf/nginx/templates:/etc/nginx/templates
+      # Not sure how we need to set this up
+      - ${EXTERNAL_DATA_DIR}/nginx/static:/static
+      - ${EXTERNAL_DATA_DIR}/nginx/media:/media
+    environment:
+      - TZ=$TZ
+      - NGINX_PORT=8000
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    depends_on:
+      - mgwatch-backend

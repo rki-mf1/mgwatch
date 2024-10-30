@@ -1,0 +1,22 @@
+# This compose file is meant to be used *with* the compose.yml file, and only
+# adds/overrides some settings. Mainly we expose a few ports that might be
+# useful for debugging, and mount the current dir under /code in the backend
+# container so that you can make live changes to the code without needing to
+# rebuild the container.
+services:
+
+  mgwatch-backend:
+    volumes:
+      # Overlay the code directory so that you can directly edit code and not
+      # need to rebuild the docker container. It will be live-reloaded by the
+      # django runserver dev server started below.
+      - .:/code
+    ports:
+      # To access the backend directly, normally can use localhost:8000 via the
+      # nginx proxy
+      - "9080:9080"
+    command: [ "conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw ./manage.py runserver" ]
+
+  mgwatch-mongodb:
+    ports:
+      - "27017:27017"

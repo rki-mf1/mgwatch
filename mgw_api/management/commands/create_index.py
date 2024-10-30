@@ -20,8 +20,8 @@ class Command(BaseCommand):
         try:
             kmers = [21, 31, 51]
             database = "SRA"
-            sig_list = os.path.join(settings.EXTERNAL_DATA_DIR, database, "metagenomes", f"sig-list.txt")
-            manifest = os.path.join(settings.EXTERNAL_DATA_DIR, database, "metagenomes", f"manifest.pcl")
+            sig_list = os.path.join(settings.DATA_DIR, database, "metagenomes", f"sig-list.txt")
+            manifest = os.path.join(settings.DATA_DIR, database, "metagenomes", f"manifest.pcl")
             dir_paths = self.handle_dirs(database, ["updates", "index", "signatures", "failed"])
             sig_files = self.get_manifest(manifest, dir_paths)
             new_files = self.check_updates(sig_files, dir_paths)
@@ -36,10 +36,10 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(self.style.SUCCESS(f"{log}No new files to process in {dir_paths['updates']}."))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"{log}Error processing directory '{settings.EXTERNAL_DATA_DIR}': {e}"))
+            self.stdout.write(self.style.ERROR(f"{log}Error processing directory '{settings.DATA_DIR}': {e}"))
 
     def handle_dirs(self, database, dir_names):
-        dir_paths = {n:os.path.join(settings.EXTERNAL_DATA_DIR, database, "metagenomes", n) for n in dir_names}
+        dir_paths = {n:os.path.join(settings.DATA_DIR, database, "metagenomes", n) for n in dir_names}
         for dir_path in dir_paths.values():
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
