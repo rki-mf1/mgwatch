@@ -33,6 +33,19 @@ except:
 
 
 class Command(BaseCommand):
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--no-download",
+            action="store_true",
+            help="Do not download latest SRA metadata from S3",
+        )
+        parser.add_argument(
+            "--no-process",
+            action="store_true",
+            help="Do not process the downloaded SRA data and load it into the mongodb",
+        )
+
+
     def handle(self, *args, **kwargs):
         now = datetime.now()
         dt = now.strftime("%d.%m.%Y %H:%M:%S")
@@ -40,7 +53,8 @@ class Command(BaseCommand):
         try:
             self.clean_log()
             self.write_log(f"Starting metadata update!")
-            re_download, re_process = False, True
+            re_download = not kwargs["no_download"]
+            re_process = not kwargs["no_process"]
             database = "SRA"
             dir_paths = self.handle_dirs(database, ["parquet"])
             column_list, jattr_list = self.get_filter_data()

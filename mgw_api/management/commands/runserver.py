@@ -22,7 +22,9 @@ class Command(StaticRunServerCommand):
             init_flag = os.path.join(settings.DATA_DIR, "SRA", "metadata", "initial_setup.txt")
             if not os.path.exists(init_flag):
                 print("Creating initial metadata...")
-                call_command('create_metadata')
+                # Skip downloading to restore the original behaviour we had
+                # before arguments were added to create_metadata
+                call_command('create_metadata', '--no-download')
 
         # Stop cron jobs and mail server on exit
         signal.signal(signal.SIGINT, self.stop_services)
