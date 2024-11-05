@@ -25,6 +25,7 @@ env = environ.Env(
     CSRF_TRUSTED_ORIGINS=(str, None),
     TIME_ZONE=(str, "Europe/Berlin"),
     DATA_DIR=(Path, BASE_DIR / ".." / "mgw-data"),
+    DB_DIR=(Path, "/data-db"),
     MONGO_URI=(str, None),
     EMAIL_HOST=(str, None),
     EMAIL_PORT=(int, 1025),
@@ -100,7 +101,7 @@ DATA_DIR = env("DATA_DIR")
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
-DB_DIR = DATA_DIR / "db"
+DB_DIR = env("DB_DIR")
 DB_DIR.mkdir(parents=True, exist_ok=True)
 
 DATABASES = {
