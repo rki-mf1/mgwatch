@@ -101,7 +101,7 @@ DATA_DIR = env("DATA_DIR")
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
-DB_DIR = env("DB_DIR")
+DB_DIR = Path(env("DB_DIR"))
 DB_DIR.mkdir(parents=True, exist_ok=True)
 
 DATABASES = {
