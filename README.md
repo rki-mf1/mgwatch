@@ -96,7 +96,7 @@ $ ./mgw.sh -h
 $ ./mgw.sh -bm
 ```
 
-### Automatic behaviour in developer modified
+### Automatic behaviour in developer mode
 
 Staring MetagenomeWatch in developer mode will do a few things automatically, which aren't done in production:
 
