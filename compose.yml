@@ -5,7 +5,7 @@ services:
     container_name: mgwatch-backend
     volumes:
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      - ${EXTERNAL_DATA_DIR}/nginx/static:/static
+      - ${NGINX_DATA_DIR}/static:/static
       # Persist mgwatch cron jobs
       - ${EXTERNAL_DATA_DIR}/backend-crontabs:/var/spool/cron/crontabs
       - ${SQLITE_DIR}:/data-db
@@ -25,7 +25,7 @@ services:
     container_name: mgwatch-cron
     volumes:
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      - ${EXTERNAL_DATA_DIR}/nginx/static:/static
+      - ${NGINX_DATA_DIR}/static:/static
       # Persist mgwatch cron jobs
       - ${EXTERNAL_DATA_DIR}/backend-crontabs:/var/spool/cron/crontabs
       - ${SQLITE_DIR}:/data-db
@@ -55,8 +55,8 @@ services:
     volumes:
       - ./conf/nginx/templates:/etc/nginx/templates
       # Not sure how we need to set this up
-      - ${EXTERNAL_DATA_DIR}/nginx/static:/static
-      - ${EXTERNAL_DATA_DIR}/nginx/media:/media
+      - ${NGINX_DATA_DIR}/static:/static
+      - ${NGINX_DATA_DIR}/media:/media
     environment:
       - TZ=$TZ
       - NGINX_PORT=8000
