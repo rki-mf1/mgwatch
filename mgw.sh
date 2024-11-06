@@ -25,6 +25,6 @@ done
 
 ./scripts/dc-dev.sh down --remove-orphans
 [[ BUILD_CONTAINER -eq 0 ]] && ./scripts/build-docker.sh
-./scripts/dc-dev.sh up -d
+./scripts/dc-dev.sh up -d --force-recreate
 [[ CREATE_MIGRATIONS -eq 0 ]] && ./scripts/dev-manage.sh makemigrations
 [[ MIGRATE -eq 0 ]] && ./scripts/dev-manage.sh migrate
