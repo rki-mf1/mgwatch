@@ -15,7 +15,7 @@ services:
       # To access the backend directly, normally can use localhost:8000 via the
       # nginx proxy
       - "9080:9080"
-    command: [ "conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw ./manage.py runserver" ]
+    command: [ "conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw ./manage.py runserver 0.0.0.0:9080" ]
 
   mgwatch-mongodb:
     ports:
