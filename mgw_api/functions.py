@@ -13,7 +13,7 @@ from .management.commands.return_command import CommandWithReturnValue
 import pymongo as pm
 import pandas as pd
 
-
+from mgw.settings import LOGGER
 
 
 import csv
@@ -67,14 +67,14 @@ def apply_compare(modifier, rows, column, value):
 def run_create_signature_and_search(user_id, name, fasta_id, do_sketching):
     try:
         fasta = Fasta.objects.get(id=fasta_id)
-        print(f"TEST fasta id: {fasta_id}")
+        LOGGER.info(f"TEST fasta id: {fasta_id}")
         if do_sketching: call_command('create_signature', user_id, name)
         output = io.StringIO()
         call_command('create_search', user_id, name, "False", stdout=output)
         output.seek(0)
         match = re.search(r'RESULT_PK:\s*(\d+)', output.getvalue())
         result_pk = int(match.group(1)) if match else None
-        print(f"TEST result pk: {result_pk}")
+        LOGGER.info(f"TEST result pk: {result_pk}")
         if result_pk:
             fasta.result_pk = result_pk
             fasta.processed = True
@@ -83,7 +83,7 @@ def run_create_signature_and_search(user_id, name, fasta_id, do_sketching):
         else:
             raise Exception(f"Search failed, result_pk is empty!")
     except Exception as e:
-        print(f"Error during background processing: {e}")
+        LOGGER.error(f"Error during background processing: {e}")
         fasta.status = f"Error: {e}"
         fasta.save()
 

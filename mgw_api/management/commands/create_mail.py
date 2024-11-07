@@ -10,6 +10,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import smtplib
 
+from mgw.settings import LOGGER
+from mgw.settings import LOG_DIR
+
+
 class Command(BaseCommand):
     help = "Start or stop the mail server"
 
@@ -36,18 +40,17 @@ class Command(BaseCommand):
                     f.write(envelope.content.decode('utf8', errors='replace'))
                     f.write('\nEnd of message\n\n')
                 return '250 Message accepted for delivery'
-        mail_path = os.path.dirname(os.path.abspath(__file__))
-        log_file_path = os.path.join(mail_path, "log_mail.log")
+        log_file_path = LOG_DIR / "mail.log"
         self.handler = CustomHandler(log_file_path)
         self.controller = Controller(self.handler, hostname='localhost', port=1025)
         self.thread = threading.Thread(target=self.controller.start)
         self.thread.start()
-        self.stdout.write(self.style.SUCCESS('Mail server started on port 1025'))
+        LOGGER.info('Mail server started on port 1025')
 
     def stop_mail_server(self):
         if hasattr(self, 'controller') and self.controller is not None:
             self.controller.stop()
             self.thread.join()  # Ensure the thread has finished
-            self.stdout.write(self.style.SUCCESS('Mail server stopped'))
+            LOGGER.info('Mail server stopped')
         else:
-            self.stdout.write(self.style.WARNING('Mail server is not running'))
+            LOGGER.warning('Mail server is not running')
