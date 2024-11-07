@@ -12,6 +12,8 @@ from django.core.exceptions import ValidationError
 import re
 from datetime import datetime
 
+from mgw.settings import LOGGER
+
 
 def validate_fasta_content(file):
     # check if first two lines are in fasta format
@@ -19,8 +21,8 @@ def validate_fasta_content(file):
         first_line = file.readline().decode("utf-8")
         second_line = file.readline().decode("utf-8")
         if not re.match(r">", first_line.strip()) or not re.match(r"^[ACGTUacgtu]+$", second_line.strip()):
-                print(first_line)
-                print(second_line)
+                LOGGER.error(first_line)
+                LOGGER.error(second_line)
                 raise ValidationError("File does not start with '>' character, invalid FASTA format!")
     except Exception as e:
         raise ValidationError(f"Error reading file: {str(e)}")

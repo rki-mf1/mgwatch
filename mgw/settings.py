@@ -10,9 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import logging
+
 import environ
 from pathlib import Path
 import os
+from datetime import datetime
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,6 +36,8 @@ env = environ.Env(
     EMAIL_HOST_USER=(str, None),
     EMAIL_HOST_PASSWORD=(str, None),
     DEFAULT_FROM_EMAIL=(str, 'test@mail.de'),
+    LOG_DIR=(Path, Path("/logs")),
+    LOG_LEVEL=(str, "DEBUG"),
 )
 
 environ.Env.read_env(BASE_DIR / 'vars.env')
@@ -53,6 +58,43 @@ ALLOWED_HOSTS = env("ALLOWED_HOSTS", "").split(",")
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS", "").split(",")
 
 STATIC_ROOT = "/static"
+
+# Logging
+LOGGER = logging.getLogger(__name__)
+
+LOG_DIR = env("LOG_DIR")
+if not LOG_DIR.is_dir():
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_LEVEL = env("LOG_LEVEL")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {
+                "format": '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+        "app_log_file": {
+            "level": LOG_LEVEL,
+            "class": "logging.FileHandler",
+            "filename": os.path.join(
+                LOG_DIR, f'{datetime.today().strftime("%Y_%m_%d")}.log'
+            ),
+            "formatter": "simple",
+        },
+    },
+    "loggers": {
+        "": {
+            "level": LOG_LEVEL,
+            "handlers": ["console", "app_log_file"],
+        },
+    },
+}
 
 # Application definition
 

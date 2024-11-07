@@ -1,6 +1,7 @@
 # mgw_api/management/commands/create_metadata.py
 import os
 import shutil
+from pathlib import Path
 from django.core.management.base import BaseCommand
 from django.core.management import call_command
 from django.conf import settings
@@ -22,6 +23,8 @@ import multiprocessing as mp
 from datetime import datetime
 from datetime import date
 import gc
+
+from mgw.settings import LOGGER
 
 try:
     import multiprocessingPickle4
@@ -47,12 +50,8 @@ class Command(BaseCommand):
 
 
     def handle(self, *args, **kwargs):
-        now = datetime.now()
-        dt = now.strftime("%d.%m.%Y %H:%M:%S")
-        log = f"{dt} - create_metadata - "
         try:
-            self.clean_log()
-            self.write_log(f"Starting metadata update!")
+            LOGGER.info("Starting metadata update")
             re_download = not kwargs["no_download"]
             re_process = not kwargs["no_process"]
             database = "SRA"
@@ -61,10 +60,9 @@ class Command(BaseCommand):
             if re_download: self.download_parquet(dir_paths["parquet"])
             if re_process:  self.process_parquet(dir_paths["parquet"], column_list, jattr_list)
             self.set_initial_flag()
-            self.write_log(f"Downloaded and imported new metadata to {dir_paths['parquet']}.")
-            self.stdout.write(self.style.SUCCESS(f"{log}Downloaded and imported new metadata to {dir_paths['parquet']}."))
+            LOGGER.info(f"Downloaded and imported new metadata to {dir_paths['parquet']}.")
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"{log}Error processing metadata update': {e}"))
+            LOGGER.error(f"Error processing metadata update': {e}")
         gc.collect()
 
     def handle_dirs(self, database, dir_names):
@@ -82,16 +80,15 @@ class Command(BaseCommand):
         return column_list, jattr_list
 
     def download_parquet(self, parquet_dir):
+        LOGGER.info("Downloading SRA metadata files from S3")
         self.remove_old_parquet(parquet_dir)
         command = ["aws", "s3", "cp", "--recursive", "s3://sra-pub-metadata-us-east-1/sra/metadata/", parquet_dir, "--no-sign-request"]
         result = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         stdout, stderr = result.communicate()
         if result.returncode == 0:
-            self.stdout.write(self.style.SUCCESS("Download metadata succeeded!"))
-            self.write_log(f"Download metadata succeeded!")
+            LOGGER.info("Download metadata succeeded")
         else:
-            self.stdout.write(self.style.WARNING(f"Download metadata failed with error {stderr}"))
-            self.write_log(f"Download metadata failed with error {stderr}!")
+            LOGGER.error(f"Download metadata failed with error {stderr}")
 
     def remove_old_parquet(self, parquet_dir):
         for root, dirs, files in os.walk(parquet_dir):
@@ -100,15 +97,15 @@ class Command(BaseCommand):
 
     def process_parquet(self, parquet_dir, column_list, jattr_list):
         self.clean_mongo("sradb_temp")
-        self.write_log(f"Cleaned mongodb sradb_temp")
-        cpus = min(1, int(mp.cpu_count()*0.8))
-        self.write_log(f"Using {cpus} cores")
-        for file in os.listdir(parquet_dir):
-            self.write_log(f"Processing parquet file {file}")
+        LOGGER.debug("Cleaned mongodb sradb_temp")
+        cpus = max(1, int(mp.cpu_count() * 0.8))
+        LOGGER.debug(f"Using {cpus} cores")
+        for i, file in enumerate(Path(parquet_dir).glob("*"), start=1):
+            LOGGER.info(f"Processing parquet file {i}: {file}")
             self.add_to_mongo(parquet_dir, file, column_list, jattr_list)
             gc.collect()
         self.clean_mongo("sradb_list")
-        self.write_log(f"Cleaned mongodb sradb_list")
+        LOGGER.debug(f"Cleaned mongodb sradb_list")
         self.finish_mongo()
 
     def clean_mongo(self, collection):
@@ -119,7 +116,7 @@ class Command(BaseCommand):
 
     def add_to_mongo(self, parquet_dir_path, file, column_list, jattr_list):
         pf = pq.ParquetFile(os.path.join(parquet_dir_path, file))
-        cpus = max(1, int(mp.cpu_count()*0.8))
+        cpus = max(1, int(mp.cpu_count() * 0.8))
         # Default batch size for iter_batches() is 64k records
         for data in pf.iter_batches(columns = column_list + ["jattr"]):
             df = data.to_pandas()
@@ -136,10 +133,8 @@ class Command(BaseCommand):
         db["sradb_temp"].rename("sradb_list")
         collection_stats = db.command("collstats", "sradb_list")
         acc_count, total_size, avg_doc_size = collection_stats["count"], collection_stats["size"], collection_stats["avgObjSize"]
-        self.write_log(f"{acc_count} acc documents imported to mongoDB collection")
-        self.write_log(f"MongoDB size is {total_size} bytes, average document size is {avg_doc_size} bytes")
-        self.stdout.write(self.style.SUCCESS(f"{acc_count} acc documents imported to mongoDB collection"))
-        self.stdout.write(self.style.SUCCESS(f"MongoDB size is {total_size} bytes, average document size is {avg_doc_size} bytes"))
+        LOGGER.info(f"{acc_count} acc documents imported to mongoDB collection")
+        LOGGER.debug(f"MongoDB size is {total_size} bytes, average document size is {avg_doc_size} bytes")
         mongo.close()
 
     def multi_parsing(self, data_list, parseFunction, threads, *argv, shuffle=True):
@@ -201,20 +196,7 @@ class Command(BaseCommand):
         extracted_values = {key: cleaned_dict.get(key, "NP") for key in jattr_list}
         return extracted_values
 
-    def clean_log(self):
-        logfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log_metadata.log")
-        with open(logfile, "w") as logf:
-            logf.write(f"")
-
-    def write_log(self, message):
-        logfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log_metadata.log")
-        now = datetime.now()
-        dt = now.strftime("%d.%m.%Y %H:%M:%S")
-        with open(logfile, "a") as logf:
-            logf.write(f"{dt} - Status: {message}\n")
-
     def set_initial_flag(self):
-        init_flag = os.path.join(settings.DATA_DIR, "SRA", "metadata", "initial_setup.txt")
-        with open(init_flag, "w") as initf:
-            initf.write(f"")
+        init_flag = Path(settings.DATA_DIR) / "SRA" / "metadata" / "initial_setup.txt"
+        init_flag.touch()
 

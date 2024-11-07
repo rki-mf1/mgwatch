@@ -13,10 +13,13 @@ import pandas as pd
 from django.urls import reverse
 from datetime import datetime
 
+from mgw.settings import LOGGER
+
+
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         results = Result.objects.filter(is_watched=True)
-        self.write_log(f"Starting watches for a total of {len(results)} watched results.")
+        LOGGER.info(f"Starting watches for a total of {len(results)} watched results.")
         for result in results:
             try:
                 signature = Signature.objects.get(user_id=result.user.id, name=result.name)
@@ -30,10 +33,10 @@ class Command(BaseCommand):
                 else:
                     self.send_notification(result.user, result, new_result)
                     new_message = "with new Metagenomes"
-                self.stdout.write(self.style.SUCCESS(f"Successfully processed file '{result.name}' {new_message}"))
+                LOGGER.info(f"Successfully processed file '{result.name}' {new_message}")
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"Error processing file '{result.name}': {e}"))
-        self.write_log(f"Running watches finished.")
+                LOGGER.error(f"Error processing file '{result.name}': {e}")
+        LOGGER.info("Running watches finished")
 
     def search_watch(self, name, user_id, watch_pk):
         output = io.StringIO()
@@ -51,7 +54,7 @@ class Command(BaseCommand):
         return is_equal
 
     def send_notification(self, user, result, new_result):
-        self.stdout.write(self.style.SUCCESS("Preparing to send email..."))
+        LOGGER.info("Preparing to send email...")
         result_page = self.request.build_absolute_uri(reverse('result_table', args=[new_result.pk]))
         subject = f"MetagenomeWatch: Found new Genomes for {new_result.name}!"
         message = f"""
@@ -73,11 +76,5 @@ class Command(BaseCommand):
         from_email = settings.DEFAULT_FROM_EMAIL
         recipient_list = [user.email]
         send_mail(subject, message, from_email, recipient_list, fail_silently=False,)
-        self.stdout.write(self.style.SUCCESS("Email sent successfully! ✔️"))
+        LOGGER.info("Email sent successfully")
 
-    def write_log(self, message):
-        logfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log_watch.log")
-        now = datetime.now()
-        dt = now.strftime("%d.%m.%Y %H:%M:%S")
-        with open(logfile, "a") as logf:
-            logf.write(f"{dt} - Status: {message}\n")

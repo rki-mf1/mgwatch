@@ -4,10 +4,11 @@ from django.core.management.base import BaseCommand
 from mgw_api.models import Fasta, Signature
 from django.conf import settings
 
-
 from datetime import datetime
 import subprocess
 import os
+
+from mgw.settings import LOGGER
 
 
 class Command(BaseCommand):
@@ -19,25 +20,25 @@ class Command(BaseCommand):
         user_id = kwargs['user_id']
         name = kwargs['name']
         fasta = Fasta.objects.get(user_id=user_id, name=name, processed=False)
-        self.write_log(f"Creating a signature for {fasta.name}.")
+        LOGGER.info(f"Creating a signature for {fasta.name}.")
         try:
             date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
             user_path = os.path.dirname(fasta.file.path)
             signature_file = os.path.join(user_path, f"signature_{fasta.name}.{date}.sig.gz")
-            self.stdout.write(self.style.SUCCESS(signature_file))
+            LOGGER.debug(signature_file)
             result = self.calculate_signatures(fasta.file.path, signature_file)
             if result.returncode != 0:
                 raise Exception(f"Sketching failed with exit code {result.returncode}: {result.stderr}")
             relative_path = os.path.relpath(signature_file, settings.MEDIA_ROOT)
-            self.stdout.write(self.style.SUCCESS(relative_path))
+            LOGGER.debug(relative_path)
             signature_model = Signature(user=fasta.user, fasta=fasta, name=fasta.name)
             signature_model.file.name = relative_path
             signature_model.size = signature_model.file.size
             signature_model.submitted = True
             signature_model.save()
-            self.stdout.write(self.style.SUCCESS(f"Successfully processed file '{fasta.name}'"))
+            LOGGER.info(f"Successfully processed file '{fasta.name}'")
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Error processing file '{fasta.name}': {e}"))
+            LOGGER.error(f"Error processing file '{fasta.name}': {e}")
         fasta.processed = True
         fasta.file.delete()
         fasta.save()
@@ -48,9 +49,3 @@ class Command(BaseCommand):
         result = subprocess.run(cmd, capture_output=True, text=True)
         return result # returncode: 0 = success, 2 = fail
 
-    def write_log(self, message):
-        logfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log_signature.log")
-        now = datetime.now()
-        dt = now.strftime("%d.%m.%Y %H:%M:%S")
-        with open(logfile, "a") as logf:
-            logf.write(f"{dt} - Status: {message}\n")
