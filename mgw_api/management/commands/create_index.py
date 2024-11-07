@@ -11,12 +11,11 @@ import subprocess
 import glob
 import pickle
 
+from mgw.settings import LOGGER
+
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
-        now = datetime.now()
-        dt = now.strftime("%d.%m.%Y %H:%M:%S")
-        log = f"{dt} - create_index - "
         try:
             kmers = [21, 31, 51]
             database = "SRA"
@@ -31,12 +30,12 @@ class Command(BaseCommand):
                 td, rs = ("failed", ".err") if sum([int(r.returncode) for r in results]) else ("signatures", "")
                 self.move_files(new_files, dir_paths, td, rs)
                 self.update_manifest(new_files, sig_files, manifest)
-                self.stdout.write(self.style.SUCCESS(f"{log}Updated index and moved new signatures."))
+                LOGGER.info("Updated index and moved new signatures.")
                 #call_command('create_watch')
             else:
-                self.stdout.write(self.style.SUCCESS(f"{log}No new files to process in {dir_paths['updates']}."))
+                LOGGER.info(f"No new files to process in {dir_paths['updates']}.")
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"{log}Error processing directory '{settings.DATA_DIR}': {e}"))
+            LOGGER.error(f"Error processing directory '{settings.DATA_DIR}': {e}")
 
     def handle_dirs(self, database, dir_names):
         dir_paths = {n:os.path.join(settings.DATA_DIR, database, "metagenomes", n) for n in dir_names}
