@@ -15,6 +15,7 @@ import logging
 import environ
 from pathlib import Path
 import os
+from datetime import datetime
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -35,8 +36,8 @@ env = environ.Env(
     EMAIL_HOST_USER=(str, None),
     EMAIL_HOST_PASSWORD=(str, None),
     DEFAULT_FROM_EMAIL=(str, 'test@mail.de'),
-    LOG_PATH=(Path, Path("logs")),
-    LOG_LEVEL=(str, "debug"),
+    LOG_DIR=(Path, Path("/logs")),
+    LOG_LEVEL=(str, "DEBUG"),
 )
 
 environ.Env.read_env(BASE_DIR / 'vars.env')
@@ -61,9 +62,9 @@ STATIC_ROOT = "/static"
 # Logging
 LOGGER = logging.getLogger(__name__)
 
-LOG_PATH = env("LOG_PATH")
-if not LOG_PATH.is_dir():
-    LOG_PATH.mkdir(parents=True, exist_ok=True)
+LOG_DIR = env("LOG_DIR")
+if not LOG_DIR.is_dir():
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_LEVEL = env("LOG_LEVEL")
 
 LOGGING = {
@@ -82,7 +83,7 @@ LOGGING = {
             "level": LOG_LEVEL,
             "class": "logging.FileHandler",
             "filename": os.path.join(
-                LOG_PATH, f'{datetime.today().strftime("%Y_%m_%d")}.log'
+                LOG_DIR, f'{datetime.today().strftime("%Y_%m_%d")}.log'
             ),
             "formatter": "simple",
         },
