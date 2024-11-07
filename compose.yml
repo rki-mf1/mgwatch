@@ -9,6 +9,7 @@ services:
       # Persist mgwatch cron jobs
       - ${EXTERNAL_DATA_DIR}/backend-crontabs:/var/spool/cron/crontabs
       - ${SQLITE_DIR}:/data-db
+      - ${LOG_DIR}:/logs
     environment:
       - TZ=$TZ
     entrypoint: /bin/sh -c
@@ -29,6 +30,7 @@ services:
       # Persist mgwatch cron jobs
       - ${EXTERNAL_DATA_DIR}/backend-crontabs:/var/spool/cron/crontabs
       - ${SQLITE_DIR}:/data-db
+      - ${LOG_DIR}:/logs
     environment:
       - TZ=$TZ
     entrypoint: /bin/sh -c

@@ -99,11 +99,9 @@ class Command(BaseCommand):
         self.clean_mongo("sradb_temp")
         LOGGER.debug("Cleaned mongodb sradb_temp")
         cpus = max(1, int(mp.cpu_count() * 0.8))
-        LOGGER.debug("Using {cpus} cores")
-        parquet_files = Path(parquet_dir).glob()
-        n_files = len(parquet_files)
-        for i, file in enumerate(parquet_files, start=1):
-            LOGGER.info(f"Processing parquet file {i}/{n_files}: {file}")
+        LOGGER.debug(f"Using {cpus} cores")
+        for i, file in enumerate(Path(parquet_dir).glob("*"), start=1):
+            LOGGER.info(f"Processing parquet file {i}: {file}")
             self.add_to_mongo(parquet_dir, file, column_list, jattr_list)
             gc.collect()
         self.clean_mongo("sradb_list")
