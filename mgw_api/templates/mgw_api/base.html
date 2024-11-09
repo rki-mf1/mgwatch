@@ -5,31 +5,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="author" content="Daniel Desirò" />
-    <meta name="description" content="MetagenomeWatch (MGW) provides a metagenome search engine ablte to search through petabyte scale databases in real time." />
+    <meta name="description" content="MetagenomeWatch provides a metagenome search engine able to search through petabyte scale databases in real time." />
 
     <title>MetagenomeWatch</title>
 
     {% load static %}
 
     <link rel="stylesheet" href="{% static 'mgw_api/style.css' %}">
-
-    <div class="account-navigation">
-        {% if request.user.is_authenticated %}
-            <a href="{% url 'mgw_api:upload_fasta' %}">Search</a>
-            <a href="{% url 'mgw_api:list_result' %}">Watches</a>
-            {{ request.user.username }}
-            <a href="{% url 'mgw_api:logout' %}">Logout</a>
-        {% else %}
-            <a href="{% url 'mgw_api:login' %}">Login</a>
-            <a href="{% url 'mgw_api:signup' %}">Signup</a>
-        {% endif %}
-    </div>
 </head>
 
 <body>
     <header>
         <div class="page-head">
-            <h2>MetagenomeWatch</h2>
+            <div class="logo">
+                MetagenomeWatch
+            </div>
+
+            <div class="account-navigation">
+                {% if request.user.is_authenticated %}
+                    {{ request.user.username }}
+                    <a href="{% url 'mgw_api:logout' %}">Logout</a>
+                {% else %}
+                    <a href="{% url 'mgw_api:login' %}">Login</a>
+                    <a href="{% url 'mgw_api:signup' %}">Signup</a>
+                {% endif %}
+            </div>
         </div>
     </header>
     <main>
