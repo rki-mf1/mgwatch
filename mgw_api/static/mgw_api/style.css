@@ -1,6 +1,5 @@
 /* Random CSS stuff */
 
-
 body {
     content: ' ';
     display: block;
@@ -10,21 +9,14 @@ body {
     width: 100%;
     height: 100%;
     opacity: 1.0;
-    background-image: url("images/background.webp");
-    background-repeat: no-repeat;
-    background-position: 50% 0;
-    background-size: cover;
     background-color: #ffffff;
     background-attachment: fixed;
 }
 
-
-
-
-
 /* CSS with purpose */
 
 .nav {
+
     font: bold normal 1em/3em Arial,sans-serif;
     text-shadow: 1px 1px white;
     width: 90%;
@@ -75,6 +67,10 @@ ul.nav {
 
 
 .page-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
     font-family: Arial, sans-serif;
     text-shadow: 1px 1px white;
     width: 90%;
@@ -83,12 +79,10 @@ ul.nav {
     padding-left: 20px;
     padding-right: 20px;
     background-color: #f9f9f974;
-    border: 1px solid #000000;
-    border-radius: 5px;
     margin-top: 5px;
     margin-bottom: 5px;
 }
-.page-head h1 {
+.logo {
     font-size: 36px;
     color: #000000;
     margin-bottom: 5px;
@@ -407,15 +401,9 @@ ul.nav {
 .account-navigation {
     font-family: Arial, sans-serif;
     text-shadow: 1px 1px white;
-    width: 90%;
-    max-width: 1024px;
-    margin: 0 auto;
-    padding: 20px;
     padding-top: 0px;
     padding-bottom: 0px;
     background-color: #f9f9f900;
-    border: 1px solid #00000000;
-    border-radius: 5px;
     margin-top: 5px;
     margin-bottom: 5px;
 }
