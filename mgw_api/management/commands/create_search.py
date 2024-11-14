@@ -58,11 +58,8 @@ class Command(BaseCommand):
             signature.submitted = False
             signature.save()
             LOGGER.info(f"Search finished with result_pk = {result_pk}.")
-            ################################################################################
-            ## Do NOT remove this line (again)!
+            ## Do NOT remove this line:
             self.stdout.write(self.style.SUCCESS(f"RESULT_PK: {result_pk}"))
-            ## !
-            ################################################################################
         except Exception as e:
             LOGGER.error(f"Error processing search '{signature.name}': {e}")
 
