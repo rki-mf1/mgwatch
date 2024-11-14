@@ -1,6 +1,7 @@
 # Project tests
 cruft/
 work/
+data/
 work-mongo/
 /mgw-data/
 /branchwater/
