@@ -1,8 +1,8 @@
 <div class="settings-section">
     <h2>Settings</h2>
 
-    <div class="settings-form">
-        <form method="post" enctype="multipart/form-data" id="settings-form">
+    <form method="post" enctype="multipart/form-data" id="settings-form">
+        <div class="grid">
             {% csrf_token %}
 
             <div class="form-group">
@@ -22,6 +22,7 @@
                 <div class="options">{{ settings_form.containment }}</div>
                 <small>Enter a value between 0.0 and 1.0</small>
             </div>
+        </div>
 
             <div class="submission-message">
                 {% if messages %}
@@ -34,8 +35,7 @@
                     </ul>
                 {% endif %}
             </div>
-        </form>
-    </div>
+    </form>
 </div>
 
 
