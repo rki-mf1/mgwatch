@@ -100,7 +100,7 @@ class Command(BaseCommand):
         LOGGER.debug("Cleaned mongodb sradb_temp")
         cpus = max(1, int(mp.cpu_count() * 0.8))
         LOGGER.debug(f"Using {cpus} cores")
-        for i, file in enumerate(Path(parquet_dir).glob("*"), start=1):
+        for i, file in enumerate(os.listdir(parquet_dir), start=1):
             LOGGER.info(f"Processing parquet file {i}: {file}")
             self.add_to_mongo(parquet_dir, file, column_list, jattr_list)
             gc.collect()
