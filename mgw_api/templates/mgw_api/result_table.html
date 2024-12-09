@@ -161,7 +161,7 @@
             if (index === sortedColumn) {
                 header.innerHTML = sortReverse ? '▼' : '▲';
             } else {
-                header.innerHTML = '□';
+                header.innerHTML = ' ';
             }
         });
     }
@@ -186,6 +186,10 @@
                         linkElement.target = '_blank';
                         linkElement.textContent = cell.split('/').pop();
                         cellElement.appendChild(linkElement);
+                    } else if (header === 'containment' || header === 'query containment ani') {
+                        cellElement.textContent = cell.toFixed(4);
+                    } else if (cell == 'NP') {
+                        cellElement.textContent = '';
                     } else {
                         cellElement.textContent = cell;
                     }
