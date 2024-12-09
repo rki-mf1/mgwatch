@@ -29,7 +29,8 @@
                             <span onclick="sortTable({{ forloop.counter0 }}); event.stopPropagation();">
                             {% if forloop.counter0 == sort_column %}
                                 {% if sort_reverse %}▼{% else %}▲{% endif %}
-                            {% else %}□{% endif %}
+                            {% else %} {% endif %}
+                            </span>
                         </th>
                     {% endfor %}
                 </tr>
@@ -53,6 +54,9 @@
                             <td>
                                 {% if header == "sra link" or header == "biosample link" %}
                                     <a href="{{ cell }}" target="_blank">{{ cell|last_part_of_url }}</a>
+                                {% elif header == "containment" or header == "query containment ani" %}
+                                    {{ cell|floatformat:4 }}
+                                {% elif cell == "NP" %}
                                 {% else %}
                                     {{ cell }}
                                 {% endif %}
