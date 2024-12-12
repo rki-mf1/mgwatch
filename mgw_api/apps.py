@@ -18,7 +18,7 @@ class MgwApiConfig(AppConfig):
 
         # Extra code to initialize cronjobs. Copied from custom runserver.
         self.manage_py_path = os.path.abspath("manage.py")
-        LOGGER.info("Starting cron jobs...")
+        LOGGER.info("Adding cron jobs to crontab.")
         call_command('create_crons', 'add', self.manage_py_path)
 
         # Stop cron jobs on exit
@@ -26,6 +26,6 @@ class MgwApiConfig(AppConfig):
         signal.signal(signal.SIGTERM, self.stop_services)
 
     def stop_services(self, signum, frame):
-        LOGGER.info("Stopping cron jobs...")
+        LOGGER.info("Removing cron jobs from crontab.")
         call_command('create_crons', 'remove', self.manage_py_path)
         sys.exit(0)
