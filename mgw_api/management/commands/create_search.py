@@ -70,11 +70,13 @@ class Command(BaseCommand):
         return new_files
 
     def search_index(self, result_file, sketch_file, index_path, k, containment):
-        cpus = min(8, int(mp.cpu_count()*0.8))
-        cmd = ["sourmash", "scripts", "manysearch", "--ksize", f"{k}", "--moltype", "DNA", "--scaled", "1000", "--cores", f"{cpus}", "--threshold", f"{containment}", "--output", result_file, sketch_file, index_path]
-        LOGGER.debug(f"Running commands: {' '.join(cmd)}")
+        # Limit this to 1 cpu per search for now, because we were overloading
+        # the server with the default
+        cores = 1
+        cmd = ["sourmash", "scripts", "manysearch", "--ksize", f"{k}", "--moltype", "DNA", "--scaled", "1000", "--cores", f"{cores}", "--threshold", f"{containment}", "--output", result_file, sketch_file, index_path]
+        LOGGER.debug(f"Running search command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True)
-        return result # returncode: 0 = success, 2 = fail
+        return result
     
     def combine_results(self, file_list, combined_file, query_name):
         header, table_data = "", list()
