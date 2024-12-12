@@ -91,7 +91,7 @@ def human_sort_key(text):
     return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(text)) if c]
 
 def get_metadata(headers, rows):
-    column_dict = {"acc":0, "assay_type":0, "bioproject":0, "sra_link":0, "biosample_link":0, "query_containment_ani":1, "collection_date_sam":0, "containment":1, "geo_loc_name_country_calc":0, "lat_lon":0, "organism":0, "k-mer":1, "database":1, "containment_threshold":1}
+    column_dict = {"sra_link":0, "assay_type":0, "bioproject":0, "biosample_link":0, "query_containment_ani":1, "collection_date_sam":0, "containment":1, "geo_loc_name_country_calc":0, "lat_lon":0, "organism":0, "containment_threshold":1}
     mongo_df = search_mongodb(headers, rows)
     csv_df = search_csv(headers, rows, column_dict)
     combined_df = pd.DataFrame()
