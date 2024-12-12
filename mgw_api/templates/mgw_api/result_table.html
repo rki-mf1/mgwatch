@@ -56,6 +56,10 @@
                                     <a href="{{ cell }}" target="_blank">{{ cell|last_part_of_url }}</a>
                                 {% elif header == "containment" or header == "query containment ani" %}
                                     {{ cell|floatformat:4 }}
+                                {% elif header == "lat_lon" %}
+                                    {% if cell != "NP" %}
+                                        <a href="https://www.openstreetmap.org/#map=12/{{ cell|urlencode }}>view map</a>
+                                    {% else %}
                                 {% elif cell == "NP" %}
                                 {% else %}
                                     {{ cell }}
