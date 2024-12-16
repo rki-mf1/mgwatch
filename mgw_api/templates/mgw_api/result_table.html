@@ -195,7 +195,11 @@
                     } else if (header === 'lat lon') {
                         if (cell !== 'NP') {
                             const lat_lon = cell.replace(", ", "/");
-                            cellElement.textContent = '<a href="https://www.openstreetmap.org/#map=12/' + lat_lon + '">view map</a>'
+                            const osm_link = document.createElement('a');
+                            osm_link.href = '<a href="https://www.openstreetmap.org/#map=12/' + lat_lon + '">view map</a>';
+                            osm_link.target = '_blank';
+                            osm_link.textContent = 'view map';
+                            cellElement.appendChild(osm_link);
                         }
                     } else if (cell === 'NP') {
                         cellElement.textContent = '';
