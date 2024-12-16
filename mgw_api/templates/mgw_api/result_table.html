@@ -58,7 +58,7 @@
                                     {{ cell|floatformat:4 }}
                                 {% elif header == "lat lon" %}
                                     {% if cell != "NP" %}
-                                        <a href="https://www.openstreetmap.org/#map=12/{{ cell|urlencode }}">view map</a>
+                                        <a href="https://www.openstreetmap.org/#map=12/{{ cell|lat_lon_for_osm }}">view map</a>
                                     {% endif %}
                                 {% elif cell == "NP" %}
                                 {% else %}
@@ -192,6 +192,11 @@
                         cellElement.appendChild(linkElement);
                     } else if (header === 'containment' || header === 'query containment ani') {
                         cellElement.textContent = parseFloat(cell).toFixed(4);
+                    } else if (header === 'lat lon') {
+                        if (cell !== 'NP') {
+                            const lat_lon = cell.replace(", ", "/");
+                            cellElement.textContent = '<a href="https://www.openstreetmap.org/#map=12/' + lat_lon + '">view map</a>'
+                        }
                     } else if (cell === 'NP') {
                         cellElement.textContent = '';
                     } else {
