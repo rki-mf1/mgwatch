@@ -36,3 +36,7 @@ def last_part_of_url(value):
 @register.filter
 def zip_lists(a, b):
     return zip(a, b)
+
+@register.filter
+def lat_lon_for_osm(lat_lon):
+    return lat_lon.replace(", ", "/")

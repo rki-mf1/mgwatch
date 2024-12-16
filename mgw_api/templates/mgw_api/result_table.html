@@ -56,6 +56,10 @@
                                     <a href="{{ cell }}" target="_blank">{{ cell|last_part_of_url }}</a>
                                 {% elif header == "containment" or header == "query containment ani" %}
                                     {{ cell|floatformat:4 }}
+                                {% elif header == "lat lon" %}
+                                    {% if cell != "NP" %}
+                                        <a href="https://www.openstreetmap.org/#map=12/{{ cell|lat_lon_for_osm }}">view map</a>
+                                    {% endif %}
                                 {% elif cell == "NP" %}
                                 {% else %}
                                     {{ cell }}
@@ -188,6 +192,15 @@
                         cellElement.appendChild(linkElement);
                     } else if (header === 'containment' || header === 'query containment ani') {
                         cellElement.textContent = parseFloat(cell).toFixed(4);
+                    } else if (header === 'lat lon') {
+                        if (cell !== 'NP') {
+                            const lat_lon = cell.replace(", ", "/");
+                            const osm_link = document.createElement('a');
+                            osm_link.href = 'https://www.openstreetmap.org/#map=12/' + lat_lon;
+                            osm_link.target = '_blank';
+                            osm_link.textContent = 'view map';
+                            cellElement.appendChild(osm_link);
+                        }
                     } else if (cell === 'NP') {
                         cellElement.textContent = '';
                     } else {
