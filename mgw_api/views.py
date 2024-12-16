@@ -267,7 +267,7 @@ def result_table(request, pk):
         sort_reverse = filter_settings.sort_reverse
         if sort_column is not None:
             # Check if the sort column index is invalid, and if so reset it to 0
-            if int(sort_column) >= rows.shape[1]:
+            if int(sort_column) >= len(rows):
                 sort_column = 0
             rows = sorted(rows, key=lambda x: human_sort_key(x[int(sort_column)]), reverse=sort_reverse)
 
@@ -379,7 +379,7 @@ def download_filtered_table(request, pk):
     sort_reverse = filter_settings.sort_reverse
     if sort_column is not None:
         # Check if the sort column index is invalid, and if so reset it to 0
-        if int(sort_column) >= rows.shape[1]:
+        if int(sort_column) >= len(rows):
             sort_column = 0
         rows = sorted(rows, key=lambda x: human_sort_key(x[int(sort_column)]), reverse=sort_reverse)
     filename = f"{result.name}-MGwatch_filtered.tsv".replace(' ', '_')
