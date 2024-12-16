@@ -59,7 +59,7 @@
                                 {% elif header == "lat_lon" %}
                                     {% if cell != "NP" %}
                                         <a href="https://www.openstreetmap.org/#map=12/{{ cell|urlencode }}>view map</a>
-                                    {% else %}
+                                    {% endif %}
                                 {% elif cell == "NP" %}
                                 {% else %}
                                     {{ cell }}
