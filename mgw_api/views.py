@@ -266,6 +266,9 @@ def result_table(request, pk):
         sort_column = filter_settings.sort_column
         sort_reverse = filter_settings.sort_reverse
         if sort_column is not None:
+            # Check if the sort column index is invalid, and if so reset it to 0
+            if int(sort_column) >= rows.shape[1]:
+                sort_column = 0
             rows = sorted(rows, key=lambda x: human_sort_key(x[int(sort_column)]), reverse=sort_reverse)
 
         watch_form = WatchForm(instance=result)
@@ -375,6 +378,9 @@ def download_filtered_table(request, pk):
     sort_column = filter_settings.sort_column
     sort_reverse = filter_settings.sort_reverse
     if sort_column is not None:
+        # Check if the sort column index is invalid, and if so reset it to 0
+        if int(sort_column) >= rows.shape[1]:
+            sort_column = 0
         rows = sorted(rows, key=lambda x: human_sort_key(x[int(sort_column)]), reverse=sort_reverse)
     filename = f"{result.name}-MGwatch_filtered.tsv".replace(' ', '_')
     response = HttpResponse(content_type='text/tab-separated-values')
