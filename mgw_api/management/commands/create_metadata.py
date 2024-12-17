@@ -40,14 +40,11 @@ class Command(BaseCommand):
         parser.add_argument(
             "--no-download",
             action="store_true",
-            help="Do not download latest SRA metadata from S3",
-        )
+            help="Do not download latest SRA metadata from S3",)
         parser.add_argument(
             "--no-process",
             action="store_true",
-            help="Do not process the downloaded SRA data and load it into the mongodb",
-        )
-
+            help="Do not process the downloaded SRA data and load it into the mongodb",)
 
     def handle(self, *args, **kwargs):
         try:
@@ -124,7 +121,8 @@ class Command(BaseCommand):
             mongo = pm.MongoClient(settings.MONGO_URI)
             db = mongo["sradb"]
             for meta_list in res_list:
-                db["sradb_temp"].insert_many(meta_list)
+                if meta_list:
+                    db["sradb_temp"].insert_many(meta_list)
             mongo.close()
 
     def finish_mongo(self):
@@ -168,7 +166,8 @@ class Command(BaseCommand):
             meta_dict['biosample_link'] = f"https://www.ncbi.nlm.nih.gov/biosample/{meta_dict.get('biosample', '')}"
             meta_dict['sra_link'] = f"https://www.ncbi.nlm.nih.gov/sra/{meta_dict.get('acc', '')}"
             meta_dict['_id'] = meta_dict['acc']
-            new_attr.append(meta_dict)
+            if meta_dict["librarysource"] == "METAGENOMIC":
+                new_attr.append(meta_dict)
         res_list.append(new_attr)
 
     def process_value(self, v):

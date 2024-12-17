@@ -38,6 +38,7 @@ env = environ.Env(
     DEFAULT_FROM_EMAIL=(str, 'test@mail.de'),
     LOG_DIR=(Path, Path("/logs")),
     LOG_LEVEL=(str, "DEBUG"),
+    INDEX_FROM_SCRATCH=(bool, False),
 )
 
 environ.Env.read_env(BASE_DIR / 'vars.env')
