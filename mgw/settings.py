@@ -219,7 +219,7 @@ if EMAIL_HOST:
     DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL")
 else:
     # If an SMTP server isn't specified, write emails to the console
-    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"`
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 ################################################################################
 
 ################################################################################
