@@ -123,11 +123,6 @@ Staring MetagenomeWatch in developer mode will do a few things automatically, wh
 - line 17: runs watches (also run after successfull index update)
 - currently all are deactivated
 
-### mgw_api/management/commands/create_mail.py
-- local mail server for testing
-- create vars.env file in main directory with mail setting variables
-- e.g. SECRET_KEY, EMAIL_HOST_PASSWORD, EMAIL_HOST, EMAIL_PORT, EMAIL_USE_TLS, EMAIL_HOST_USER, DEFAULT_FROM_EMAIL
-
 ### mgw_api/management/commands/create_search.py
 - modified to only work with SRA and k=21
 - change line 35 to change this behavior
