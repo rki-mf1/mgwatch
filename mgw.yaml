@@ -21,5 +21,6 @@ dependencies:
   - conda-forge::aiosmtpd=1.4.6
   - conda-forge::gunicorn=23.0.0
   - conda-forge::python-ldap=3.4.3
+  - conda-forge::curl=8.11.1
   - pip:
     - django-auth-ldap==5.0.0
