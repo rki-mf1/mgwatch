@@ -38,6 +38,15 @@ env = environ.Env(
     DEFAULT_FROM_EMAIL=(str, 'test@mail.de'),
     LOG_DIR=(Path, Path("/logs")),
     LOG_LEVEL=(str, "DEBUG"),
+    INDEX_FROM_SCRATCH=(bool, False),
+    INDEX_MAX_SIGNATURES=(int, 100000),
+    START_DATE=(str, "2024-03-15"), 
+    END_DATE=(str, "2024-03-15"),
+    LIB_SOURCE=(list, []),
+    WORT_ATTEMPTS=(int, 1),
+    WORT_SKIP_FAILED=(bool, True),
+    MAX_DOWNLOADS=(int, 100),
+    INDEX_MIN_ITERATOR=(int, 38),
 )
 
 environ.Env.read_env(BASE_DIR / 'vars.env')
@@ -50,6 +59,22 @@ SECRET_KEY = env("SECRET_KEY")
 
 # MongoDB used for SRA metadata
 MONGO_URI = env("MONGO_URI")
+
+# Wort updates
+INDEX_FROM_SCRATCH = env("INDEX_FROM_SCRATCH")
+# number of signatures in each index
+INDEX_MAX_SIGNATURES = env("INDEX_MAX_SIGNATURES")
+INDEX_MIN_ITERATOR = env("INDEX_MIN_ITERATOR")
+# format: "yyyy-mm-dd" if START_DATE set to "auto", start and end will be set to today - 2 days; current index is on "2023-09-27"
+START_DATE = env("START_DATE")
+END_DATE = env("END_DATE")
+# will be ignored if list is empty; possible lib_source values: ["GENOMIC", "GENOMIC SINGLE CELL", "METAGENOMIC", "METATRANSCRIPTOMIC", "OTHER", "SYNTHETIC", "TRANSCRIPTOMIC", "TRANSCRIPTOMIC SINGLE CELL", "VIRAL RNA"]
+LIB_SOURCE = env("LIB_SOURCE")
+WORT_ATTEMPTS = env("WORT_ATTEMPTS")
+# skip failed wort attempts
+WORT_SKIP_FAILED = env("WORT_SKIP_FAILED")
+# limit total of IDS trying to download, set to 0 if no limit
+MAX_DOWNLOADS = env("MAX_DOWNLOADS")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG")

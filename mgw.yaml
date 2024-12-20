@@ -16,10 +16,11 @@ dependencies:
   - conda-forge::numpy=2.1.0
   - conda-forge::pyyaml=6.0.2
   - conda-forge::python-crontab=3.2.0
-  - conda-forge::sourmash-minimal=4.8.11
-  - conda-forge::sourmash_plugin_branchwater=0.9.5
+  - conda-forge::sourmash-minimal=4.8.12
+  - conda-forge::sourmash_plugin_branchwater=0.9.11
   - conda-forge::aiosmtpd=1.4.6
   - conda-forge::gunicorn=23.0.0
   - conda-forge::python-ldap=3.4.3
+  - conda-forge::curl=8.11.1
   - pip:
     - django-auth-ldap==5.0.0
