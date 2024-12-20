@@ -17,9 +17,6 @@ class Command(StaticRunServerCommand):
             # Start cron jobs
             LOGGER.info("Starting cron jobs...")
             call_command('create_crons', 'add', self.manage_py_path)
-            # Start the mail server
-            LOGGER.info("Starting mail server...")
-            call_command('create_mail', 'start')
             # Create initial metadata
             init_flag = os.path.join(settings.DATA_DIR, "SRA", "metadata", "initial_setup.txt")
             if not os.path.exists(init_flag):
@@ -38,6 +35,4 @@ class Command(StaticRunServerCommand):
     def stop_services(self, signum, frame):
         LOGGER.info("Stopping cron jobs...")
         call_command('create_crons', 'remove', self.manage_py_path)
-        LOGGER.info("Stopping mail server...")
-        call_command('create_mail', 'stop')
         sys.exit(0)

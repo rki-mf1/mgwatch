@@ -4,6 +4,7 @@ services:
     image: mgwatch:local
     container_name: mgwatch-backend
     volumes:
+      - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
       - ${NGINX_DATA_DIR}/static:/static
       # Persist mgwatch cron jobs
@@ -12,6 +13,7 @@ services:
       - ${LOG_DIR}:/logs
     environment:
       - TZ=$TZ
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
     command: [ "conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:9080 mgw.wsgi:application" ]
     restart: unless-stopped
@@ -25,6 +27,7 @@ services:
     image: mgwatch:local
     container_name: mgwatch-cron
     volumes:
+      - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
       - ${NGINX_DATA_DIR}/static:/static
       # Persist mgwatch cron jobs
@@ -33,6 +36,7 @@ services:
       - ${LOG_DIR}:/logs
     environment:
       - TZ=$TZ
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
     command: [ "/usr/sbin/cron -f" ]
     restart: unless-stopped
