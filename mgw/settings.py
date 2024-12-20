@@ -242,6 +242,9 @@ if EMAIL_HOST:
     EMAIL_HOST_USER = env("EMAIL_HOST_USER")
     EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
     DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL")
+else:
+    # If an SMTP server isn't specified, write emails to the console
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 ################################################################################
 
 ################################################################################
