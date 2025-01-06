@@ -16,11 +16,12 @@ async def main():
     await provide_after(5, "5nd awaitable")
     LOGGER.debug(f"finished at {time.strftime('%X')}")
     await asyncio.sleep(2)  # just to have some gap
-    t1 = asyncio.create_task(provide_after(20., "20st task"))
-    t2 = asyncio.create_task(provide_after(15., "15nd task"))
+    t1 = asyncio.create_task(provide_after(20.0, "20st task"))
+    t2 = asyncio.create_task(provide_after(15.0, "15nd task"))
     LOGGER.debug(f"started at {time.strftime('%X')}")
     await t1
     await t2
     LOGGER.debug(f"finished at {time.strftime('%X')}")
+
 
 asyncio.run(main())

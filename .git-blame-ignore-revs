@@ -1,1 +1,3 @@
 # Add git hashes of commits you want to ignore to this file, one per line
+# Initial format and lint fix with ruff
+f716f89d798be0e5d29e700b37a893047faa59b6

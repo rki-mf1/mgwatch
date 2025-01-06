@@ -1,29 +1,32 @@
 # mgw_api/management/commands/create_crons.py
 
-import sys
-import os
 import subprocess
+import sys
+
 from crontab import CronTab
+from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from mgw.settings import LOG_DIR
-from mgw.settings import LOGGER
+LOGGER = settings.LOGGER
 
 
 class Command(BaseCommand):
-
     def add_arguments(self, parser):
-        parser.add_argument('action', choices=['add', 'remove'], help="Action to perform: add or remove cron jobs from crontab")
-        parser.add_argument('manage', type=str, help="Full manage.py path.")
+        parser.add_argument(
+            "action",
+            choices=["add", "remove"],
+            help="Action to perform: add or remove cron jobs from crontab",
+        )
+        parser.add_argument("manage", type=str, help="Full manage.py path.")
 
     def handle(self, *args, **options):
-        action = options['action'].lower()
+        action = options["action"].lower()
         try:
             if action == "add":
                 # Clear out old jobs before adding our new jobs, to avoid
                 # duplicates
                 self.remove_cron_jobs()
-                manage_py_path = options['manage']
+                manage_py_path = options["manage"]
                 cron_jobs = self.get_cron_jobs(manage_py_path)
                 self.add_cron_jobs(cron_jobs)
             elif action == "remove":
@@ -39,12 +42,13 @@ class Command(BaseCommand):
         """Generate the crontab lines we want to add for each command"""
         cron_jobs, env_name = list(), "mgw"
         conda_path = self.get_conda_path()
-        cron_path = os.path.dirname(os.path.abspath(__file__))
-        log_file_path = LOG_DIR / "log_crons.log"
-        for script in ["create_daily",]:
+        log_file_path = settings.LOG_DIR / "log_crons.log"
+        for script in [
+            "create_daily",
+        ]:
             python_command = f"{conda_path} run -n {env_name} {sys.executable} {manage_py_path} {script} >> {log_file_path} 2>&1"
             # 0 - At minute 0 | 1 - At 1 AM | * - Every day of the month | * - Every month | 6 - On Saturday
-            cron_jobs.append({"schedule":"0 1 * * *", "command":f"{python_command}"})
+            cron_jobs.append({"schedule": "0 1 * * *", "command": f"{python_command}"})
         return cron_jobs
 
     def add_cron_jobs(self, cron_jobs):
@@ -65,8 +69,7 @@ class Command(BaseCommand):
         LOGGER.info("Cron jobs added.")
 
     def remove_cron_jobs(self):
-        """Remove all mgwatch cron jobs from the crontab
-        """
+        """Remove all mgwatch cron jobs from the crontab"""
         cron = CronTab(user=True)
         cron.remove_all(comment="mgwatch")
         cron.write()
