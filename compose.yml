@@ -1,5 +1,4 @@
 services:
-
   mgwatch-backend:
     image: mgwatch:local
     container_name: mgwatch-backend
@@ -15,12 +14,11 @@ services:
       - TZ=$TZ
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
-    command: [ "conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:9080 mgw.wsgi:application" ]
+    command: ["conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:9080 mgw.wsgi:application"]
     restart: unless-stopped
     depends_on:
       mgwatch-mongodb:
         condition: service_started
-
   # This container just handles running cron jobs set up by the above backend
   # container
   mgwatch-cron:
@@ -38,12 +36,11 @@ services:
       - TZ=$TZ
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
-    command: [ "/usr/sbin/cron -f" ]
+    command: ["/usr/sbin/cron -f"]
     restart: unless-stopped
     depends_on:
       mgwatch-backend:
         condition: service_started
-
   mgwatch-mongodb:
     image: $DOCKER_MONGODB_IMAGE
     container_name: mgwatch-mongodb
@@ -54,7 +51,6 @@ services:
     volumes:
       - ${MONGODB_DATA_DIR}:/data/db
     restart: unless-stopped
-
   mgwatch-proxy:
     image: $DOCKER_NGINX_IMAGE
     container_name: mgwatch-proxy

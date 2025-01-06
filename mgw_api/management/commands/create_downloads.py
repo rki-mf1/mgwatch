@@ -1,72 +1,72 @@
-# mgw_api/management/commands/create_downloads.py
+import glob
+import os
+import pickle
+import subprocess
+import time
+from datetime import datetime, timedelta
 
-from django.core.management.base import BaseCommand, CommandError
-from mgw_api.models import Fasta, Signature, Result, Settings
+import pymongo as pm
 from django.conf import settings
+from django.core.management.base import BaseCommand
 
 from mgw.settings import LOGGER
 
-import os
-import shutil
-import subprocess
-import json
-import hashlib
-import re
-import multiprocessing as mp
-from functools import partial
-import datetime
-
-
-import pickle
-import resource
-
-import sys
-import os 
-import re
-import time
-import pickle
-import random
-
-import glob
-import pymongo as pm
-from datetime import datetime, timedelta
-
-
 ################################################################################
-## django command class
+# Download signature files and add them to the search index
 ################################################################################
+
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         try:
-            kmers = [21, 31, 51]
             database = "SRA"
             today = datetime.today() - timedelta(days=2)
             today = today.strftime("%Y-%m-%d")
             start_date = today if settings.START_DATE == "auto" else settings.START_DATE
             end_date = today if settings.START_DATE == "auto" else settings.END_DATE
-            manifest = os.path.join(settings.DATA_DIR, database, "metagenomes", f"manifest.pcl")
-            man_succ = os.path.join(settings.DATA_DIR, database, "metagenomes", f"update_successful.pcl")
-            man_fail = os.path.join(settings.DATA_DIR, database, "metagenomes", f"update_failed.pcl")
-            dir_paths = self.handle_dirs(database, ["updates", "index", "signatures", "failed", "manifests"])
+            manifest = os.path.join(
+                settings.DATA_DIR, database, "metagenomes", "manifest.pcl"
+            )
+            man_succ = os.path.join(
+                settings.DATA_DIR, database, "metagenomes", "update_successful.pcl"
+            )
+            man_fail = os.path.join(
+                settings.DATA_DIR, database, "metagenomes", "update_failed.pcl"
+            )
+            dir_paths = self.handle_dirs(
+                database, ["updates", "index", "signatures", "failed", "manifests"]
+            )
             mani_list = self.get_manifest(manifest)
-            LOGGER.info(f"There are currently {len(mani_list)} IDs in the index manifest.")
+            LOGGER.info(
+                f"There are currently {len(mani_list)} IDs in the index manifest."
+            )
             if not mani_list and not settings.INDEX_FROM_SCRATCH:
-                LOGGER.error(f"There is no index available and creating one from scratch is disabled.")
-                raise Exception(f"There is no index available and creating one from scratch is disabled.")
+                LOGGER.error(
+                    "There is no index available and creating one from scratch is disabled."
+                )
+                raise Exception(
+                    "There is no index available and creating one from scratch is disabled."
+                )
             mongo_IDs = self.get_mongoIDs(start_date, end_date)
-            LOGGER.info(f"There are currently {len(mongo_IDs)} IDs in the mongoDB between {start_date} and {end_date}.")
+            LOGGER.info(
+                f"There are currently {len(mongo_IDs)} IDs in the mongoDB between {start_date} and {end_date}."
+            )
             missing_IDs = set(mongo_IDs) - set(mani_list)
-            LOGGER.info(f"There are currently {len(missing_IDs)} IDs that are not in the index manifest.")
+            LOGGER.info(
+                f"There are currently {len(missing_IDs)} IDs that are not in the index manifest."
+            )
             print(f"missing IDs: {len(missing_IDs)}")
             LOGGER.info("Running SRA downloads ...")
             self.download_from_wort(dir_paths, missing_IDs, man_succ, man_fail)
-            LOGGER.info(f"Creating downloads finished.")
+            LOGGER.info("Creating downloads finished.")
         except Exception as e:
             LOGGER.error(f"Error downloading signatures '{settings.DATA_DIR}': {e}")
 
     def handle_dirs(self, database, dir_names):
-        dir_paths = {n:os.path.join(settings.DATA_DIR, database, "metagenomes", n) for n in dir_names}
+        dir_paths = {
+            n: os.path.join(settings.DATA_DIR, database, "metagenomes", n)
+            for n in dir_names
+        }
         for dir_path in dir_paths.values():
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
@@ -74,24 +74,33 @@ class Command(BaseCommand):
         return dir_paths
 
     def get_manifest(self, manifest):
-        LOGGER.info(f"Reading manifest file for signature update.")
+        LOGGER.info("Reading manifest file for signature update.")
         if not os.path.exists(manifest):
             mani_list = list()
         else:
             with open(manifest, "rb") as pcl_in:
                 mani_list = pickle.load(pcl_in)
         return mani_list
-    
+
     def get_last_index(self, dir_paths):
-        LOGGER.info(f"Getting last index number and content.")
-        last_num = max([int(os.path.basename(f).split("db")[1].split(".pcl")[0]) for f in glob.glob(os.path.join(dir_paths["manifests"], "wort-sra-kmer-db*.pcl"))])
-        last_sigs = os.path.join(dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pcl")
+        LOGGER.info("Getting last index number and content.")
+        last_num = max(
+            [
+                int(os.path.basename(f).split("db")[1].split(".pcl")[0])
+                for f in glob.glob(
+                    os.path.join(dir_paths["manifests"], "wort-sra-kmer-db*.pcl")
+                )
+            ]
+        )
+        last_sigs = os.path.join(
+            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pcl"
+        )
         with open(last_sigs, "rb") as pcl_in:
             sig_list = pickle.load(pcl_in)
         return sig_list, last_num
-    
+
     def get_mongoIDs(self, start_date, end_date):
-        #LOGGER.info(f"Getting current SRA IDs from MongoDB.")
+        # LOGGER.info(f"Getting current SRA IDs from MongoDB.")
         mongo = pm.MongoClient(settings.MONGO_URI)
         db = mongo["sradb"]
         collection = db["sradb_list"]
@@ -100,20 +109,23 @@ class Command(BaseCommand):
         # start_date = "2023-09-27" mongo IDs: 95092  shared IDs: 54
         # start_date = "2023-09-28" mongo IDs: 67608  shared IDs: 0
         query = {"releasedate": {"$gte": start_date, "$lte": end_date}}
-        if settings.LIB_SOURCE: query = query | {"librarysource": {"$in": settings.LIB_SOURCE}}
+        if settings.LIB_SOURCE:
+            query = query | {"librarysource": {"$in": settings.LIB_SOURCE}}
         ids = collection.find(query, {"_id": 1})
         mongo_IDs = [doc["_id"] for doc in ids]
         mongo.close()
         return mongo_IDs
-    
+
     def download_from_wort(self, dir_paths, SRA_IDs, man_succ, man_fail):
         IDs_succ = self.load_pickle(man_succ) if os.path.exists(man_succ) else set()
         IDs_fail = self.load_pickle(man_fail) if os.path.exists(man_fail) else set()
         SRA_IDs = SRA_IDs - IDs_succ
-        if settings.WORT_SKIP_FAILED: SRA_IDs = list(SRA_IDs - IDs_fail)
-        if settings.MAX_DOWNLOADS and settings.MAX_DOWNLOADS < len(SRA_IDs): SRA_IDs = SRA_IDs[:settings.MAX_DOWNLOADS]
+        if settings.WORT_SKIP_FAILED:
+            SRA_IDs = list(SRA_IDs - IDs_fail)
+        if settings.MAX_DOWNLOADS and settings.MAX_DOWNLOADS < len(SRA_IDs):
+            SRA_IDs = SRA_IDs[: settings.MAX_DOWNLOADS]
         slen = len(SRA_IDs)
-        for i,SRA_ID in enumerate(SRA_IDs):
+        for i, SRA_ID in enumerate(SRA_IDs):
             LOGGER.info(f"... {i} of {slen} ID {SRA_ID} ...")
             attempts, success = 0, False
             while attempts < settings.WORT_ATTEMPTS and not success:

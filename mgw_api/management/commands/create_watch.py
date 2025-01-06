@@ -1,19 +1,17 @@
 # mgw_api/management/commands/create_watch.py
 
-from django.core.management.base import BaseCommand
-from django.core.management import call_command
-from mgw_api.models import Fasta, Signature, Result, Settings
-from django.conf import settings
-from django.core.mail import send_mail
-
-import os
 import io
 import re
+
 import pandas as pd
+from django.conf import settings
+from django.core.mail import send_mail
+from django.core.management import call_command
+from django.core.management.base import BaseCommand
 from django.urls import reverse
-from datetime import datetime
 
 from mgw.settings import LOGGER
+from mgw_api.models import Result, Signature
 
 
 class Command(BaseCommand):
@@ -22,10 +20,14 @@ class Command(BaseCommand):
         LOGGER.info(f"Starting watches for a total of {len(results)} watched results.")
         for result in results:
             try:
-                signature = Signature.objects.get(user_id=result.user.id, name=result.name)
+                signature = Signature.objects.get(
+                    user_id=result.user.id, name=result.name
+                )
                 signature.submitted = True
                 signature.save()
-                new_result = self.search_watch(signature.name, signature.user.id, result.pk)
+                new_result = self.search_watch(
+                    signature.name, signature.user.id, result.pk
+                )
                 is_equal = self.compare_results(result, new_result)
                 if is_equal:
                     new_result.delete()
@@ -33,29 +35,33 @@ class Command(BaseCommand):
                 else:
                     self.send_notification(result.user, result, new_result)
                     new_message = "with new Metagenomes"
-                LOGGER.info(f"Successfully processed file '{result.name}' {new_message}")
+                LOGGER.info(
+                    f"Successfully processed file '{result.name}' {new_message}"
+                )
             except Exception as e:
                 LOGGER.error(f"Error processing file '{result.name}': {e}")
         LOGGER.info("Running watches finished")
 
     def search_watch(self, name, user_id, watch_pk):
         output = io.StringIO()
-        call_command('create_search', user_id, name, watch_pk, stdout=output)
-        match = re.search(r'RESULT_PK:\s*(\d+)', output.getvalue())
+        call_command("create_search", user_id, name, watch_pk, stdout=output)
+        match = re.search(r"RESULT_PK:\s*(\d+)", output.getvalue())
         result_pk = int(match.group(1)) if match else None
         new_result = Result.objects.get(pk=result_pk, user_id=user_id)
         return new_result
-    
+
     def compare_results(self, result, new_result):
         df1 = pd.read_csv(result.file.path)
         df2 = pd.read_csv(new_result.file.path)
         is_equal = df1.equals(df2)
-        #diff = df1.compare(df2)
+        # diff = df1.compare(df2)
         return is_equal
 
     def send_notification(self, user, result, new_result):
         LOGGER.info("Preparing to send email...")
-        result_page = self.request.build_absolute_uri(reverse('result_table', args=[new_result.pk]))
+        result_page = self.request.build_absolute_uri(
+            reverse("result_table", args=[new_result.pk])
+        )
         subject = f"MetagenomeWatch: Found new Genomes for {new_result.name}!"
         message = f"""
         Dear {user.username},
@@ -75,6 +81,11 @@ class Command(BaseCommand):
         """
         from_email = settings.DEFAULT_FROM_EMAIL
         recipient_list = [user.email]
-        send_mail(subject, message, from_email, recipient_list, fail_silently=False,)
+        send_mail(
+            subject,
+            message,
+            from_email,
+            recipient_list,
+            fail_silently=False,
+        )
         LOGGER.info("Email sent successfully")
-
