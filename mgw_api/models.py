@@ -1,16 +1,12 @@
 # mgw_api/models.py
 
-import datetime
-
-from django.db import models
-from django.contrib.auth.models import User
-from django.utils import timezone
-from django.contrib import admin
-from django.core.validators import FileExtensionValidator
-from django.core.exceptions import ValidationError
-
 import re
 from datetime import datetime
+
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.validators import FileExtensionValidator
+from django.db import models
 
 from mgw.settings import LOGGER
 
@@ -20,10 +16,14 @@ def validate_fasta_content(file):
     try:
         first_line = file.readline().decode("utf-8")
         second_line = file.readline().decode("utf-8")
-        if not re.match(r">", first_line.strip()) or not re.match(r"^[ACGTUacgtu]+$", second_line.strip()):
-                LOGGER.error(first_line)
-                LOGGER.error(second_line)
-                raise ValidationError("File does not start with '>' character, invalid FASTA format!")
+        if not re.match(r">", first_line.strip()) or not re.match(
+            r"^[ACGTUacgtu]+$", second_line.strip()
+        ):
+            LOGGER.error(first_line)
+            LOGGER.error(second_line)
+            raise ValidationError(
+                "File does not start with '>' character, invalid FASTA format!"
+            )
     except Exception as e:
         raise ValidationError(f"Error reading file: {str(e)}")
 
@@ -36,16 +36,19 @@ def user_directory_path(instance, filename):
 class Fasta(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=100, blank=True, null=True)
-    file = models.FileField(upload_to=user_directory_path, 
-                            validators=[
-                                FileExtensionValidator(["fa", "fasta", "fsa", "fna", "FASTA"]),
-                                validate_fasta_content,])
+    file = models.FileField(
+        upload_to=user_directory_path,
+        validators=[
+            FileExtensionValidator(["fa", "fasta", "fsa", "fna", "FASTA"]),
+            validate_fasta_content,
+        ],
+    )
     upload_date = models.DateTimeField(auto_now_add=True)
     size = models.IntegerField()
     processed = models.BooleanField(default=False)
     status = models.CharField(max_length=255, default="Pending")
     result_pk = models.IntegerField(null=True, blank=True)
-    
+
     def __str__(self):
         return self.name or self.file.name
 
@@ -77,15 +80,17 @@ class Settings(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     kmer = models.JSONField(default=list, help_text="List of k-mers")
     database = models.JSONField(default=list, help_text="List of databases")
-    containment = models.FloatField(default=0.10, help_text="Containment value (between 0 and 1)")
+    containment = models.FloatField(
+        default=0.10, help_text="Containment value (between 0 and 1)"
+    )
 
     def clean(self):
         if not self.kmer:
-            raise ValidationError('At least one kmer must be selected.')
+            raise ValidationError("At least one kmer must be selected.")
         if not self.database:
-            raise ValidationError('At least one database must be selected.')
+            raise ValidationError("At least one database must be selected.")
         if not (0 <= self.containment <= 1):
-            raise ValidationError('Containment value must be between 0 and 1.')
+            raise ValidationError("Containment value must be between 0 and 1.")
 
     def to_dict(self):
         return {
@@ -129,7 +134,9 @@ class FilterSetting(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     result = models.ForeignKey(Result, on_delete=models.CASCADE)
     filters = models.JSONField(default=dict)  # {column_index: filter_value}
-    range_filters = models.JSONField(default=dict)  # {column_index: [min_value, max_value]}
+    range_filters = models.JSONField(
+        default=dict
+    )  # {column_index: [min_value, max_value]}
     sort_column = models.IntegerField(null=True, blank=True)
     sort_reverse = models.BooleanField(default=False)
 
