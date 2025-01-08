@@ -17,7 +17,7 @@ from pathlib import Path
 
 import environ
 import ldap
-from django_auth_ldap.config import GroupOfNamesType, LDAPSearch
+from django_auth_ldap.config import LDAPSearch
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -49,6 +49,12 @@ env = environ.Env(
     WORT_SKIP_FAILED=(bool, True),
     MAX_DOWNLOADS=(int, 100),
     INDEX_MIN_ITERATOR=(int, 38),
+    LDAP_SERVER_URI=(str, None),
+    LDAP_BIND_DN=(str, None),
+    LDAP_BIND_PASSWORD=(str, None),
+    LDAP_SEARCH_ROOT=(str, None),
+    LDAP_ATTR_USERNAME=(str, None),
+    LDAP_ATTR_EMAIL=(str, None),
 )
 
 environ.Env.read_env(BASE_DIR / "vars.env")
@@ -247,45 +253,28 @@ if EMAIL_HOST:
 else:
     # If an SMTP server isn't specified, write emails to the console
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-################################################################################
 
 ################################################################################
-## LDAP
-# general settings
-AUTH_LDAP_SERVER_URI = "ldap://ldap-hostname-here"
-AUTH_LDAP_BIND_DN = "dc=rki,dc=local"
-AUTH_LDAP_BIND_PASSWORD = ""
-
-# maybe have to adjust depending on institute account settings
-AUTH_LDAP_USER_SEARCH = LDAPSearch(
-    "ou=Users,dc=rki,dc=local", ldap.SCOPE_SUBTREE, "(uid=%(user)s)"
-)
-AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
-    "ou=Groups,dc=company,dc=local", ldap.SCOPE_SUBTREE, "(objectClass=groupOfNames)"
-)
-AUTH_LDAP_GROUP_TYPE = GroupOfNamesType(name_attr="cn")
-AUTH_LDAP_USER_ATTR_MAP = {
-    "username": "user",
-    "email": "mail",
-}
-
-# group restrictions
-# AUTH_LDAP_REQUIRE_GROUP = 'cn=enabled,ou=django,ou=groups,dc=example,dc=com'
-# AUTH_LDAP_DENY_GROUP = 'cn=disabled,ou=django,ou=groups,dc=example,dc=com'
-
-# define groups and permissions mapping from LDAP to Django
-AUTH_LDAP_FIND_GROUP_PERMS = True
-AUTH_LDAP_MIRROR_GROUPS = True
-
-# Cache authentication
-AUTH_LDAP_CACHE_GROUPS = True
-AUTH_LDAP_GROUP_CACHE_TIMEOUT = 3600
-
-# Populate Django's user database automatically with data from LDAP
-AUTH_LDAP_ALWAYS_UPDATE_USER = True
-
-# Use Django’s default user authentication if LDAP fails
+# By default use Django's default user authentication
 AUTHENTICATION_BACKENDS = [
-    "django_auth_ldap.backend.LDAPBackend",
     "django.contrib.auth.backends.ModelBackend",
 ]
+
+# Optionally check LDAP/Active Directory server for user accounts first
+if env("LDAP_SERVER_URI"):
+    AUTH_LDAP_CONNECTION_OPTIONS = {ldap.OPT_REFERRALS: 0}
+    AUTH_LDAP_SERVER_URI = env("LDAP_SERVER_URI")
+    AUTH_LDAP_BIND_DN = env("LDAP_BIND_DN")
+    AUTH_LDAP_BIND_PASSWORD = env("LDAP_BIND_PASSWORD")
+
+    AUTH_LDAP_USER_SEARCH = LDAPSearch(
+        env("LDAP_SEARCH_ROOT"), ldap.SCOPE_SUBTREE, "(cn=%(user)s)"
+    )
+    AUTH_LDAP_USER_ATTR_MAP = {
+        "username": env("LDAP_ATTR_USERNAME"),
+        "email": env("LDAP_ATTR_EMAIL"),
+    }
+    # Populate Django's user database automatically with data from LDAP
+    AUTH_LDAP_ALWAYS_UPDATE_USER = True
+    # Try LDAP first, before reverting to default user authentication
+    AUTHENTICATION_BACKENDS.insert(0, "django_auth_ldap.backend.LDAPBackend")
