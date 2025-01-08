@@ -50,6 +50,8 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=example1
     volumes:
       - ${MONGODB_DATA_DIR}:/data/db
+      - ${MONGODB_LOG_DIR}:/data/logs
+    command: --logpath /data/logs/mongodb.log
     restart: unless-stopped
   mgwatch-proxy:
     image: $DOCKER_NGINX_IMAGE
