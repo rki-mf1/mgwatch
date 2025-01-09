@@ -16,13 +16,19 @@ def validate_fasta_content(file):
     try:
         first_line = file.readline().decode("utf-8")
         second_line = file.readline().decode("utf-8")
-        if not re.match(r">", first_line.strip()) or not re.match(
-            r"^[ACGTUacgtu]+$", second_line.strip()
-        ):
-            LOGGER.error(first_line)
-            LOGGER.error(second_line)
+        if not re.match(r"^>", first_line.strip()):
+            LOGGER.error(first_line.strip())
+            LOGGER.error(second_line.strip())
             raise ValidationError(
-                "File does not start with '>' character, invalid FASTA format!"
+                "File does not start with '>' character, invalid FASTA format."
+            )
+        elif not re.match(
+            r"^[ACGTRYSWKMBDHVN.-]+$", second_line.strip(), flags=re.IGNORECASE
+        ):
+            LOGGER.error(first_line.strip())
+            LOGGER.error(second_line.strip())
+            raise ValidationError(
+                "Sequence contains non-IUPAC characters, invalid FASTA format."
             )
     except Exception as e:
         raise ValidationError(f"Error reading file: {str(e)}")
