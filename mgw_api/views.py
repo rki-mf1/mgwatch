@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -220,7 +221,7 @@ def process_signature(request, pk):
 
 
 @login_required
-def settings(request):
+def sourmash_settings(request):
     sourmash_settings, created = Settings.objects.get_or_create(user=request.user)
     if request.method == "POST":
         settings_form = SettingsForm(request.POST, instance=sourmash_settings)
@@ -341,7 +342,7 @@ def result_table(request, pk):
     else:
         ## handle result table
         result = get_object_or_404(Result, pk=pk, user=request.user)
-        headers, rows = get_table_data(result)
+        headers, rows = get_table_data(result, max_rows=settings.MAX_SEARCH_RESULTS)
         headers, rows = get_metadata(headers, rows)
 
         headers = [h.replace("_", " ") for h in headers]
