@@ -24,3 +24,14 @@ repos:
         args: [--fix]
       # Run the formatter.
       - id: ruff-format
+  # Conflicts with djLint formatting
+  #- repo: https://github.com/adamchainz/djade-pre-commit
+  #  rev: 1.3.2
+  #  hooks:
+  #    - id: djade
+  #      args: [--target-version, "5.1"]
+  - repo: https://github.com/djlint/djLint
+    rev: v1.36.4
+    hooks:
+      - id: djlint-reformat-django
+      - id: djlint-django

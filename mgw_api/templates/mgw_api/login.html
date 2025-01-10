@@ -1,21 +1,13 @@
 {% extends "mgw_api/base.html" %}
-
-{% block title %}Login!{% endblock %}
-
+{% block title %}Login{% endblock %}
 {% block content %}
-
-<div class="login-section">
-    <h2>Login</h2>
-    <form method="POST">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Login</button>
-        <a href="{% url 'mgw_api:signup' %}">Don't have an account?</a>
-    </form>
-</div>
-
-{% endblock %}
-
-
-
-
+    <div class="login-section">
+        <h2>Login</h2>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit">Login</button>
+            <a href="{% url 'mgw_api:signup' %}">Don't have an account?</a>
+        </form>
+    </div>
+{% endblock content %}
