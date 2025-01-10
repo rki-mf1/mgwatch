@@ -55,12 +55,16 @@ env = environ.Env(
     LDAP_SEARCH_ROOT=(str, None),
     LDAP_ATTR_USERNAME=(str, None),
     LDAP_ATTR_EMAIL=(str, None),
+    MAX_SEARCH_RESULTS=(int, 100),
 )
 
 environ.Env.read_env(BASE_DIR / "vars.env")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
+
+# The maximum number of search results to provide
+MAX_SEARCH_RESULTS = env("MAX_SEARCH_RESULTS")
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY")

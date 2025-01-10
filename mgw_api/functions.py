@@ -14,12 +14,17 @@ from mgw.settings import LOGGER
 from .models import Fasta
 
 
-def get_table_data(result):
+def get_table_data(result, max_rows=None):
     table_data = []
     with open(result.file.path, newline="") as csvfile:
         reader = csv.reader(csvfile)
+        # The first row is a header, we don't count it
+        n_rows = -1
         for row in reader:
             table_data.append(row)
+            n_rows += 1
+            if max_rows and n_rows >= max_rows:
+                break
     return table_data[0], table_data[1:]
 
 
