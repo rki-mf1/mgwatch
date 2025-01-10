@@ -16,7 +16,7 @@ urlpatterns = [
         "process_signature/<int:pk>/", views.process_signature, name="process_signature"
     ),
     path("delete_signature/<int:pk>/", views.delete_signature, name="delete_signature"),
-    path("settings/", views.settings, name="settings"),
+    path("settings/", views.sourmash_settings, name="settings"),
     path("results/", views.list_result, name="list_result"),
     path("result/<int:pk>/", views.result_table, name="result_table"),
     path(
