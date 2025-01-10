@@ -1,33 +1,33 @@
 {% extends "mgw_api/base.html" %}
-
 {% block content %}
-
-<div class="help-section">
-     <h2>How to Get Started</h2>
-     <p>Welcome to MetagenomeWatch! To get started, simply upload a Fasta file with your favourite genomes. The search will then happen in the background and you will be redirected to the result page as soon as it is finished. Depending on the size of the genome, this may take up to 5 minutes. Please refrain from reloading the page in the meantime. If you are not interested in directly seeing the results, you can just click on the "Search" button at the top to submit another genome. This will prevent the automate redirection, but your results will be available in the watch section by pressing the "Watches" button.</p>
-     <p>If you have any questions or require further assistance, please feel free to contact our development team. Happy searching!</p>
-</div>
-
-{% include "mgw_api/settings.html" %}
-
-<div class="upload-section" id="upload-section">
-    <h2>Upload Genome</h2>
-    <form id="upload-form" method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        <div>{{ fasta_form.name }}</div>
-        <div>{{ fasta_form.file }}</div>
-        <input type="submit" value="Search">
-        <small id="upload-helper">The maximum sequence file size you can upload is 100 megabytes.</small>
-    </form>
-</div>
-
-<div class="waiting-message" id="waiting-message" style="display: none;">
-    <ul class="messages">
-        <li class="info">Searching for matches, please wait. Do not close or reload the page. This process might take a few minutes.</li>
-    </ul>
-</div>
-
-<script>
+    <div class="help-section">
+        <h2>How to Get Started</h2>
+        <p>
+            Welcome to MetagenomeWatch! To get started, simply upload a Fasta file with your favourite genomes. The search will then happen in the background and you will be redirected to the result page as soon as it is finished. Depending on the size of the genome, this may take up to 5 minutes. Please refrain from reloading the page in the meantime. If you are not interested in directly seeing the results, you can just click on the "Search" button at the top to submit another genome. This will prevent the automate redirection, but your results will be available in the watch section by pressing the "Watches" button.
+        </p>
+        <p>
+            If you have any questions or require further assistance, please feel free to contact our development team. Happy searching!
+        </p>
+    </div>
+    {% include "mgw_api/settings.html" %}
+    <div class="upload-section" id="upload-section">
+        <h2>Upload Genome</h2>
+        <form id="upload-form" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div>{{ fasta_form.name }}</div>
+            <div>{{ fasta_form.file }}</div>
+            <input type="submit" value="Search">
+            <small id="upload-helper">The maximum sequence file size you can upload is 100 megabytes.</small>
+        </form>
+    </div>
+    <div class="waiting-message" id="waiting-message" style="display: none;">
+        <ul class="messages">
+            <li class="info">
+                Searching for matches, please wait. Do not close or reload the page. This process might take a few minutes.
+            </li>
+        </ul>
+    </div>
+    <script>
     document.addEventListener('DOMContentLoaded', function () {
         const fileInput = document.querySelector('input[type="file"]');
         const nameInput = document.querySelector('input[name="name"]');
@@ -133,6 +133,5 @@
             handleFormSubmission(event, headers);
         });
     });
-</script>
-
-{% endblock %}
+    </script>
+{% endblock content %}
