@@ -1,17 +1,13 @@
 {% extends "mgw_api/base.html" %}
-
-{% block title %}Confirm Result Deleteion!{% endblock %}
-
+{% block title %}Confirm Result Deletion{% endblock %}
 {% block content %}
-
-<div class="confirm-delete">
-    <h2>Confirm Delete</h2>
-    <p>Are you sure you want to delete the result file "{{ result.file.name }}"?</p>
-    <form method="post">
-        {% csrf_token %}
-        <button type="submit">Confirm</button>
-        <a href="{{ next_url }}">Cancel</a>
-    </form>
-</div>
-
-{% endblock %}
+    <div class="confirm-delete">
+        <h2>Confirm Delete</h2>
+        <p>Are you sure you want to delete the result file "{{ result.file.name }}"?</p>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit">Confirm</button>
+            <a href="{{ next_url }}">Cancel</a>
+        </form>
+    </div>
+{% endblock content %}

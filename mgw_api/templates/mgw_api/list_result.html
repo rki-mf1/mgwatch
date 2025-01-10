@@ -1,75 +1,83 @@
 {% extends "mgw_api/base.html" %}
-
 {% block content %}
-
-{% include "mgw_api/settings.html" %}
-
-<div class="signature-list" id="upload-section">
-    <h2>Genomes and Results</h2>
-    {% for signature in signatures %}
-        <div class="signature-header">
-            <div class="signature-name">
-                <h3>{{ signature.name }}</h3>
+    {% include "mgw_api/settings.html" %}
+    <div class="signature-list" id="upload-section">
+        <h2>Genomes and Results</h2>
+        {% for signature in signatures %}
+            <div class="signature-header">
+                <div class="signature-name">
+                    <h3>{{ signature.name }}</h3>
+                </div>
+                <div class="signature-actions">
+                    {% if not signature.result_set.exists %}
+                        <a href="{% url 'mgw_api:delete_signature' signature.pk %}?next={% url 'mgw_api:list_result' %}"
+                           class="delete-link">delete</a>
+                    {% endif %}
+                    <form class="search-form"
+                          method="post"
+                          action="{% url 'mgw_api:list_result' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="signature_id" value="{{ signature.pk }}">
+                        <button type="submit">search</button>
+                    </form>
+                </div>
             </div>
-            <div class="signature-actions">
-                {% if not signature.result_set.exists %}
-                <a href="{% url 'mgw_api:delete_signature' signature.pk %}?next={% url 'mgw_api:list_result' %}" class="delete-link">delete</a>
-                {% endif %}
-                <form class="search-form" method="post" action="{% url 'mgw_api:list_result' %}">
-                    {% csrf_token %}
-                    <input type="hidden" name="signature_id" value="{{ signature.pk }}">
-                    <button type="submit">search</button>
-                </form>
-            </div>
-        </div>
-
-        {% if signature.result_set.exists %}
-            <table class="result-list">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Date</th>
-                        <th>K-mers</th>
-                        <th>Databases</th>
-                        <th>Containment</th>
-                        <th>Size (KB)</th>
-                        <th>Watched</th>
-                        <th>Delete</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for result in signature.sorted_results.all %}
+            {% if signature.result_set.exists %}
+                <table class="result-list">
+                    <thead>
                         <tr>
-                            <td><a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.name }}</a></td>
-                            <td>{{ result.date }} {{ result.time|date:"H:i:s" }}</td>
-                            <td>{{ result.kmer }}</td>
-                            <td>{{ result.database }}</td>
-                            <td>{{ result.containment }}</td>
-                            <td>{{ result.file.size|filesizeformat }}</td>
-                            <td>
-                                <form id="watch-form-{{ result.pk }}" method="post" action="{% url 'mgw_api:toggle_watch' result.pk %}">
-                                    {% csrf_token %}
-                                    <input type="checkbox" name="is_watched" {% if result.is_watched %}checked{% endif %} onchange="submitWatchForm({{ result.pk }})">
-                                </form>
-                            </td>
-                            <td><a href="{% url 'mgw_api:delete_result' result.pk %}?next={% url 'mgw_api:list_result' %}">delete</a></td>
+                            <th>Name</th>
+                            <th>Date</th>
+                            <th>K-mers</th>
+                            <th>Databases</th>
+                            <th>Containment</th>
+                            <th>Size (KB)</th>
+                            <th>Watched</th>
+                            <th>Delete</th>
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% endif %}
-    {% empty %}
-        <div class="no-signatures">No signature files found.</div>
-    {% endfor %}
-</div>
-
-<div class="waiting-message" id="waiting-message" style="display: none;">
-    <ul class="messages">
-        <li class="info">Searching for matches, please wait. Do not close or reload the page. This process might take a few minutes.</li>
-    </ul>
-</div>
-
-<script>
+                    </thead>
+                    <tbody>
+                        {% for result in signature.sorted_results.all %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.name }}</a>
+                                </td>
+                                <td>{{ result.date }} {{ result.time|date:"H:i:s" }}</td>
+                                <td>{{ result.kmer }}</td>
+                                <td>{{ result.database }}</td>
+                                <td>{{ result.containment }}</td>
+                                <td>{{ result.file.size|filesizeformat }}</td>
+                                <td>
+                                    <form id="watch-form-{{ result.pk }}"
+                                          method="post"
+                                          action="{% url 'mgw_api:toggle_watch' result.pk %}">
+                                        {% csrf_token %}
+                                        <input type="checkbox"
+                                               name="is_watched"
+                                               {% if result.is_watched %}checked{% endif %}
+                                               onchange="submitWatchForm({{ result.pk }})">
+                                    </form>
+                                </td>
+                                <td>
+                                    <a href="{% url 'mgw_api:delete_result' result.pk %}?next={% url 'mgw_api:list_result' %}">delete</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        {% empty %}
+            <div class="no-signatures">No signature files found.</div>
+        {% endfor %}
+    </div>
+    <div class="waiting-message" id="waiting-message" style="display: none;">
+        <ul class="messages">
+            <li class="info">
+                Searching for matches, please wait. Do not close or reload the page. This process might take a few minutes.
+            </li>
+        </ul>
+    </div>
+    <script>
     function handleError(message) {
         const submissionMessageDiv = document.querySelector('.submission-message');
         submissionMessageDiv.style.display = 'block';
@@ -162,6 +170,5 @@
             });
         });
     });
-</script>
-
-{% endblock %}
+    </script>
+{% endblock content %}
