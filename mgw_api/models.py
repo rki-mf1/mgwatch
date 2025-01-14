@@ -2,6 +2,7 @@
 
 import re
 from datetime import datetime
+from functools import partial
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -84,8 +85,10 @@ class Signature(models.Model):
 
 class Settings(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    kmer = models.JSONField(default=list, help_text="List of k-mers")
-    database = models.JSONField(default=list, help_text="List of databases")
+    kmer = models.JSONField(default=partial(list, [21]), help_text="List of k-mers")
+    database = models.JSONField(
+        default=partial(list, ["SRA"]), help_text="List of databases"
+    )
     containment = models.FloatField(
         default=0.10, help_text="Containment value (between 0 and 1)"
     )
