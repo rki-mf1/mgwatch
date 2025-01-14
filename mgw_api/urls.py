@@ -17,6 +17,7 @@ urlpatterns = [
     ),
     path("delete_signature/<int:pk>/", views.delete_signature, name="delete_signature"),
     path("settings/", views.sourmash_settings, name="settings"),
+    path("watches/", views.list_watches, name="list_watches"),
     path("results/", views.list_result, name="list_result"),
     path("result/<int:pk>/", views.result_table, name="result_table"),
     path(
