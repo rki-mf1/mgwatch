@@ -43,12 +43,17 @@ class LoginForm(forms.Form):
 
 class SettingsForm(forms.ModelForm):
     kmer = forms.MultipleChoiceField(
-        choices=[(21, "21 k-mer"), (31, "31 k-mer"), (51, "51 k-mer")],
+        choices=[(21, "21 k-mer")],
+        # We currently only have indexes for 21-mers. Hide the other k-mer
+        # lengths for now.
+        # choices=[(21, "21 k-mer"), (31, "31 k-mer"), (51, "51 k-mer")],
         widget=forms.CheckboxSelectMultiple,
         initial=[21],
     )
     database = forms.MultipleChoiceField(
-        choices=[("SRA", "SRA database"), ("RKI", "RKI database")],
+        choices=[("SRA", "SRA database")],
+        # We don't yet index any database other than SRA. Disable this for now.
+        # choices=[("SRA", "SRA database"), ("RKI", "RKI database")],
         widget=forms.CheckboxSelectMultiple,
         initial=["SRA"],
     )
