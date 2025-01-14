@@ -1,12 +1,11 @@
 {% extends "mgw_api/base.html" %}
 {% block content %}
-    {% include "mgw_api/settings.html" %}
     <div class="signature-list" id="upload-section">
-        <h2>Genomes and Results</h2>
+        <h2>Search Results</h2>
         {% for signature in signatures %}
             <div class="signature-header">
                 <div class="signature-name">
-                    <h3>{{ signature.name }}</h3>
+                    <h3>Sequence name: {{ signature.name }}</h3>
                 </div>
                 <div class="signature-actions">
                     {% if not signature.result_set.exists %}
@@ -18,11 +17,12 @@
                           action="{% url 'mgw_api:list_result' %}">
                         {% csrf_token %}
                         <input type="hidden" name="signature_id" value="{{ signature.pk }}">
-                        <button type="submit">search</button>
+                        <button type="submit">Update search</button>
                     </form>
                 </div>
             </div>
             {% if signature.result_set.exists %}
+                Previous searches:
                 <table class="result-list">
                     <thead>
                         <tr>
@@ -67,7 +67,9 @@
                 </table>
             {% endif %}
         {% empty %}
-            <div class="no-signatures">No signature files found.</div>
+            <div class="no-signatures">
+                <mark>No previous search results files found. Go to the <a href="{% url 'mgw_api:upload_fasta' %}">search page</a> and upload a seqeunce to do a new search.</mark>
+            </div>
         {% endfor %}
     </div>
     <div class="waiting-message" id="waiting-message" style="display: none;">
