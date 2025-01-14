@@ -5,7 +5,11 @@
         <p>
             These are your watches, searches that have been saved and will be re-run automatically whenever new datasets are added to the search index used by MetagenomeWatch. If those automatic searches return new results, you will be informed via email.
         </p>
-        {% for signature in signatures %}
+        {% if signatures %}
+            <div>
+                <mark>No watched searches were found. Go to the <a href="{% url 'mgw_api:upload_fasta' %}">search page</a> and upload a seqeunce to do a new search, then mark it as "watched" on the results page.</mark>
+            </div>
+        {% else %}
             <table class="result-list">
                 <thead>
                     <tr>
@@ -20,38 +24,36 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for result in signature.result.all %}
-                        <tr>
-                            <td>
-                                <a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.name }}</a>
-                            </td>
-                            <td>{{ result.date }} {{ result.time|date:"H:i:s" }}</td>
-                            <td>{{ result.kmer }}</td>
-                            <td>{{ result.database }}</td>
-                            <td>{{ result.containment }}</td>
-                            <td>{{ result.file.size|filesizeformat }}</td>
-                            <td>
-                                <form id="watch-form-{{ result.pk }}"
-                                      method="post"
-                                      action="{% url 'mgw_api:toggle_watch' result.pk %}">
-                                    {% csrf_token %}
-                                    <input type="checkbox"
-                                           name="is_watched"
-                                           {% if result.is_watched %}checked{% endif %}
-                                           onchange="submitWatchForm({{ result.pk }})">
-                                </form>
-                            </td>
-                            <td>
-                                <a href="{% url 'mgw_api:delete_result' result.pk %}?next={% url 'mgw_api:list_result' %}">delete</a>
-                            </td>
-                        </tr>
+                    {% for signature in signatures %}
+                        {% for result in signature.result_set.all %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.name }}</a>
+                                </td>
+                                <td>{{ result.date }} {{ result.time|date:"H:i:s" }}</td>
+                                <td>{{ result.kmer }}</td>
+                                <td>{{ result.database }}</td>
+                                <td>{{ result.containment }}</td>
+                                <td>{{ result.file.size|filesizeformat }}</td>
+                                <td>
+                                    <form id="watch-form-{{ result.pk }}"
+                                          method="post"
+                                          action="{% url 'mgw_api:toggle_watch' result.pk %}">
+                                        {% csrf_token %}
+                                        <input type="checkbox"
+                                               name="is_watched"
+                                               {% if result.is_watched %}checked{% endif %}
+                                               onchange="submitWatchForm({{ result.pk }})">
+                                    </form>
+                                </td>
+                                <td>
+                                    <a href="{% url 'mgw_api:delete_result' result.pk %}?next={% url 'mgw_api:list_result' %}">delete</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
                     {% endfor %}
                 </tbody>
             </table>
-        {% empty %}
-            <div>
-                <mark>No watched searches were found. Go to the <a href="{% url 'mgw_api:upload_fasta' %}">search page</a> and upload a seqeunce to do a new search, then mark it as "watched" on the results page.</mark>
-            </div>
-        {% endfor %}
+        {% endif %}
     </div>
 {% endblock content %}

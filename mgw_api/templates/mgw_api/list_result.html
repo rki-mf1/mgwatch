@@ -26,13 +26,12 @@
                 <table class="result-list">
                     <thead>
                         <tr>
-                            <th>Name</th>
                             <th>Date</th>
                             <th>K-mers</th>
                             <th>Databases</th>
                             <th>Containment</th>
                             <th>Size (KB)</th>
-                            <th>Watched</th>
+                            <th>Is watched?</th>
                             <th>Delete</th>
                         </tr>
                     </thead>
@@ -40,9 +39,8 @@
                         {% for result in signature.sorted_results.all %}
                             <tr>
                                 <td>
-                                    <a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.name }}</a>
+                                    {{ result.date }}<a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.time|date:"H:i:s" }}</a>
                                 </td>
-                                <td>{{ result.date }} {{ result.time|date:"H:i:s" }}</td>
                                 <td>{{ result.kmer }}</td>
                                 <td>{{ result.database }}</td>
                                 <td>{{ result.containment }}</td>
