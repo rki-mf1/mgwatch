@@ -91,7 +91,6 @@ def upload_fasta(request):
             settings_form = SettingsForm(request.POST, instance=sourmash_settings)
             if settings_form.is_valid():
                 settings_form.save()
-                messages.success(request, "Settings have been successfully saved.")
                 return redirect(reverse("mgw_api:upload_fasta"))
             else:
                 messages.error(request, "Please correct the errors below.")
@@ -227,7 +226,6 @@ def sourmash_settings(request):
         settings_form = SettingsForm(request.POST, instance=sourmash_settings)
         if settings_form.is_valid():
             settings_form.save()
-            messages.success(request, "Settings have been successfully saved.")
             return redirect(reverse("mgw_api:settings"))
         else:
             messages.error(request, "Please correct the errors below.")
@@ -259,7 +257,6 @@ def list_result(request):
             settings_form = SettingsForm(request.POST, instance=sourmash_settings)
             if settings_form.is_valid():
                 settings_form.save()
-                messages.success(request, "Settings have been successfully saved.")
                 return redirect(reverse("mgw_api:list_result"))
             else:
                 messages.error(request, "Please correct the errors below.")
@@ -335,7 +332,6 @@ def result_table(request, pk):
             settings_form = SettingsForm(request.POST, instance=sourmash_settings)
             if settings_form.is_valid():
                 settings_form.save()
-                messages.success(request, "Settings have been successfully saved.")
                 return redirect(reverse("mgw_api:result_table", kwargs={"pk": pk}))
             else:
                 messages.error(request, "Please correct the errors below.")
