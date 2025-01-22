@@ -101,6 +101,8 @@ def human_sort_key(text):
 
 
 def get_metadata(headers, rows):
+    # 0 = in the SRA mongodb database
+    # 1 = in the search result csv file
     column_dict = {
         "sra_link": 0,
         "assay_type": 0,
@@ -113,6 +115,8 @@ def get_metadata(headers, rows):
         "lat_lon": 0,
         "organism": 0,
         "containment_threshold": 1,
+        "releasedate": 0,
+        "librarysource": 0,
     }
     mongo_df = search_mongodb(headers, rows)
     csv_df = search_csv(headers, rows, column_dict)
