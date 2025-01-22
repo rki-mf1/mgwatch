@@ -8,7 +8,6 @@ app_name = "mgw_api"
 urlpatterns = [
     path("", views.upload_fasta, name="upload_fasta"),
     path("login/", views.user_login, name="login"),
-    path("signup/", views.user_signup, name="signup"),
     path("logout/", views.user_logout, name="logout"),
     path("uploads/", views.upload_fasta, name="upload_fasta"),
     path("signatures/", views.list_signature, name="list_signature"),

@@ -23,7 +23,6 @@ from .forms import (
     FilterSettingForm,
     LoginForm,
     SettingsForm,
-    SignupForm,
     WatchForm,
 )
 from .functions import (
@@ -40,17 +39,6 @@ from .models import Fasta, FilterSetting, Result, Settings, Signature
 
 ################################################################
 ## account management
-
-
-def user_signup(request):
-    if request.method == "POST":
-        form = SignupForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect("mgw_api:login")
-    else:
-        form = SignupForm()
-    return render(request, "mgw_api/signup.html", {"form": form})
 
 
 def user_login(request):
