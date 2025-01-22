@@ -470,60 +470,6 @@ ul.nav {
     text-decoration: underline;
 }
 
-
-.signup-section {
-    font-family: Arial, sans-serif;
-    text-shadow: 1px 1px white;
-    width: 90%;
-    max-width: 1024px;
-    margin: 0 auto;
-    padding: 20px;
-    background-color: #f9f9f974;
-    border: 1px solid #000000;
-    border-radius: 5px;
-    margin-top: 5px;
-    margin-bottom: 5px;
-}
-.signup-section h2 {
-    font-size: 24px;
-    color: #000000;
-    margin-bottom: 10px;
-}
-.signup-section form {
-    width: 100%;
-}
-.signup-section form div {
-    margin-bottom: 10px;
-}
-.signup-section button {
-    background-color: #000000;
-    text-shadow: none;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    text-align: center;
-    text-decoration: none;
-    display: inline-block;
-    font-size: 16px;
-    cursor: pointer;
-    border-radius: 5px;
-}
-.signup-section button:hover {
-    background-color: #45a049;
-}
-.signup-section a {
-    display: inline-block;
-    margin-top: 10px;
-    margin-left: 10px;
-    color: #000000;
-    text-decoration: none;
-    font-size: 16px;
-}
-.signup-section a:hover {
-    text-decoration: underline;
-}
-
-
 .submission-message {
     margin-top: 5px;
     margin-bottom: 20px;
