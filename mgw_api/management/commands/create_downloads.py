@@ -143,7 +143,7 @@ class Command(BaseCommand):
         LOGGER.info(f"Failed downloads: {len(IDs_fail)}")
 
     def call_curl_download(self, dir_paths, SRA_ID):
-        url = f"https://wort.sourmash.bio/v1/view/sra/{SRA_ID}.sig"
+        url = f"https://wort.sourmash.bio/v1/view/sra/{SRA_ID}"
         output_file = os.path.join(dir_paths["updates"], f"{SRA_ID}.sig")
         cmd = ["curl", "-JLf", url, "-o", output_file]
         try:
