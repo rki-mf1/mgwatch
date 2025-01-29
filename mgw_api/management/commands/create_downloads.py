@@ -128,11 +128,13 @@ class Command(BaseCommand):
         for i, SRA_ID in enumerate(SRA_IDs):
             LOGGER.info(f"... {i} of {slen} ID {SRA_ID} ...")
             attempts, success = 0, False
-            while attempts < settings.WORT_ATTEMPTS and not success:
+            while not success:
+                attempts += 1
                 success = self.call_curl_download(dir_paths, SRA_ID)
-                if not success:
-                    attempts += 1
+                if attempts < settings.WORT_ATTEMPTS and not success:
                     time.sleep(1)
+                else:
+                    break
             if success:
                 IDs_succ.add(SRA_ID)
                 self.save_pickle(IDs_succ, man_succ)
