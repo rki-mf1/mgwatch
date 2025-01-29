@@ -150,12 +150,13 @@ class Command(BaseCommand):
 
     def download_parquet(self, parquet_dir):
         LOGGER.info("Downloading SRA metadata files from S3")
-        self.remove_old_parquet(parquet_dir)
+        # Disable deletion of existing parquet_dir because we want to use sync,
+        # instead of using cp and transferring the whole data set every time
+        # self.remove_old_parquet(parquet_dir)
         command = [
             "aws",
             "s3",
-            "cp",
-            "--recursive",
+            "sync",
             "s3://sra-pub-metadata-us-east-1/sra/metadata/",
             parquet_dir,
             "--no-sign-request",
@@ -179,8 +180,10 @@ class Command(BaseCommand):
         LOGGER.debug("Cleaned mongodb sradb_temp")
         cpus = max(1, int(mp.cpu_count() * 0.8))
         LOGGER.debug(f"Using {cpus} cores")
-        for i, file in enumerate(os.listdir(parquet_dir), start=1):
-            LOGGER.info(f"Processing parquet file {i}: {file}")
+        files_to_import = os.listdir(parquet_dir)
+        num_files_to_import = len(files_to_import)
+        for i, file in enumerate(files_to_import, start=1):
+            LOGGER.info(f"Processing parquet file {i}/{num_files_to_import}: {file}")
             self.add_to_mongo(parquet_dir, file, column_list, jattr_list)
             gc.collect()
         self.clean_mongo("sradb_list")
