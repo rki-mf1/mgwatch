@@ -19,6 +19,12 @@ from mgw.settings import LOGGER
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         try:
+            # URL for a sample that we know is in wort. This is for the example
+            # they provide on the website.
+            test_url = "https://wort.sourmash.bio/v1/view/sra/SRR15461028"
+            if not self.check_wort_up(test_url):
+                return f"The wort server is not accessible (failed to download {test_url}). Aborting."
+
             database = "SRA"
             today = datetime.today() - timedelta(days=2)
             today = today.strftime("%Y-%m-%d")
@@ -61,6 +67,20 @@ class Command(BaseCommand):
             LOGGER.info("Creating downloads finished.")
         except Exception as e:
             LOGGER.error(f"Error downloading signatures '{settings.DATA_DIR}': {e}")
+
+    def check_wort_up(self, url):
+        """Try to download a known-good SRA siganture, to check if the wort
+        service is up
+        """
+        cmd = ["curl", "-sLf", "-r", "0-10", url]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                return True
+            else:
+                return False
+        except Exception:
+            return False
 
     def handle_dirs(self, database, dir_names):
         dir_paths = {
