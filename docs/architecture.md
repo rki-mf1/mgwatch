@@ -1,11 +1,23 @@
 # Updates
 
+## Summary of important files and directories
+
+All subfolders of `backend-data/SRA/metagenomes`:
+
+- `failed/`: ?
+- `index/`: Branchwater indexes
+- `lists/`: lists of SRA IDs explaining what is contained in the indexes generated from data received from Titus et al. Not used in the future.
+- `manifest.pcl`: a list of all SRA indexes that are stored in all indexes (the union of manifests/*.pcl file contents)
+- `manifests/`: list of SRA indexes that are stored in each matching index file (in index/)
+- `signatures/`: signatures downloaded from wort that have been indexed
+- `updates/`: signatures downloaded from wort but not yet indexed
+
 ## Initial setup
 
 Before any update on the index, the following command has to be run once from inside the code directory. Before running the command, all `sig-sra-<0-9>.txt` files have to be moved inside the `data/SRA/metagenomes/lists/` directory. These are then used inside the `create_manifest.py` command to generate the main manifest and all individual index manifests.
 
 ```bash
-./scripts/dev-manage.sh create_manifest
+./scripts/dev-manage.sh create_manifests
 ```
 
 This will create the initial `manifest.pcl` and all individual index manifest files available in `data/SRA/metagenomes/manifests/`.
