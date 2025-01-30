@@ -72,7 +72,7 @@ class Command(BaseCommand):
         """Try to download a known-good SRA siganture, to check if the wort
         service is up
         """
-        cmd = ["curl", "-sLf", "-r", "0-10", url]
+        cmd = ["curl", "-sLf", "-r", "0-10", url, "-o", "/dev/null"]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
