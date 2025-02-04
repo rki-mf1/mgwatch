@@ -1,4 +1,5 @@
 import glob
+import gzip
 import os
 import pickle
 import subprocess
@@ -188,7 +189,13 @@ class Command(BaseCommand):
         try:
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
-                return True
+                # wort sometime returns a .sig.gz file that is a gzipped empty
+                # file. Check for this specifically.
+                with gzip.open(output_file, "r") as f:
+                    if len(f.read(1)) == 0:
+                        print(f"Downloaded wort file is empty for {SRA_ID}")
+                        return False
+                    return True
             else:
                 print(f"Failed to download {SRA_ID}: Exit code {result.returncode}")
                 return False
