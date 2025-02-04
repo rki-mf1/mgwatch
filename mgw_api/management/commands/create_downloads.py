@@ -175,7 +175,7 @@ class Command(BaseCommand):
 
     def call_curl_download(self, dir_paths, SRA_ID, timeout_seconds=3600):
         url = f"https://wort.sourmash.bio/v1/view/sra/{SRA_ID}"
-        output_file = os.path.join(dir_paths["updates"], f"{SRA_ID}.sig")
+        output_file = os.path.join(dir_paths["updates"], f"{SRA_ID}.sig.gz")
         cmd = [
             "curl",
             "--max-time",
