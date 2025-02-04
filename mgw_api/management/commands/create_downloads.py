@@ -25,6 +25,11 @@ class Command(BaseCommand):
             if not self.check_wort_up(test_url):
                 return f"The wort server is not accessible (failed to download {test_url}). Aborting."
 
+            # Signatures are small, they shouldn't take long to download. At
+            # the same time we have several IDs where wort seems to just hang
+            # for a long time and never send anything. Therefore we set a
+            # timeout on each download.
+            timeout_seconds = 30
             database = "SRA"
             today = datetime.today() - timedelta(days=2)
             today = today.strftime("%Y-%m-%d")
@@ -63,7 +68,9 @@ class Command(BaseCommand):
             )
             print(f"missing IDs: {len(missing_IDs)}")
             LOGGER.info("Running SRA downloads ...")
-            self.download_from_wort(dir_paths, missing_IDs, man_succ, man_fail)
+            self.download_from_wort(
+                dir_paths, missing_IDs, man_succ, man_fail, timeout_seconds
+            )
             LOGGER.info("Creating downloads finished.")
         except Exception as e:
             LOGGER.error(f"Error downloading signatures '{settings.DATA_DIR}': {e}")
@@ -136,7 +143,9 @@ class Command(BaseCommand):
         mongo.close()
         return mongo_IDs
 
-    def download_from_wort(self, dir_paths, SRA_IDs, man_succ, man_fail):
+    def download_from_wort(
+        self, dir_paths, SRA_IDs, man_succ, man_fail, timeout_seconds
+    ):
         IDs_succ = self.load_pickle(man_succ) if os.path.exists(man_succ) else set()
         IDs_fail = self.load_pickle(man_fail) if os.path.exists(man_fail) else set()
         SRA_IDs = SRA_IDs - IDs_succ
@@ -150,7 +159,7 @@ class Command(BaseCommand):
             attempts, success = 0, False
             while not success:
                 attempts += 1
-                success = self.call_curl_download(dir_paths, SRA_ID)
+                success = self.call_curl_download(dir_paths, SRA_ID, timeout_seconds)
                 if attempts < settings.WORT_ATTEMPTS and not success:
                     time.sleep(1)
                 else:
@@ -164,10 +173,18 @@ class Command(BaseCommand):
         LOGGER.info(f"Successful downloads: {len(IDs_succ)}")
         LOGGER.info(f"Failed downloads: {len(IDs_fail)}")
 
-    def call_curl_download(self, dir_paths, SRA_ID):
+    def call_curl_download(self, dir_paths, SRA_ID, timeout_seconds=3600):
         url = f"https://wort.sourmash.bio/v1/view/sra/{SRA_ID}"
         output_file = os.path.join(dir_paths["updates"], f"{SRA_ID}.sig")
-        cmd = ["curl", "-JLf", url, "-o", output_file]
+        cmd = [
+            "curl",
+            "--max-time",
+            str(timeout_seconds),
+            "-JLf",
+            url,
+            "-o",
+            output_file,
+        ]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
