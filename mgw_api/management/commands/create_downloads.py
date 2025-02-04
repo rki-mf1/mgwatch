@@ -1,4 +1,5 @@
 import glob
+import gzip
 import os
 import pickle
 import subprocess
@@ -19,6 +20,17 @@ from mgw.settings import LOGGER
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         try:
+            # URL for a sample that we know is in wort. This is for the example
+            # they provide on the website.
+            test_url = "https://wort.sourmash.bio/v1/view/sra/SRR15461028"
+            if not self.check_wort_up(test_url):
+                return f"The wort server is not accessible (failed to download {test_url}). Aborting."
+
+            # Signatures are small, they shouldn't take long to download. At
+            # the same time we have several IDs where wort seems to just hang
+            # for a long time and never send anything. Therefore we set a
+            # timeout on each download.
+            timeout_seconds = 30
             database = "SRA"
             today = datetime.today() - timedelta(days=2)
             today = today.strftime("%Y-%m-%d")
@@ -57,10 +69,26 @@ class Command(BaseCommand):
             )
             print(f"missing IDs: {len(missing_IDs)}")
             LOGGER.info("Running SRA downloads ...")
-            self.download_from_wort(dir_paths, missing_IDs, man_succ, man_fail)
+            self.download_from_wort(
+                dir_paths, missing_IDs, man_succ, man_fail, timeout_seconds
+            )
             LOGGER.info("Creating downloads finished.")
         except Exception as e:
             LOGGER.error(f"Error downloading signatures '{settings.DATA_DIR}': {e}")
+
+    def check_wort_up(self, url):
+        """Try to download a known-good SRA siganture, to check if the wort
+        service is up
+        """
+        cmd = ["curl", "-sLf", "-r", "0-10", url, "-o", "/dev/null"]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                return True
+            else:
+                return False
+        except Exception:
+            return False
 
     def handle_dirs(self, database, dir_names):
         dir_paths = {
@@ -116,7 +144,9 @@ class Command(BaseCommand):
         mongo.close()
         return mongo_IDs
 
-    def download_from_wort(self, dir_paths, SRA_IDs, man_succ, man_fail):
+    def download_from_wort(
+        self, dir_paths, SRA_IDs, man_succ, man_fail, timeout_seconds
+    ):
         IDs_succ = self.load_pickle(man_succ) if os.path.exists(man_succ) else set()
         IDs_fail = self.load_pickle(man_fail) if os.path.exists(man_fail) else set()
         SRA_IDs = SRA_IDs - IDs_succ
@@ -128,11 +158,13 @@ class Command(BaseCommand):
         for i, SRA_ID in enumerate(SRA_IDs):
             LOGGER.info(f"... {i} of {slen} ID {SRA_ID} ...")
             attempts, success = 0, False
-            while attempts < settings.WORT_ATTEMPTS and not success:
-                success = self.call_curl_download(dir_paths, SRA_ID)
-                if not success:
-                    attempts += 1
+            while not success:
+                attempts += 1
+                success = self.call_curl_download(dir_paths, SRA_ID, timeout_seconds)
+                if attempts < settings.WORT_ATTEMPTS and not success:
                     time.sleep(1)
+                else:
+                    break
             if success:
                 IDs_succ.add(SRA_ID)
                 self.save_pickle(IDs_succ, man_succ)
@@ -142,13 +174,29 @@ class Command(BaseCommand):
         LOGGER.info(f"Successful downloads: {len(IDs_succ)}")
         LOGGER.info(f"Failed downloads: {len(IDs_fail)}")
 
-    def call_curl_download(self, dir_paths, SRA_ID):
-        url = f"https://wort.sourmash.bio/v1/view/sra/{SRA_ID}.sig"
-        output_file = os.path.join(dir_paths["updates"], f"{SRA_ID}.sig")
-        cmd = ["curl", "-JLf", url, "-o", output_file]
+    def call_curl_download(self, dir_paths, SRA_ID, timeout_seconds=3600):
+        url = f"https://wort.sourmash.bio/v1/view/sra/{SRA_ID}"
+        output_file = os.path.join(dir_paths["updates"], f"{SRA_ID}.sig.gz")
+        cmd = [
+            "curl",
+            "--max-time",
+            str(timeout_seconds),
+            "-JLf",
+            url,
+            "-o",
+            output_file,
+        ]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
+                # wort sometime returns a .sig.gz file that is a gzipped empty
+                # file. Check for this specifically.
+                with gzip.open(output_file, "r") as f:
+                    is_empty = len(f.read(1)) == 0
+                if is_empty:
+                    os.remove(output_file)
+                    print(f"Downloaded wort file is empty for {SRA_ID}")
+                    return False
                 return True
             else:
                 print(f"Failed to download {SRA_ID}: Exit code {result.returncode}")
