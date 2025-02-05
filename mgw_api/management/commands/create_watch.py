@@ -36,6 +36,14 @@ class Command(BaseCommand):
                     new_result.delete()
                     new_message = "without finding new Metagenomes"
                 else:
+                    # Move the watch to the latest result, so that the next
+                    # time we run the watch query we are comparing with the
+                    # latest search results
+                    result.is_watched = False
+                    new_result.is_watched = True
+                    result.save()
+                    new_result.save()
+
                     self.send_notification(result.user, result, new_result)
                     new_message = "with new Metagenomes"
                 LOGGER.info(
@@ -67,9 +75,9 @@ class Command(BaseCommand):
         )
         subject = f"MetagenomeWatch: Found new results for watch {new_result.name}"
         message = inspect.cleandoc(f"""
-        Dear {user.username},
+        Dear MetagenomeWatch user {user.username},
 
-        Your watch that was created on {result.date.strftime('%Y-%m-%d')} has found new results.
+        New results have been found for your watch named "{result.name}".
 
         You can view the results here: {result_page}
 
@@ -77,7 +85,7 @@ class Command(BaseCommand):
             Name: {new_result.name}
             K-mer: {new_result.kmer}
             Database: {new_result.database}
-            Containment: {new_result.containment}
+            Containment threshold: {new_result.containment}
 
         Best wishes,
         The MetagenomeWatch Team
