@@ -122,10 +122,15 @@ def get_metadata(headers, rows):
     csv_df = search_csv(headers, rows, column_dict)
     combined_df = pd.DataFrame()
     for column, in_csv in column_dict.items():
-        if in_csv:
+        if in_csv == 1 and column in csv_df.columns:
             combined_df[column] = csv_df[column]
-        else:
+        elif in_csv == 0 and column in mongo_df.columns:
             combined_df[column] = mongo_df[column]
+        else:
+            LOGGER.warning(
+                "Metadata column '%s' missing. Returning an empty string.", column
+            )
+            combined_df[column] = ""
     new_headers = combined_df.columns.tolist()
     new_rows = combined_df.values.tolist()
     return new_headers, new_rows
