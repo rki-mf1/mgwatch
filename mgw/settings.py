@@ -27,6 +27,7 @@ env = environ.Env(
     DEBUG=(bool, False),
     SECRET_KEY=str,
     ALLOWED_HOSTS=(str, None),
+    MGW_URL=(str, None),
     CSRF_TRUSTED_ORIGINS=(str, None),
     TIME_ZONE=(str, "Europe/Berlin"),
     DATA_DIR=(Path, BASE_DIR / ".." / "mgw-data"),
@@ -59,6 +60,9 @@ env = environ.Env(
 )
 
 environ.Env.read_env(BASE_DIR / "vars.env")
+
+# The hostname to use for links (e.g. https://mgwatch.example.com)
+MGW_URL = env("MGW_URL")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
