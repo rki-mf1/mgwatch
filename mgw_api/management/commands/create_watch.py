@@ -10,7 +10,7 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.urls import reverse
 
-from mgw.settings import LOGGER
+from mgw.settings import HOSTNAME, LOGGER
 from mgw_api.models import Result, Signature
 
 
@@ -58,21 +58,24 @@ class Command(BaseCommand):
         return is_equal
 
     def send_notification(self, user, result, new_result):
-        LOGGER.info("Preparing to send email...")
-        result_page = self.request.build_absolute_uri(
-            reverse("result_table", args=[new_result.pk])
-        )
-        subject = f"MetagenomeWatch: Found new Genomes for {new_result.name}!"
+        LOGGER.info("Preparing to send email to {user}...")
+        url = new_result.get_absolute_url()
+        result_page = f"{HOSTNAME}{url}"
+        LOGGER.debug(f"Result link: {result_page}")
+        url_reverse = reverse("result_table", args=[new_result.pk])
+        result_page_reverse = f"{HOSTNAME}{url_reverse}"
+        LOGGER.debug(f"Result link using reverse(): {result_page_reverse}")
+        subject = f"MetagenomeWatch: Found new results for watch {new_result.name}"
         message = f"""
         Dear {user.username},
 
-        Your watch that was created on {result.date.strftime('%Y-%m-%d')} has successfully found new results with your query!
+        Your watch that was created on {result.date.strftime('%Y-%m-%d')} has found new results. You can view them here: {result_page}
 
-        Query: {new_result.name}
-        K-mer: {new_result.kmer}
-        Database: {new_result.database}
-        Containment: {new_result.containment}
-        Link: {result_page}
+        Watch details:
+            Query: {new_result.name}
+            K-mer: {new_result.kmer}
+            Database: {new_result.database}
+            Containment: {new_result.containment}
 
         Thank you for using MetagenomeWatch!
 
