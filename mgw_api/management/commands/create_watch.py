@@ -11,8 +11,10 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.urls import reverse
 
-from mgw.settings import LOGGER, MGW_URL
-from mgw_api.models import Result, Signature
+from mgw.settings import LOGGER
+from mgw.settings import MGW_URL
+from mgw_api.models import Result
+from mgw_api.models import Signature
 
 
 class Command(BaseCommand):

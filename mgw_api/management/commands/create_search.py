@@ -11,7 +11,9 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from mgw.settings import LOGGER
-from mgw_api.models import Result, Settings, Signature
+from mgw_api.models import Result
+from mgw_api.models import Settings
+from mgw_api.models import Signature
 
 
 class Command(BaseCommand):

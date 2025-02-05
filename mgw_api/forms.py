@@ -2,7 +2,10 @@
 
 from django import forms
 
-from mgw_api.models import Fasta, FilterSetting, Result, Settings
+from mgw_api.models import Fasta
+from mgw_api.models import FilterSetting
+from mgw_api.models import Result
+from mgw_api.models import Settings
 
 
 class FastaForm(forms.ModelForm):
