@@ -9,33 +9,38 @@ import threading
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate
+from django.contrib.auth import login
+from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import HttpResponse
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.shortcuts import redirect
+from django.shortcuts import render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 # from .forms import UploadFileForm
 # from .models import Choice, Question
-from .forms import (
-    FastaForm,
-    FilterSettingForm,
-    LoginForm,
-    SettingsForm,
-    WatchForm,
-)
-from .functions import (
-    apply_compare,
-    apply_regex,
-    get_metadata,
-    get_numeric_columns,
-    get_table_data,
-    human_sort_key,
-    is_float,
-    run_create_signature_and_search,
-)
-from .models import Fasta, FilterSetting, Result, Settings, Signature
+from .forms import FastaForm
+from .forms import FilterSettingForm
+from .forms import LoginForm
+from .forms import SettingsForm
+from .forms import WatchForm
+from .functions import apply_compare
+from .functions import apply_regex
+from .functions import get_metadata
+from .functions import get_numeric_columns
+from .functions import get_table_data
+from .functions import human_sort_key
+from .functions import is_float
+from .functions import run_create_signature_and_search
+from .models import Fasta
+from .models import FilterSetting
+from .models import Result
+from .models import Settings
+from .models import Signature
 
 ################################################################
 ## account management
