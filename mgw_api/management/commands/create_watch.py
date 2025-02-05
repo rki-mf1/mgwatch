@@ -1,5 +1,6 @@
 # mgw_api/management/commands/create_watch.py
 
+import inspect
 import io
 import re
 
@@ -10,7 +11,7 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.urls import reverse
 
-from mgw.settings import LOGGER
+from mgw.settings import LOGGER, MGW_URL
 from mgw_api.models import Result, Signature
 
 
@@ -54,31 +55,31 @@ class Command(BaseCommand):
         df1 = pd.read_csv(result.file.path)
         df2 = pd.read_csv(new_result.file.path)
         is_equal = df1.equals(df2)
-        # diff = df1.compare(df2)
         return is_equal
 
     def send_notification(self, user, result, new_result):
-        LOGGER.info("Preparing to send email...")
-        result_page = self.request.build_absolute_uri(
-            reverse("result_table", args=[new_result.pk])
+        absolute_url = reverse("mgw_api:result_table", kwargs={"pk": new_result.pk})
+        result_page = f"{MGW_URL}{absolute_url}"
+        LOGGER.info(
+            f"Preparing to send email to {user} with new results at {result_page} ..."
         )
-        subject = f"MetagenomeWatch: Found new Genomes for {new_result.name}!"
-        message = f"""
+        subject = f"MetagenomeWatch: Found new results for watch {new_result.name}"
+        message = inspect.cleandoc(f"""
         Dear {user.username},
 
-        Your watch that was created on {result.date.strftime('%Y-%m-%d')} has successfully found new results with your query!
+        Your watch that was created on {result.date.strftime('%Y-%m-%d')} has found new results.
 
-        Query: {new_result.name}
-        K-mer: {new_result.kmer}
-        Database: {new_result.database}
-        Containment: {new_result.containment}
-        Link: {result_page}
+        You can view the results here: {result_page}
 
-        Thank you for using MetagenomeWatch!
+        Watch details:
+            Name: {new_result.name}
+            K-mer: {new_result.kmer}
+            Database: {new_result.database}
+            Containment: {new_result.containment}
 
         Best wishes,
         The MetagenomeWatch Team
-        """
+        """)
         from_email = settings.DEFAULT_FROM_EMAIL
         recipient_list = [user.email]
         send_mail(
