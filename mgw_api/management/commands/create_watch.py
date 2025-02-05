@@ -1,5 +1,6 @@
 # mgw_api/management/commands/create_watch.py
 
+import inspect
 import io
 import re
 
@@ -10,7 +11,7 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.urls import reverse
 
-from mgw.settings import HOSTNAME, LOGGER
+from mgw.settings import LOGGER, MGW_URL
 from mgw_api.models import Result, Signature
 
 
@@ -54,34 +55,31 @@ class Command(BaseCommand):
         df1 = pd.read_csv(result.file.path)
         df2 = pd.read_csv(new_result.file.path)
         is_equal = df1.equals(df2)
-        # diff = df1.compare(df2)
         return is_equal
 
     def send_notification(self, user, result, new_result):
-        LOGGER.info("Preparing to send email to {user}...")
-        url = new_result.get_absolute_url()
-        result_page = f"{HOSTNAME}{url}"
-        LOGGER.debug(f"Result link: {result_page}")
-        url_reverse = reverse("result_table", args=[new_result.pk])
-        result_page_reverse = f"{HOSTNAME}{url_reverse}"
-        LOGGER.debug(f"Result link using reverse(): {result_page_reverse}")
+        absolute_url = reverse("mgw_api:result_table", kwargs={"pk": new_result.pk})
+        result_page = f"{MGW_URL}{absolute_url}"
+        LOGGER.info(
+            f"Preparing to send email to {user} with new results at {result_page} ..."
+        )
         subject = f"MetagenomeWatch: Found new results for watch {new_result.name}"
-        message = f"""
+        message = inspect.cleandoc(f"""
         Dear {user.username},
 
-        Your watch that was created on {result.date.strftime('%Y-%m-%d')} has found new results. You can view them here: {result_page}
+        Your watch that was created on {result.date.strftime('%Y-%m-%d')} has found new results.
+
+        You can view the results here: {result_page}
 
         Watch details:
-            Query: {new_result.name}
+            Name: {new_result.name}
             K-mer: {new_result.kmer}
             Database: {new_result.database}
             Containment: {new_result.containment}
 
-        Thank you for using MetagenomeWatch!
-
         Best wishes,
         The MetagenomeWatch Team
-        """
+        """)
         from_email = settings.DEFAULT_FROM_EMAIL
         recipient_list = [user.email]
         send_mail(
