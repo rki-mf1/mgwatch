@@ -110,7 +110,7 @@ def get_branchwater_table(result, max_rows=None):
         "query_containment_ani": "float64",
     }
     return pd.read_csv(
-        result.file.path, index_col="match_name", nrows=max_rows, dtypes=data_types
+        result.file.path, index_col="match_name", nrows=max_rows, dtype=data_types
     )
 
 
