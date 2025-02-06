@@ -337,7 +337,6 @@ def result_table(request, pk):
         branchwater_results = get_branchwater_table(
             result, max_rows=settings.MAX_SEARCH_RESULTS
         )
-        print(f"Branchwater: {branchwater_results}")
         results_with_metadata = add_sra_metadata(branchwater_results)
         results_with_metadata = prettify_column_names(results_with_metadata)
         filter_settings, created = FilterSetting.objects.get_or_create(

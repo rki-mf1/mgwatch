@@ -109,9 +109,12 @@ def get_branchwater_table(result, max_rows=None):
         "max_containment": "float64",
         "query_containment_ani": "float64",
     }
-    return pd.read_csv(
+    LOGGER.info(f"Reading branchwater results file: {result.file.path}")
+    branchwater_results = pd.read_csv(
         result.file.path, index_col="match_name", nrows=max_rows, dtype=data_types
     )
+    LOGGER.info(f"{branchwater_results}")
+    return branchwater_results
 
 
 def apply_regex(rows, column, value):
