@@ -217,6 +217,10 @@ def add_sra_metadata(branchwater_results):
         right_on="_id",
         suffixes=None,
     )
+    overlapping_ids = set(branchwater_subset_columns.columns.to_list()).intersection(
+        set(sra_metadata.columns.to_list())
+    )
+    print(f"overlapping index values = {overlapping_ids}")
     LOGGER.info(f"branchwater_results: {branchwater_results}")
     LOGGER.info(f"sra_metadata: {sra_metadata}")
     LOGGER.info(f"joined: {results_with_metadata}")
