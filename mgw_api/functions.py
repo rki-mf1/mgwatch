@@ -187,7 +187,6 @@ def prettify_column_names(df):
 
 def add_sra_metadata(branchwater_results):
     branchwater_columns_for_output = [
-        "match_name",
         "query_containment_ani",
         "containment",
         "containment_threshold",
@@ -204,8 +203,8 @@ def add_sra_metadata(branchwater_results):
         "releasedate",
         "librarysource",
     ]
-    sra_accessions = branchwater_results["match_name"]
-    sra_metadata = search_mongodb(sra_accessions, sra_columns)
+    sra_accessions = branchwater_results.index.to_list()
+    sra_metadata = get_sra_fields(sra_accessions, sra_columns)
     branchwater_subset_columns = branchwater_results[branchwater_columns_for_output]
     branchwater_subset_columns.join(sra_metadata, validate="one_to_one")
     return branchwater_subset_columns
@@ -224,6 +223,7 @@ def get_sra_fields(sra_accessions, fields):
     results = list(collection.find(query))
     mongo.close()
     sra_metadata = pd.DataFrame(results)
+    LOGGER.info(f"{sra_metadata}")
     found_columns = fields in sra_metadata.columns
     if not all(found_columns):
         LOGGER.warning(
