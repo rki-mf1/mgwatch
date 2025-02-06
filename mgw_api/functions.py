@@ -224,12 +224,12 @@ def get_sra_fields(sra_accessions, fields):
     mongo.close()
     sra_metadata = pd.DataFrame(results)
     LOGGER.info(f"{sra_metadata}")
-    found_columns = fields in sra_metadata.columns
-    if not all(found_columns):
+    found_columns = set(fields) & set(sra_metadata.columns)
+    if len(found_columns) < len(fields):
         LOGGER.warning(
             "Not all SRA metadata fields were found in the SRA mongodb. Returning the subset of columns that were found."
         )
-    sra_subset_columns = sra_metadata[found_columns]
+    sra_subset_columns = sra_metadata[list(found_columns)]
     # I'm not sure we need to convert_to_string here. Reenable this later if
     # necessary
     # return mongo_df.map(convert_to_string)
