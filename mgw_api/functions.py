@@ -209,11 +209,18 @@ def add_sra_metadata(branchwater_results):
     sra_accessions = branchwater_results.index.to_list()
     sra_metadata = get_sra_fields(sra_accessions, sra_columns)
     branchwater_subset_columns = branchwater_results[branchwater_columns_for_output]
-    branchwater_subset_columns.join(sra_metadata, validate="one_to_one")
-    LOGGER.info(f"sra_metadata: {sra_metadata}")
+    results_with_metadata = pd.merge(
+        branchwater_subset_columns,
+        sra_metadata,
+        how="left",
+        left_on="match_name",
+        right_on="_id",
+        suffixes=None,
+    )
     LOGGER.info(f"branchwater_results: {branchwater_results}")
-    LOGGER.info(f"joined: {branchwater_subset_columns}")
-    return branchwater_subset_columns
+    LOGGER.info(f"sra_metadata: {sra_metadata}")
+    LOGGER.info(f"joined: {results_with_metadata}")
+    return results_with_metadata
 
 
 #    new_headers = branchwater_subset_columns.columns.tolist()
