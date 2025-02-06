@@ -215,7 +215,7 @@ def add_sra_metadata(branchwater_results):
         how="left",
         left_on="match_name",
         right_on="_id",
-        suffixes=None,
+        suffixes=(None, None),
     )
     overlapping_ids = set(branchwater_subset_columns.columns.to_list()).intersection(
         set(sra_metadata.columns.to_list())
