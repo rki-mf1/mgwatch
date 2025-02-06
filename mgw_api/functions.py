@@ -181,7 +181,7 @@ def prettify_column_names(df):
 
     This won't universally give the perfect results but it should be good enough
     """
-    df.columns = df.columns.replace("_", " ").capitalize()
+    df.columns = [c.replace("_", " ").capitalize() for c in df.columns.to_list()]
     return df
 
 
