@@ -210,6 +210,9 @@ def add_sra_metadata(branchwater_results):
     sra_metadata = get_sra_fields(sra_accessions, sra_columns)
     branchwater_subset_columns = branchwater_results[branchwater_columns_for_output]
     branchwater_subset_columns.join(sra_metadata, validate="one_to_one")
+    LOGGER.info(f"sra_metadata: {sra_metadata}")
+    LOGGER.info(f"branchwater_results: {branchwater_results}")
+    LOGGER.info(f"joined: {branchwater_subset_columns}")
     return branchwater_subset_columns
 
 
