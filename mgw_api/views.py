@@ -344,11 +344,11 @@ def result_table(request, pk):
         )
         sort_column = filter_settings.sort_column
         sort_reverse = filter_settings.sort_reverse
-        results_with_metadata = results_with_metadata.sort_values(
-            by=sort_column,
-            ascending=not sort_reverse,
-            na_position="last",
-        )
+        # results_with_metadata = results_with_metadata.sort_values(
+        #    by=sort_column,
+        #    ascending=not sort_reverse,
+        #    na_position="last",
+        # )
         numeric_columns = get_numeric_columns_pandas(results_with_metadata)
 
         # Convert from DataFrame to lists for serialization

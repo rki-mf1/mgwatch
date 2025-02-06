@@ -223,6 +223,7 @@ def get_sra_fields(sra_accessions, fields):
     results = list(collection.find(query))
     mongo.close()
     sra_metadata = pd.DataFrame(results)
+    sra_metadata.set_index("_id", inplace=True)
     LOGGER.info(f"{sra_metadata}")
     found_columns = set(fields) & set(sra_metadata.columns)
     if len(found_columns) < len(fields):
