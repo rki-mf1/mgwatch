@@ -47,4 +47,7 @@ def zip_lists(a, b):
 
 @register.filter
 def lat_lon_for_osm(lat_lon):
-    return lat_lon.replace(", ", "/")
+    try:
+        return lat_lon.replace(", ", "/")
+    except Exception:
+        return ""
