@@ -28,13 +28,17 @@ from .forms import FilterSettingForm
 from .forms import LoginForm
 from .forms import SettingsForm
 from .forms import WatchForm
+from .functions import add_sra_metadata
 from .functions import apply_compare
 from .functions import apply_regex
+from .functions import get_branchwater_table
 from .functions import get_metadata
-from .functions import get_numeric_columns
+from .functions import get_numeric_columns_pandas
 from .functions import get_table_data
 from .functions import human_sort_key
 from .functions import is_float
+from .functions import prettify_column_names
+from .functions import reorder_result_columns_sra
 from .functions import run_create_signature_and_search
 from .models import Fasta
 from .models import FilterSetting
@@ -311,12 +315,12 @@ def toggle_watch(request, pk):
 
 @login_required
 def result_table(request, pk):
-    ## handle settings
+    # handle settings
     sourmash_settings, created = Settings.objects.get_or_create(user=request.user)
     settings_form = SettingsForm(instance=sourmash_settings)
 
     if request.method == "POST":
-        ## handle settings
+        # handle settings
         if (
             "kmer" in request.POST
             or "database" in request.POST
@@ -329,17 +333,32 @@ def result_table(request, pk):
             else:
                 messages.error(request, "Please correct the errors below.")
     else:
-        ## handle result table
+        # handle result table
         result = get_object_or_404(Result, pk=pk, user=request.user)
-        headers, rows = get_table_data(result, max_rows=settings.MAX_SEARCH_RESULTS)
-        headers, rows = get_metadata(headers, rows)
-
-        headers = [h.replace("_", " ") for h in headers]
-        numeric_columns = get_numeric_columns(rows)
+        branchwater_results = get_branchwater_table(
+            result, max_rows=settings.MAX_SEARCH_RESULTS
+        )
+        results_with_metadata = add_sra_metadata(branchwater_results)
+        results_with_metadata = reorder_result_columns_sra(results_with_metadata)
+        results_with_metadata = prettify_column_names(results_with_metadata)
+        results_with_metadata.reset_index(inplace=True)
         filter_settings, created = FilterSetting.objects.get_or_create(
             result=result, user=request.user
         )
+        sort_column = filter_settings.sort_column
+        sort_reverse = filter_settings.sort_reverse
+        # results_with_metadata = results_with_metadata.sort_values(
+        #    by=sort_column,
+        #    ascending=not sort_reverse,
+        #    na_position="last",
+        # )
+        numeric_columns = get_numeric_columns_pandas(results_with_metadata)
 
+        # Convert from DataFrame to lists for serialization
+        headers = results_with_metadata.columns.tolist()
+        rows = results_with_metadata.values.tolist()
+
+        # FIXME: adapt filtering to pandas DataFrame
         for column, value in filter_settings.filters.items():
             rows = apply_regex(rows, column, value)
         for column, range_values in filter_settings.range_filters.items():
@@ -350,18 +369,6 @@ def result_table(request, pk):
                     rows = [row for row in rows if apply_compare(m, row, column, value)]
                 elif value is not None:
                     rows = apply_regex(rows, column, value)
-
-        sort_column = filter_settings.sort_column
-        sort_reverse = filter_settings.sort_reverse
-        if sort_column is not None:
-            # Check if the sort column index is invalid, and if so reset it to 0
-            if int(sort_column) >= len(rows):
-                sort_column = 0
-            rows = sorted(
-                rows,
-                key=lambda x: human_sort_key(x[int(sort_column)]),
-                reverse=sort_reverse,
-            )
 
         watch_form = WatchForm(instance=result)
         filter_form = FilterSettingForm(instance=filter_settings)
