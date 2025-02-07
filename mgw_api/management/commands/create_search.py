@@ -1,12 +1,12 @@
 # mgw_api/management/commands/create_signature.py
 
-import csv
 import glob
 import os
 import subprocess
 from datetime import datetime
 from itertools import product
 
+import pandas as pd
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
@@ -123,24 +123,16 @@ class Command(BaseCommand):
         return result
 
     def combine_results(self, file_list, combined_file, query_name):
-        header, table_data = "", list()
-        for k, db, c, file in file_list:
-            if os.stat(file).st_size != 0:
-                header, t_data = self.read_table(file, query_name, k, db, c)
-                table_data = table_data + t_data
-            if os.path.exists(file):
-                os.remove(file)
-        with open(combined_file, "w", newline="") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(header)
-            for row in table_data:
-                writer.writerow(row)
-
-    def read_table(self, file, query_name, k, db, c):
-        with open(file, newline="") as csvfile:
-            reader = csv.reader(csvfile)
-            header = next(reader) + ["k-mer", "database", "containment_threshold"]
-            table_data = [
-                [query_name] + row[1:] + [f"{k}", f"{db}", f"{c}"] for row in reader
-            ]
-        return header, table_data
+        read_files = []
+        for k, db, c, filename in file_list:
+            df = pd.read_csv(
+                filename, index_col=None, header=0, dtype={"containment": "float64"}
+            )
+            df["k-mer"] = str(k)
+            df["database"] = str(db)
+            df["containment_threshold"] = str(c)
+            read_files.append(df)
+        combined_results = pd.concat(read_files, axis=0, ignore_index=True)
+        combined_results.insert(0, "query_name", query_name)
+        sorted_results = combined_results.sort_values(by="containment", ascending=False)
+        sorted_results.to_csv(combined_file)
