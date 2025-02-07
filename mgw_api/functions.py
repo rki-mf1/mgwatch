@@ -241,6 +241,16 @@ def get_sra_fields(sra_accessions, fields):
     collection = db["sradb_list"]
     query = {"_id": {"$in": sra_accessions}}
     results = list(collection.find(query))
+    if len(results) == 0:
+        # Return a dataframe with just the ID column we can't find anything in
+        # the mongodb
+        empty_df = pd.DataFrame.from_dict({"_id": sra_accessions})
+        empty_df.set_index("_id", inplace=True)
+        return empty_df
+    elif len(results) < len(sra_accessions):
+        LOGGER.info(
+            "Not all SRA accessions were found in the mongodb. Returning metadata for {len(results)} samples instead of {len(sra_accessions)}"
+        )
     mongo.close()
     sra_metadata = pd.DataFrame(results)
     sra_metadata.set_index("_id", inplace=True)
