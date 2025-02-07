@@ -109,12 +109,18 @@ def get_branchwater_table(result, max_rows=None):
         "max_containment": "float64",
         "query_containment_ani": "float64",
     }
+    branchwater_columns_for_output = [
+        "query_containment_ani",
+        "containment",
+        "containment_threshold",
+    ]
     LOGGER.info(f"Reading branchwater results file: {result.file.path}")
     branchwater_results = pd.read_csv(
         result.file.path, index_col="match_name", nrows=max_rows, dtype=data_types
     )
-    LOGGER.info(f"{branchwater_results}")
-    return branchwater_results
+    branchwater_subset = branchwater_results[branchwater_columns_for_output]
+    LOGGER.info(f"{branchwater_subset}")
+    return branchwater_subset
 
 
 def apply_regex(rows, column, value):
@@ -192,11 +198,7 @@ def prettify_column_names(df):
 
 
 def add_sra_metadata(branchwater_results):
-    branchwater_columns_for_output = [
-        "query_containment_ani",
-        "containment",
-        "containment_threshold",
-    ]
+    branchwater_results.rename_axis("sra_accession", inplace=True)
     sra_columns = [
         "sra_link",
         "assay_type",
@@ -211,28 +213,33 @@ def add_sra_metadata(branchwater_results):
     ]
     sra_accessions = branchwater_results.index.to_list()
     sra_metadata = get_sra_fields(sra_accessions, sra_columns)
-    branchwater_subset_columns = branchwater_results[branchwater_columns_for_output]
-    results_with_metadata = pd.merge(
-        branchwater_subset_columns,
-        sra_metadata,
-        how="left",
-        left_on="match_name",
-        right_on="_id",
-        suffixes=(None, None),
+    results_with_metadata = branchwater_results.join(
+        sra_metadata, on="sra_accession", suffixes=(None, None)
     )
-    overlapping_ids = set(branchwater_subset_columns.columns.to_list()).intersection(
-        set(sra_metadata.columns.to_list())
-    )
-    print(f"overlapping index values = {overlapping_ids}")
     LOGGER.info(f"branchwater_results: {branchwater_results}")
     LOGGER.info(f"sra_metadata: {sra_metadata}")
     LOGGER.info(f"joined: {results_with_metadata}")
     return results_with_metadata
 
 
-#    new_headers = branchwater_subset_columns.columns.tolist()
-#    new_rows = branchwater_subset_columns.values.tolist()
-#    return new_headers, new_rows
+def reorder_result_columns_sra(df):
+    output_ordering = [
+        "sra_accession",
+        "sra_link",
+        "assay_type",
+        "bioproject",
+        "biosample_link",
+        "query_containment_ani",
+        "collection_date_sam",
+        "containment",
+        "geo_loc_name_country_calc",
+        "lat_lon",
+        "organism",
+        "containment_threshold",
+        "releasedate",
+        "librarysource",
+    ]
+    return df[output_ordering]
 
 
 def get_sra_fields(sra_accessions, fields):
@@ -244,8 +251,9 @@ def get_sra_fields(sra_accessions, fields):
     if len(results) == 0:
         # Return a dataframe with just the ID column we can't find anything in
         # the mongodb
-        empty_df = pd.DataFrame.from_dict({"_id": sra_accessions})
-        empty_df.set_index("_id", inplace=True)
+        empty_df = pd.DataFrame.from_dict({"sra_accession": sra_accessions})
+        empty_df.set_index("sra_accession", inplace=True)
+        empty_df[fields] = ""
         return empty_df
     elif len(results) < len(sra_accessions):
         LOGGER.info(
@@ -254,14 +262,15 @@ def get_sra_fields(sra_accessions, fields):
     mongo.close()
     sra_metadata = pd.DataFrame(results)
     sra_metadata.set_index("_id", inplace=True)
-    LOGGER.info(f"{sra_metadata}")
-    found_columns = set(fields) & set(sra_metadata.columns)
-    if len(found_columns) < len(fields):
+    sra_metadata.rename_axis("sra_accession", inplace=True)
+    missing_columns = set(fields) - set(sra_metadata.columns)
+    if len(missing_columns) > 0:
         LOGGER.warning(
             "Not all SRA metadata fields were found in the SRA mongodb. Returning the subset of columns that were found."
         )
-    sra_subset_columns = sra_metadata[list(found_columns)]
-    return sra_subset_columns.map(convert_to_string)
+        sra_metadata[list(missing_columns)] = ""
+    LOGGER.info(f"get_sra_fields: {sra_metadata}")
+    return sra_metadata.map(convert_to_string)
 
 
 def convert_to_string(value):

@@ -38,6 +38,7 @@ from .functions import get_table_data
 from .functions import human_sort_key
 from .functions import is_float
 from .functions import prettify_column_names
+from .functions import reorder_result_columns_sra
 from .functions import run_create_signature_and_search
 from .models import Fasta
 from .models import FilterSetting
@@ -338,7 +339,9 @@ def result_table(request, pk):
             result, max_rows=settings.MAX_SEARCH_RESULTS
         )
         results_with_metadata = add_sra_metadata(branchwater_results)
+        results_with_metadata = reorder_result_columns_sra(results_with_metadata)
         results_with_metadata = prettify_column_names(results_with_metadata)
+        results_with_metadata.reset_index(inplace=True)
         filter_settings, created = FilterSetting.objects.get_or_create(
             result=result, user=request.user
         )
