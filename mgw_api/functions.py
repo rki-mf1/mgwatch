@@ -251,10 +251,7 @@ def get_sra_fields(sra_accessions, fields):
             "Not all SRA metadata fields were found in the SRA mongodb. Returning the subset of columns that were found."
         )
     sra_subset_columns = sra_metadata[list(found_columns)]
-    # I'm not sure we need to convert_to_string here. Reenable this later if
-    # necessary
-    # return mongo_df.map(convert_to_string)
-    return sra_subset_columns
+    return sra_subset_columns.map(convert_to_string)
 
 
 def convert_to_string(value):
