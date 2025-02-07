@@ -222,7 +222,6 @@ def add_sra_metadata(branchwater_results):
 
 def reorder_result_columns_sra(df):
     output_ordering = [
-        "sra_accession",
         "sra_link",
         "assay_type",
         "bioproject",
