@@ -213,9 +213,7 @@ def add_sra_metadata(branchwater_results):
     ]
     sra_accessions = branchwater_results.index.to_list()
     sra_metadata = get_sra_fields(sra_accessions, sra_columns)
-    results_with_metadata = branchwater_results.join(
-        sra_metadata, on="sra_accession", suffixes=(None, None)
-    )
+    results_with_metadata = branchwater_results.join(sra_metadata, on="sra_accession")
     LOGGER.info(f"branchwater_results: {branchwater_results}")
     LOGGER.info(f"sra_metadata: {sra_metadata}")
     LOGGER.info(f"joined: {results_with_metadata}")
