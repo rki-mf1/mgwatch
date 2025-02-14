@@ -160,6 +160,7 @@ class Command(BaseCommand):
             "s3://sra-pub-metadata-us-east-1/sra/metadata/",
             parquet_dir,
             "--no-sign-request",
+            "--delete",
         ]
         result = subprocess.Popen(
             command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
