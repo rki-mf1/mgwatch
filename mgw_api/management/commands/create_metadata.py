@@ -41,17 +41,25 @@ class Command(BaseCommand):
             action="store_true",
             help="Do not process the downloaded SRA data and load it into the mongodb",
         )
+        parser.add_argument(
+            "--drop-first",
+            action="store_true",
+            help="Drop the old metadata collection before creating the new one (usually not recommended, but necessary in low space situations)",
+        )
 
     def handle(self, *args, **kwargs):
         try:
             LOGGER.info("Starting metadata update")
             re_download = not kwargs["no_download"]
             re_process = not kwargs["no_process"]
+            drop_first = kwargs["drop_first"]
             database = "SRA"
             dir_paths = self.handle_dirs(database, ["parquet"])
             column_list, jattr_list = self.get_filter_data()
             if re_download:
                 self.download_parquet(dir_paths["parquet"])
+            if drop_first:
+                self.clean_mongo("sradb_list")
             if re_process:
                 self.process_parquet(dir_paths["parquet"], column_list, jattr_list)
             self.set_initial_flag()
