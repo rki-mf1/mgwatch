@@ -285,8 +285,12 @@ class Command(BaseCommand):
                 f"https://www.ncbi.nlm.nih.gov/sra/{meta_dict.get('acc', '')}"
             )
             meta_dict["_id"] = meta_dict["acc"]
-            # if meta_dict["librarysource"] == "METAGENOMIC":
-            new_attr.append(meta_dict)
+            if meta_dict["librarysource"] in [
+                "METAGENOMIC",
+                "GENOMIC",
+                "METATRANSCRIPTOMIC",
+            ]:
+                new_attr.append(meta_dict)
         res_list.append(new_attr)
 
     def process_value(self, v):
