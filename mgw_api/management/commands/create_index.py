@@ -123,8 +123,9 @@ class Command(BaseCommand):
             sl.writelines(f"{fp}\n" for fp in new_files)
 
     def update_index(self, dir_paths, sig_list, database, k, last_num):
+        database_lower = database.lower()
         idx = os.path.join(
-            dir_paths["index"], f"wort-{database}-{k}-db{last_num}.rocksdb"
+            dir_paths["index"], f"wort-{database_lower}-{k}-db{last_num}.rocksdb"
         )
         LOGGER.info(f"Creating index {idx}.")
         LOGGER.info(f"Signature list {sig_list}.")
