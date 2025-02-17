@@ -5,7 +5,7 @@ RUN apt update --allow-releaseinfo-change && apt install -y procps wget gzip pig
 
 WORKDIR /code
 COPY mgw.yaml .
-RUN conda env create -n mgw -f mgw.yaml
+RUN conda env create -n mgw -f mgw.yaml && conda clean --all -y
 COPY manage.py README.md vars.env .
 COPY templates/ /code/templates
 COPY mgw/ /code/mgw
