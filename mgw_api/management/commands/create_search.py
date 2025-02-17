@@ -135,9 +135,9 @@ class Command(BaseCommand):
             df["database"] = str(db)
             df["containment_threshold"] = str(c)
             read_files.append(df)
-            if len(read_files) == 0:
-                # TODO: not sure what to do if there are no results
-                return
+        if len(read_files) == 0:
+            # TODO: not sure what to do if there are no results
+            return
         combined_results = pd.concat(read_files, axis=0, ignore_index=True)
         combined_results.drop(columns="query_name", inplace=True)
         combined_results.insert(0, "query_name", query_name)
