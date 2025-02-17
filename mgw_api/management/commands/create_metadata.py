@@ -118,34 +118,43 @@ class Command(BaseCommand):
                 df.filter(pl.col("librarysource").is_in(allowed_librarysources))
                 .select(column_list + ["jattr"])
                 .collect()
+                .with_columns(
+                    pl.col(pl.Date).cast(pl.Datetime)
+                )  # Cast all date columns to datetime to keep mongodb happy
+                .with_columns(
+                    pl.col("jattr").str.json_decode(jattr_dtypes).alias("jattr_decoded")
+                )  # Decode json cell into a polars struct with just the fields we care about
+                .drop("jattr")
+                .unnest("jattr_decoded")  # Unnest to split struct into separate columns
+                .with_columns(
+                    [
+                        pl.when(pl.col("acc").is_not_null())
+                        .then(
+                            pl.format(
+                                "https://www.ncbi.nlm.nih.gov/sra/{}", pl.col("acc")
+                            )
+                        )
+                        .otherwise(None)
+                        .alias("sra_link"),
+                        pl.when(pl.col("biosample").is_not_null())
+                        .then(
+                            pl.format(
+                                "https://www.ncbi.nlm.nih.gov/biosample/{}",
+                                pl.col("biosample"),
+                            )
+                        )
+                        .otherwise(None)
+                        .alias("biosample_link"),
+                    ]
+                )
+                .with_columns(
+                    [pl.col("acc").alias("_id")]
+                )  # assign acc to the special mongodb _id field
             )
-            # Cast all date columns to datetime to keep mongodb happy
-            sra_df = sra_df.with_columns(pl.col(pl.Date).cast(pl.Datetime))
-            # Decode json cell into a polars struct with just the fields we care about
-            sra_df = sra_df.with_columns(
-                pl.col("jattr").str.json_decode(jattr_dtypes).alias("jattr_decoded")
-            ).drop("jattr")
-            # Unnest to split struct into separate columns
-            sra_unnested = sra_df.unnest("jattr_decoded")
-            # Create link columns
-            sra_unnested = sra_unnested.with_columns(
-                [
-                    pl.format(
-                        "https://www.ncbi.nlm.nih.gov/sra/{}", pl.col("acc")
-                    ).alias("sra_link"),
-                    pl.format(
-                        "https://www.ncbi.nlm.nih.gov/biosample/{}", pl.col("biosample")
-                    ).alias("biosample_link"),
-                ]
-            )
-            LOGGER.info(f"{sra_unnested.glimpse(return_as_string=True)}")
-            # Duplicate the acc column and set it to mongodb's special _id field
-            sra_unnested = sra_unnested.with_columns([pl.col("acc").alias("_id")])
-            sra_dict = sra_unnested.to_dicts()
 
             mongo = pm.MongoClient(settings.MONGO_URI)
             db = mongo["sradb"]
-            db["sradb_temp"].insert_many(sra_dict)
+            db["sradb_temp"].insert_many(sra_df.to_dicts())
             mongo.close()
 
         self.drop_mongo_collection("sradb_list")
