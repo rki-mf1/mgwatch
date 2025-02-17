@@ -127,6 +127,18 @@ class Command(BaseCommand):
             ).drop("jattr")
             # Unnest to split struct into separate columns
             sra_unnested = sra_df.unnest("jattr_decoded")
+            # Create link columns
+            sra_unnested = sra_unnested.with_columns(
+                [
+                    pl.format(
+                        "https://www.ncbi.nlm.nih.gov/sra/{}", pl.col("acc")
+                    ).alias("sra_link"),
+                    pl.format(
+                        "https://www.ncbi.nlm.nih.gov/biosample/{}", pl.col("biosample")
+                    ).alias("biosample_link"),
+                ]
+            )
+            LOGGER.info(f"{sra_unnested.glimpse(return_as_string=True)}")
             # Duplicate the acc column and set it to mongodb's special _id field
             sra_unnested = sra_unnested.with_columns([pl.col("acc").alias("_id")])
             sra_dict = sra_unnested.to_dicts()
