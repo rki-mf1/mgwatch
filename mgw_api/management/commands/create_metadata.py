@@ -1,32 +1,12 @@
 # mgw_api/management/commands/create_metadata.py
-import gc
-import json
-import multiprocessing as mp
-import os
-import random
-import re
 import subprocess
-from datetime import date
-from pathlib import Path
 
-import numpy as np
-import pandas as pd
-import pyarrow.parquet as pq
+import polars as pl
 import pymongo as pm
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from mgw.settings import LOGGER
-
-try:
-    import multiprocessing as mp
-
-    import multiprocessingPickle4
-
-    ctxx = mp.get_context()
-    ctxx.reducer = multiprocessingPickle4.MultiprocessingPickle4()
-except Exception:
-    import multiprocessing as mp
 
 
 class Command(BaseCommand):
@@ -45,114 +25,57 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         try:
             LOGGER.info("Starting metadata update")
-            re_download = not kwargs["no_download"]
-            re_process = not kwargs["no_process"]
+            download = not kwargs["no_download"]
+            process = not kwargs["no_process"]
+
             database = "SRA"
-            dir_paths = self.handle_dirs(database, ["parquet"])
-            column_list, jattr_list = self.get_filter_data()
-            if re_download:
-                self.download_parquet(dir_paths["parquet"])
-            if re_process:
-                self.process_parquet(dir_paths["parquet"], column_list, jattr_list)
+            metadata_dir = settings.DATA_DIR / database / "metadata" / "parquet"
+            metadata_dir.mkdir(parents=True, exist_ok=True)
+
+            if download:
+                self.download_sra(metadata_dir)
+            else:
+                LOGGER.info("Skip downloading of new SRA metadata")
+
+            if process:
+                self.import_parquet(metadata_dir)
+            else:
+                LOGGER.info("Skip importing SRA metadata files into mongodb")
+
             self.set_initial_flag()
             LOGGER.info(
-                f"Downloaded and imported new metadata to {dir_paths['parquet']}."
+                f"Downloaded new data into {metadata_dir} and imported into mongodb."
             )
         except Exception as e:
             LOGGER.error(f"Error processing metadata update': {e}")
-        gc.collect()
-
-    def handle_dirs(self, database, dir_names):
-        dir_paths = {
-            n: os.path.join(settings.DATA_DIR, database, "metadata", n)
-            for n in dir_names
-        }
-        for dir_path in dir_paths.values():
-            if not os.path.exists(dir_path):
-                os.makedirs(dir_path)
-                os.chmod(dir_path, 0o700)
-        return dir_paths
 
     def get_filter_data(self):
-        ## data taken from branchwater attrcounts_4.5percent.csv
         column_list = [
-            "sample_name",
-            "sample_name_sam",
             "acc",
             "assay_type",
-            "avgspotlen",
             "bioproject",
             "biosample",
-            "biosamplemodel_sam",
-            "center_name",
             "collection_date_sam",
-            "consent",
-            "datastore_filetype",
-            "datastore_provider",
-            "datastore_region",
-            "ena_first_public_run",
-            "ena_last_update_run",
-            "experiment",
             "geo_loc_name_country_calc",
-            "geo_loc_name_country_continent_calc",
-            "geo_loc_name_sam",
-            "insertsize",
-            "instrument",
-            "library_name",
-            "librarylayout",
-            "libraryselection",
-            "librarysource",
-            "loaddate",
-            "mbases",
-            "mbytes",
             "organism",
-            "platform",
             "releasedate",
-            "sample_acc",
-            "sra_study",
+            "librarysource",
         ]
-        jattr_list = [
-            "bases",
-            "bytes",
-            "run_file_create_date",
-            "run_file_version",
-            "primary_search",
-            "age",
-            "altitude",
-            "body_habitat",
-            "body_product",
-            "collection_date",
-            "depth",
-            "env_biome",
-            "env_broad_scale",
-            "env_feature",
-            "env_local_scale",
-            "env_material",
-            "env_medium",
-            "env_package",
-            "host",
-            "host_age",
-            "host_body_habitat",
-            "host_body_product",
-            "host_common_name",
-            "host_sex",
-            "host_subject_id",
-            "host_taxid",
-            "investigation_type",
-            "isolate",
-            "lat_lon",
-            "project_name",
-            "race",
-            "sample_type",
-            "source_material_id",
-        ]
-        return column_list, jattr_list
 
-    def download_parquet(self, parquet_dir):
+        # These fields are packed into the jattr column of the SRA parquet
+        # files and need to be handled specially
+        jattr_dtypes = pl.Struct(
+            [
+                pl.Field("lat_lon", dtype=pl.String),
+            ]
+        )
+
+        allowed_librarysources = ["METAGENOMIC", "GENOMIC", "METATRANSCRIPTOMIC"]
+
+        return column_list, jattr_dtypes, allowed_librarysources
+
+    def download_sra(self, parquet_dir):
         LOGGER.info("Downloading SRA metadata files from S3")
-        # Disable deletion of existing parquet_dir because we want to use sync,
-        # instead of using cp and transferring the whole data set every time
-        # self.remove_old_parquet(parquet_dir)
         command = [
             "aws",
             "s3",
@@ -170,52 +93,47 @@ class Command(BaseCommand):
         else:
             LOGGER.error(f"Download metadata failed with error {stderr}")
 
-    def remove_old_parquet(self, parquet_dir):
-        for root, dirs, files in os.walk(parquet_dir):
-            for file in files:
-                os.remove(os.path.join(root, file))
+    def import_parquet(self, parquet_dir):
+        self.drop_mongo_collection("sradb_temp")
+        column_list, jattr_dtypes, allowed_librarysources = self.get_filter_data()
 
-    def process_parquet(self, parquet_dir, column_list, jattr_list):
-        self.clean_mongo("sradb_temp")
-        LOGGER.debug("Cleaned mongodb sradb_temp")
-        cpus = max(1, int(mp.cpu_count() * 0.8))
-        LOGGER.debug(f"Using {cpus} cores")
-        files_to_import = os.listdir(parquet_dir)
-        num_files_to_import = len(files_to_import)
-        for i, file in enumerate(files_to_import, start=1):
-            LOGGER.info(f"Processing parquet file {i}/{num_files_to_import}: {file}")
-            self.add_to_mongo(parquet_dir, file, column_list, jattr_list)
-            gc.collect()
-        self.clean_mongo("sradb_list")
-        LOGGER.debug("Cleaned mongodb sradb_list")
+        # scan_parquet() can handle the whole directory of files at once, but
+        # memory usage goes crazy. For now we just import one file at a time.
+        for file_num, parquet_file in enumerate(parquet_dir.glob("*")):
+            LOGGER.info(f"Processing SRA parquet file {file_num}: {parquet_file.name}")
+            df = pl.scan_parquet(parquet_file)
+            sra_df = (
+                df.filter(pl.col("librarysource").is_in(allowed_librarysources))
+                .select(column_list + ["jattr"])
+                .collect()
+            )
+            # Cast all date columns to datetime to keep mongodb happy
+            sra_df = sra_df.with_columns(pl.col(pl.Date).cast(pl.Datetime))
+            # Decode json cell into a polars struct with just the fields we care about
+            sra_df = sra_df.with_columns(
+                pl.col("jattr").str.json_decode(jattr_dtypes).alias("jattr_decoded")
+            ).drop("jattr")
+            # Unnest to split struct into separate columns
+            sra_unnested = sra_df.unnest("jattr_decoded")
+            # Duplicate the acc column and set it to mongodb's special _id field
+            sra_df.with_columns([pl.col("acc").alias("_id")])
+            sra_dict = sra_unnested.to_dicts()
+
+            mongo = pm.MongoClient(settings.MONGO_URI)
+            db = mongo["sradb"]
+            db["sradb_temp"].insert_many(sra_dict)
+            mongo.close()
+
+        self.drop_mongo_collection("sradb_list")
         self.finish_mongo()
 
-    def clean_mongo(self, collection):
+    def drop_mongo_collection(self, collection):
         mongo = pm.MongoClient(settings.MONGO_URI)
         db = mongo["sradb"]
         if collection in db.list_collection_names():
             db[collection].drop()
+            LOGGER.debug(f"Dropped mongodb collection {collection}.")
         mongo.close()
-
-    def add_to_mongo(self, parquet_dir_path, file, column_list, jattr_list):
-        pf = pq.ParquetFile(os.path.join(parquet_dir_path, file))
-        cpus = max(1, int(mp.cpu_count() * 0.8))
-        # Default batch size for iter_batches() is 64k records
-        for data in pf.iter_batches(columns=column_list + ["jattr"]):
-            df = data.to_pandas()
-            res_list = self.multi_parsing(
-                df.to_dict(orient="records"),
-                self.process_row,
-                cpus,
-                *[column_list, jattr_list],
-                shuffle=False,
-            )
-            mongo = pm.MongoClient(settings.MONGO_URI)
-            db = mongo["sradb"]
-            for meta_list in res_list:
-                if meta_list:
-                    db["sradb_temp"].insert_many(meta_list)
-            mongo.close()
 
     def finish_mongo(self):
         mongo = pm.MongoClient(settings.MONGO_URI)
@@ -229,92 +147,31 @@ class Command(BaseCommand):
         )
         LOGGER.info(f"{acc_count} acc documents imported to mongoDB collection")
         LOGGER.debug(
-            f"MongoDB size is {total_size} bytes, average document size is {avg_doc_size} bytes"
+            f"MongoDB size is {total_size} bytes ({total_size/1024.0**3} GB), average document size is {avg_doc_size} bytes"
         )
         mongo.close()
 
-    def multi_parsing(self, data_list, parseFunction, threads, *argv, shuffle=True):
-        ## shared data
-        total, res_map, res_list = len(data_list), list(), mp.Manager().list()
-        split, rest = max(total // threads, 1), total % threads
-        if threads > 1 and threads > total:
-            in_split = [(s, s + 1) for s in range(0, total)]
-        elif threads > 1:
-            in_split = [
-                (s + 1 * i, s + split + 1 * (i + 1))
-                if i < rest
-                else (s + rest, s + split + rest)
-                for i, s in enumerate(range(0, total - rest, split))
-            ]
-        else:
-            in_split = [(0, total)]
-        if shuffle:
-            random.shuffle(data_list)
-        for run, (i, j) in enumerate(in_split, 1):
-            p = mp.Process(
-                target=parseFunction, args=(data_list[i:j], run, split, res_list, *argv)
-            )
-            res_map.append(p)
-            p.start()
-        for res in res_map:
-            res.join()
-        return res_list
+    # TODO: check if we really need to do this. Currently I'm not, and I also
+    # get a lot of None columns in my jattr columns. Not sure if that is the
+    # cause.
+    # def cleanup_jattr_field_names(self, names):
+    #     cleaned_dict = {
+    #         re.sub(r"_sam_s_dpl34|_sam", "", k): v for k, v in jattr_dict.items()
+    #     }
 
-    def process_row(self, attr_list, run, split, res_list, column_list, jattr_list):
-        new_attr = list()
-        for it, attr_dict in enumerate(attr_list):
-            # if int(it*10000/split) % 10 == 0 and int(it*100/split) != 0:
-            #    self.stdout.write(self.style.SUCCESS(f"Processing {run:>2d} ... {it*100/split:>4.1f} %             ", end="\r"))
-            column_dict = {c: attr_dict[c] for c in column_list}
-            jattr_dict = self.process_jattr(attr_dict["jattr"], jattr_list)
-            meta_dict = {**column_dict, **jattr_dict}
-            meta_dict = {k: self.process_value(v) for k, v in meta_dict.items()}
-            meta_dict["biosample_link"] = (
-                f"https://www.ncbi.nlm.nih.gov/biosample/{meta_dict.get('biosample', '')}"
-            )
-            meta_dict["sra_link"] = (
-                f"https://www.ncbi.nlm.nih.gov/sra/{meta_dict.get('acc', '')}"
-            )
-            meta_dict["_id"] = meta_dict["acc"]
-            if meta_dict["librarysource"] == "METAGENOMIC":
-                new_attr.append(meta_dict)
-        res_list.append(new_attr)
-
-    def process_value(self, v):
-        if isinstance(v, list) and not len(v):
-            return "NP"
-        if isinstance(v, list):
-            return v
-        elif isinstance(v, np.ndarray) and not len(v):
-            return "NP"
-        elif isinstance(v, np.ndarray):
-            return v.tolist()
-        elif isinstance(v, float) and v.is_integer():
-            return int(v)
-        elif isinstance(v, date):
-            return str(v)
-        elif pd.isna(v):
-            return "NP"
-        else:
-            return v
-
-    def process_jattr(self, jattr_str, jattr_list):
-        jattr_dict = json.loads(jattr_str)
-        cleaned_dict = {
-            re.sub(r"_sam_s_dpl34|_sam", "", k): v for k, v in jattr_dict.items()
-        }
-        lalo = cleaned_dict.get("lat_lon", "NP")
-        NS, EW = {"N": 1, "S": -1}, {"W": -1, "E": 1}
-        match = re.search(r"(\d+(\.\d+)?) ([NS]) (\d+(\.\d+)?) ([EW])", lalo)
-        if match:
-            lat = float(match.group(1)) * NS.get(match.group(3), 1)
-            lon = float(match.group(4)) * EW.get(match.group(6), 1)
-            cleaned_dict["lat_lon"] = [lat, lon]
-        else:
-            cleaned_dict["lat_lon"] = "NP"
-        extracted_values = {key: cleaned_dict.get(key, "NP") for key in jattr_list}
-        return extracted_values
+    # TODO: see if we want to reuse some if this. The lat_lon field needs to be
+    # processed or else we will have problems when showing the results table.
+    # def parse_lat_lon(self, lat_lon):
+    #     lalo = cleaned_dict.get("lat_lon", "NP")
+    #     NS, EW = {"N": 1, "S": -1}, {"W": -1, "E": 1}
+    #     match = re.search(r"(\d+(\.\d+)?) ([NS]) (\d+(\.\d+)?) ([EW])", lalo)
+    #     if match:
+    #         lat = float(match.group(1)) * NS.get(match.group(3), 1)
+    #         lon = float(match.group(4)) * EW.get(match.group(6), 1)
+    #         cleaned_dict["lat_lon"] = [lat, lon]
+    #     else:
+    #         cleaned_dict["lat_lon"] = "NP"
 
     def set_initial_flag(self):
-        init_flag = Path(settings.DATA_DIR) / "SRA" / "metadata" / "initial_setup.txt"
+        init_flag = settings.DATA_DIR / "SRA" / "metadata" / "initial_setup.txt"
         init_flag.touch()
