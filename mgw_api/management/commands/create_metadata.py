@@ -21,6 +21,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Do not process the downloaded SRA data and load it into the mongodb",
         )
+        parser.add_argument(
+            "--drop-first",
+            action="store_true",
+            help="Drop the old metadata collection before creating the new one (usually not recommended, but necessary in low space situations)",
+        )
 
     def handle(self, *args, **kwargs):
         try:
@@ -83,6 +88,7 @@ class Command(BaseCommand):
             "s3://sra-pub-metadata-us-east-1/sra/metadata/",
             parquet_dir,
             "--no-sign-request",
+            "--delete",
         ]
         result = subprocess.Popen(
             command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
@@ -151,6 +157,7 @@ class Command(BaseCommand):
         )
         mongo.close()
 
+
     # TODO: check if we really need to do this. Currently I'm not, and I also
     # get a lot of None columns in my jattr columns. Not sure if that is the
     # cause.
@@ -171,6 +178,7 @@ class Command(BaseCommand):
     #         cleaned_dict["lat_lon"] = [lat, lon]
     #     else:
     #         cleaned_dict["lat_lon"] = "NP"
+
 
     def set_initial_flag(self):
         init_flag = settings.DATA_DIR / "SRA" / "metadata" / "initial_setup.txt"
