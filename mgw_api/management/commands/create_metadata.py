@@ -32,10 +32,16 @@ class Command(BaseCommand):
             LOGGER.info("Starting metadata update")
             download = not kwargs["no_download"]
             process = not kwargs["no_process"]
+            drop_first = kwargs["drop_first"]
 
             database = "SRA"
             metadata_dir = settings.DATA_DIR / database / "metadata" / "parquet"
             metadata_dir.mkdir(parents=True, exist_ok=True)
+
+            if drop_first:
+                LOGGER.info("Dropping existing mongodb collections")
+                self.drop_mongo_collection("sradb_list")
+                self.drop_mongo_collection("sradb_temp")
 
             if download:
                 self.download_sra(metadata_dir)
@@ -157,7 +163,6 @@ class Command(BaseCommand):
         )
         mongo.close()
 
-
     # TODO: check if we really need to do this. Currently I'm not, and I also
     # get a lot of None columns in my jattr columns. Not sure if that is the
     # cause.
@@ -178,7 +183,6 @@ class Command(BaseCommand):
     #         cleaned_dict["lat_lon"] = [lat, lon]
     #     else:
     #         cleaned_dict["lat_lon"] = "NP"
-
 
     def set_initial_flag(self):
         init_flag = settings.DATA_DIR / "SRA" / "metadata" / "initial_setup.txt"
