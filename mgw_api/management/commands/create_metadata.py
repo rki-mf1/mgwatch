@@ -128,7 +128,7 @@ class Command(BaseCommand):
             # Unnest to split struct into separate columns
             sra_unnested = sra_df.unnest("jattr_decoded")
             # Duplicate the acc column and set it to mongodb's special _id field
-            sra_df.with_columns([pl.col("acc").alias("_id")])
+            sra_unnested = sra_unnested.with_columns([pl.col("acc").alias("_id")])
             sra_dict = sra_unnested.to_dicts()
 
             mongo = pm.MongoClient(settings.MONGO_URI)
@@ -159,7 +159,7 @@ class Command(BaseCommand):
         )
         LOGGER.info(f"{acc_count} acc documents imported to mongoDB collection")
         LOGGER.debug(
-            f"MongoDB size is {total_size} bytes ({total_size/1024.0**3} GB), average document size is {avg_doc_size} bytes"
+            f"MongoDB size is {total_size} bytes ({total_size/1024.0**3:.2f} GB), average document size is {avg_doc_size} bytes"
         )
         mongo.close()
 

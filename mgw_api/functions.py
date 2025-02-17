@@ -246,6 +246,9 @@ def get_sra_fields(sra_accessions, fields):
     query = {"_id": {"$in": sra_accessions}}
     results = list(collection.find(query))
     if len(results) == 0:
+        LOGGER.info(
+            "No SRA accessions found in the metadata mongodb. Returning an empty metadata set."
+        )
         # Return a dataframe with just the ID column we can't find anything in
         # the mongodb
         empty_df = pd.DataFrame.from_dict({"sra_accession": sra_accessions})
