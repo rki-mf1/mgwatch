@@ -19,6 +19,18 @@ from mgw.settings import LOGGER
 
 
 class Command(BaseCommand):
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--ids",
+            nargs="+",
+            help="Only download signatures for these specific SRA IDs",
+        )
+        parser.add_argument(
+            "--retry-failed",
+            action="store_true",
+            help="Ignore the list of IDs that have failed to download in the past",
+        )
+
     def handle(self, *args, **kwargs):
         try:
             # URL for a sample that we know is in wort. This is for the example
@@ -37,41 +49,42 @@ class Command(BaseCommand):
             today = today.strftime("%Y-%m-%d")
             start_date = today if settings.START_DATE == "auto" else settings.START_DATE
             end_date = today if settings.START_DATE == "auto" else settings.END_DATE
-            manifest = os.path.join(
-                settings.DATA_DIR, database, "metagenomes", "manifest.pcl"
-            )
-            man_succ = os.path.join(
-                settings.DATA_DIR, database, "metagenomes", "update_successful.pcl"
-            )
-            man_fail = os.path.join(
-                settings.DATA_DIR, database, "metagenomes", "update_failed.pcl"
-            )
+            metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
+            manifest = metagenomes_dir / "manifest.pcl"
+            man_succ = metagenomes_dir / "update_successful.pcl"
+            man_fail = metagenomes_dir / "update_failed.pcl"
             dir_paths = self.handle_dirs(
                 database, ["updates", "index", "signatures", "failed", "manifests"]
             )
-            mani_list = self.get_manifest(manifest)
-            LOGGER.info(
-                f"There are currently {len(mani_list)} IDs in the index manifest."
-            )
-            if not mani_list and not settings.INDEX_FROM_SCRATCH:
-                LOGGER.error(
-                    "There is no index available and creating one from scratch is disabled."
+            if kwargs["ids"]:
+                LOGGER.info(
+                    "Only downloading signatures for specific IDs, as requested ..."
                 )
-                raise Exception(
-                    "There is no index available and creating one from scratch is disabled."
+                missing_IDs = set(kwargs["ids"])
+                LOGGER.info(f"Number of missing IDs: {len(missing_IDs)}")
+            else:
+                mani_list = self.get_manifest(manifest)
+                if not mani_list and not settings.INDEX_FROM_SCRATCH:
+                    LOGGER.error(
+                        "There is no index available and creating one from scratch is disabled."
+                    )
+                    raise Exception(
+                        "There is no index available and creating one from scratch is disabled."
+                    )
+                mongo_IDs = self.get_mongoIDs(start_date, end_date)
+                missing_IDs = set(mongo_IDs) - set(mani_list)
+                LOGGER.info(
+                    f"There are currently {len(missing_IDs)} IDs that are not in the index manifest."
                 )
-            mongo_IDs = self.get_mongoIDs(start_date, end_date)
-            LOGGER.info(
-                f"There are currently {len(mongo_IDs)} IDs in the mongoDB between {start_date} and {end_date}."
-            )
-            missing_IDs = set(mongo_IDs) - set(mani_list)
-            LOGGER.info(
-                f"There are currently {len(missing_IDs)} IDs that are not in the index manifest."
-            )
-            print(f"missing IDs: {len(missing_IDs)}")
-            LOGGER.info("Running SRA downloads ...")
+
+            retry_failed = kwargs["retry_failed"] or not settings.WORT_SKIP_FAILED
             self.download_from_wort(
-                dir_paths, missing_IDs, man_succ, man_fail, timeout_seconds
+                dir_paths,
+                missing_IDs,
+                man_succ,
+                man_fail,
+                timeout_seconds,
+                retry_failed,
             )
             LOGGER.info("Creating downloads finished.")
         except Exception as e:
@@ -109,6 +122,7 @@ class Command(BaseCommand):
         else:
             with open(manifest, "rb") as pcl_in:
                 mani_list = pickle.load(pcl_in)
+        LOGGER.info(f"There are currently {len(mani_list)} IDs in the index manifest.")
         return mani_list
 
     def get_last_index(self, dir_paths):
@@ -143,20 +157,29 @@ class Command(BaseCommand):
         ids = collection.find(query, {"_id": 1})
         mongo_IDs = [doc["_id"] for doc in ids]
         mongo.close()
+        LOGGER.info(
+            f"There are currently {len(mongo_IDs)} IDs in the mongoDB between {start_date} and {end_date}."
+        )
         return mongo_IDs
 
     def download_from_wort(
-        self, dir_paths, SRA_IDs, man_succ, man_fail, timeout_seconds
+        self,
+        dir_paths,
+        SRA_IDs,
+        man_succ,
+        man_fail,
+        timeout_seconds,
+        retry_failed=False,
     ):
         IDs_succ = self.load_pickle(man_succ) if os.path.exists(man_succ) else set()
         IDs_fail = self.load_pickle(man_fail) if os.path.exists(man_fail) else set()
         SRA_IDs = SRA_IDs - IDs_succ
-        if settings.WORT_SKIP_FAILED:
+        if not retry_failed:
             SRA_IDs = list(SRA_IDs - IDs_fail)
         if settings.MAX_DOWNLOADS and settings.MAX_DOWNLOADS < len(SRA_IDs):
             SRA_IDs = SRA_IDs[: settings.MAX_DOWNLOADS]
         slen = len(SRA_IDs)
-        for i, SRA_ID in enumerate(SRA_IDs):
+        for i, SRA_ID in enumerate(SRA_IDs, start=1):
             LOGGER.info(f"... {i} of {slen} ID {SRA_ID} ...")
             attempts, success = 0, False
             while not success:

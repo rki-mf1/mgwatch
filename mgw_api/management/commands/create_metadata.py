@@ -1,4 +1,4 @@
-# mgw_api/management/commands/create_metadata.py
+import pickle
 import subprocess
 
 import polars as pl
@@ -26,6 +26,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Drop the old metadata collection before creating the new one (usually not recommended, but necessary in low space situations)",
         )
+        parser.add_argument(
+            "--indexed-only",
+            action="store_true",
+            help="Only save metadata for sequences that are already in the search index",
+        )
 
     def handle(self, *args, **kwargs):
         try:
@@ -33,6 +38,7 @@ class Command(BaseCommand):
             download = not kwargs["no_download"]
             process = not kwargs["no_process"]
             drop_first = kwargs["drop_first"]
+            indexed_only = kwargs["indexed_only"]
 
             database = "SRA"
             metadata_dir = settings.DATA_DIR / database / "metadata" / "parquet"
@@ -49,7 +55,7 @@ class Command(BaseCommand):
                 LOGGER.info("Skip downloading of new SRA metadata")
 
             if process:
-                self.import_parquet(metadata_dir)
+                self.import_parquet(metadata_dir, indexed_only)
             else:
                 LOGGER.info("Skip importing SRA metadata files into mongodb")
 
@@ -105,19 +111,39 @@ class Command(BaseCommand):
         else:
             LOGGER.error(f"Download metadata failed with error {stderr}")
 
-    def import_parquet(self, parquet_dir):
+    def import_parquet(self, parquet_dir, indexed_only=None):
         self.drop_mongo_collection("sradb_temp")
         column_list, jattr_dtypes, allowed_librarysources = self.get_filter_data()
+
+        indexed_ids = None
+        if indexed_only:
+            database = "SRA"
+            indexed_ids_file = (
+                settings.DATA_DIR / database / "metadata" / "manifest.pcl"
+            )
+            if indexed_ids_file.exists():
+                try:
+                    indexed_ids = pickle.load(indexed_ids_file)
+                except Exception as e:
+                    LOGGER.warning(
+                        f"Could not load indexed SRA ids file ({indexed_ids_file}). Skipping filtering using those ids. {e}"
+                    )
 
         # scan_parquet() can handle the whole directory of files at once, but
         # memory usage goes crazy. For now we just import one file at a time.
         for file_num, parquet_file in enumerate(parquet_dir.glob("*")):
             LOGGER.info(f"Processing SRA parquet file {file_num}: {parquet_file.name}")
             df = pl.scan_parquet(parquet_file)
+            sra_lf = df.filter(
+                pl.col("librarysource").is_in(allowed_librarysources)
+            ).select(column_list + ["jattr"])
+
+            # Only filter by accessions if we actually have a set of ids to filter by
+            if indexed_ids:
+                sra_lf = sra_lf.filter(pl.col("acc").is_in(indexed_ids))
+
             sra_df = (
-                df.filter(pl.col("librarysource").is_in(allowed_librarysources))
-                .select(column_list + ["jattr"])
-                .collect()
+                sra_lf.collect()
                 .with_columns(
                     pl.col(pl.Date).cast(pl.Datetime)
                 )  # Cast all date columns to datetime to keep mongodb happy
