@@ -119,15 +119,18 @@ class Command(BaseCommand):
         if indexed_only:
             database = "SRA"
             indexed_ids_file = (
-                settings.DATA_DIR / database / "metadata" / "manifest.pcl"
+                settings.DATA_DIR / database / "metagenomes" / "manifest.pcl"
             )
             if indexed_ids_file.exists():
                 try:
-                    indexed_ids = pickle.load(indexed_ids_file)
+                    with open(indexed_ids_file, "rb") as f:
+                        indexed_ids = pickle.load(f)
                 except Exception as e:
                     LOGGER.warning(
                         f"Could not load indexed SRA ids file ({indexed_ids_file}). Skipping filtering using those ids. {e}"
                     )
+            else:
+                LOGGER.warning(f"File not found: {indexed_ids_file}")
 
         # scan_parquet() can handle the whole directory of files at once, but
         # memory usage goes crazy. For now we just import one file at a time.
@@ -178,10 +181,12 @@ class Command(BaseCommand):
                 )  # assign acc to the special mongodb _id field
             )
 
-            mongo = pm.MongoClient(settings.MONGO_URI)
-            db = mongo["sradb"]
-            db["sradb_temp"].insert_many(sra_df.to_dicts())
-            mongo.close()
+            # Only insert data if there is some to insert
+            if sra_df.height > 0:
+                mongo = pm.MongoClient(settings.MONGO_URI)
+                db = mongo["sradb"]
+                db["sradb_temp"].insert_many(sra_df.to_dicts())
+                mongo.close()
 
         self.drop_mongo_collection("sradb_list")
         self.finish_mongo()
