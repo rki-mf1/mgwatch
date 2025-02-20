@@ -56,14 +56,14 @@ class Command(BaseCommand):
             dir_paths = self.handle_dirs(
                 database, ["updates", "index", "signatures", "failed", "manifests"]
             )
+            mani_list = set(self.get_manifest(manifest))
             if kwargs["ids"]:
                 LOGGER.info(
                     "Only downloading signatures for specific IDs, as requested ..."
                 )
-                missing_IDs = set(kwargs["ids"])
+                missing_IDs = set(kwargs["ids"]) - mani_list
                 LOGGER.info(f"Number of missing IDs: {len(missing_IDs)}")
             else:
-                mani_list = self.get_manifest(manifest)
                 if not mani_list and not settings.INDEX_FROM_SCRATCH:
                     LOGGER.error(
                         "There is no index available and creating one from scratch is disabled."
@@ -171,8 +171,8 @@ class Command(BaseCommand):
         timeout_seconds,
         retry_failed=False,
     ):
-        IDs_succ = self.load_pickle(man_succ) if os.path.exists(man_succ) else set()
-        IDs_fail = self.load_pickle(man_fail) if os.path.exists(man_fail) else set()
+        IDs_succ = self.load_pickle(man_succ) if man_succ.exists() else set()
+        IDs_fail = self.load_pickle(man_fail) if man_fail.exists() else set()
         SRA_IDs = SRA_IDs - IDs_succ
         if not retry_failed:
             SRA_IDs = list(SRA_IDs - IDs_fail)
