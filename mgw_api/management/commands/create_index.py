@@ -1,4 +1,3 @@
-# mgw_api/management/commands/create_index.py
 import glob
 import multiprocessing as mp
 import os
@@ -29,7 +28,7 @@ class Command(BaseCommand):
             LOGGER.debug(f"Already in most recent index: {last_sig_files}")
             new_sig_files = self.check_updates(dir_paths)
             LOGGER.debug(
-                f"Will be added to the above and index rebuilt: {last_sig_files}"
+                f"Will be added to the above and index rebuilt: {new_sig_files}"
             )
             if new_sig_files:
                 sig_files = last_sig_files + new_sig_files
@@ -151,6 +150,9 @@ class Command(BaseCommand):
             idx,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
+        LOGGER.debug(
+            f"sourmash branchwater index building output:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
         return result.returncode  # returncode: 0 = success, anything else = fail
 
     def move_files(self, file_list, dir_paths, target_dir):

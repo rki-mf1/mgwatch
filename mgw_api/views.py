@@ -335,6 +335,18 @@ def result_table(request, pk):
     else:
         # handle result table
         result = get_object_or_404(Result, pk=pk, user=request.user)
+        watch_form = WatchForm(instance=result)
+        # Immediately stop if the search result set is empty
+        if result.size == 0:
+            return render(
+                request,
+                "mgw_api/result_table.html",
+                {
+                    "result": result,
+                    "watch_form": watch_form,
+                },
+            )
+
         branchwater_results = get_branchwater_table(
             result, max_rows=settings.MAX_SEARCH_RESULTS
         )
@@ -370,7 +382,6 @@ def result_table(request, pk):
                 elif value is not None:
                     rows = apply_regex(rows, column, value)
 
-        watch_form = WatchForm(instance=result)
         filter_form = FilterSettingForm(instance=filter_settings)
 
         if request.headers.get("x-requested-with") == "XMLHttpRequest":

@@ -20,80 +20,84 @@
         <a href="{% url 'mgw_api:download_filtered_table' result.pk %}">Download (filtered)</a>
         <a href="{% url 'mgw_api:delete_result' result.pk %}?next={% url 'mgw_api:result_table' result.pk %}">Delete this Result</a>
     </div>
-    <div class="result-table">
-        <div class="table-wrapper">
-            <table>
-                <thead id="table-head">
-                    <tr>
-                        {% for header in headers %}
-                            <th onclick="sortTable({{ forloop.counter0 }})">
-                                {{ header }}
-                                <span onclick="sortTable({{ forloop.counter0 }}); event.stopPropagation();">
-                                    {% if forloop.counter0 == sort_column %}
-                                        {% if sort_reverse %}
-                                            ▼
-                                        {% else %}
-                                            ▲
-                                        {% endif %}
-                                    {% else %}
-                                    {% endif %}
-                                </span>
-                            </th>
-                        {% endfor %}
-                    </tr>
-                    <tr>
-                        {% for header in headers %}
-                            <th>
-                                {% if forloop.counter0|in_list:numeric_columns %}
-                                    <input type="text"
-                                           class="filter-input-min"
-                                           placeholder="Min"
-                                           data-column="{{ forloop.counter0 }}"
-                                           value="{{ filter_form.instance.range_filters|get_min:forloop.counter0|default_if_none:'' }}"
-                                           title="Supports regular expressions if not a number">
-                                    <input type="text"
-                                           class="filter-input-max"
-                                           placeholder="Max"
-                                           data-column="{{ forloop.counter0 }}"
-                                           value="{{ filter_form.instance.range_filters|get_max:forloop.counter0|default_if_none:'' }}"
-                                           title="Supports regular expressions if not a number">
-                                {% else %}
-                                    <input type="text"
-                                           class="filter-input"
-                                           placeholder="Filter"
-                                           data-column="{{ forloop.counter0 }}"
-                                           value="{{ filter_form.instance.filters|get_item:forloop.counter0|default_if_none:'' }}"
-                                           title="Supports regular expressions">
-                                {% endif %}
-                            </th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody id="table-body">
-                    {% for row in rows %}
+    {% if not result.file %}
+        <p>This search found zero results. Try redoing the search with a lower containment threshold.</p>
+    {% else %}
+        <div class="result-table">
+            <div class="table-wrapper">
+                <table>
+                    <thead id="table-head">
                         <tr>
-                            {% for cell, header in row|zip_lists:headers %}
-                                <td>
-                                    {% if header == "sra link" or header == "biosample link" %}
-                                        <a href="{{ cell }}" target="_blank">{{ cell|last_part_of_url }}</a>
-                                    {% elif header == "containment" or header == "query containment ani" %}
-                                        {{ cell|floatformat:4 }}
-                                    {% elif header == "lat lon" %}
-                                        {% if cell != "NP" %}
-                                            <a href="https://www.openstreetmap.org/#map=12/{{ cell|lat_lon_for_osm }}">view map</a>
+                            {% for header in headers %}
+                                <th onclick="sortTable({{ forloop.counter0 }})">
+                                    {{ header }}
+                                    <span onclick="sortTable({{ forloop.counter0 }}); event.stopPropagation();">
+                                        {% if forloop.counter0 == sort_column %}
+                                            {% if sort_reverse %}
+                                                ▼
+                                            {% else %}
+                                                ▲
+                                            {% endif %}
+                                        {% else %}
                                         {% endif %}
-                                    {% elif cell == "NP" %}
-                                    {% else %}
-                                        {{ cell }}
-                                    {% endif %}
-                                </td>
+                                    </span>
+                                </th>
                             {% endfor %}
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        <tr>
+                            {% for header in headers %}
+                                <th>
+                                    {% if forloop.counter0|in_list:numeric_columns %}
+                                        <input type="text"
+                                               class="filter-input-min"
+                                               placeholder="Min"
+                                               data-column="{{ forloop.counter0 }}"
+                                               value="{{ filter_form.instance.range_filters|get_min:forloop.counter0|default_if_none:'' }}"
+                                               title="Supports regular expressions if not a number">
+                                        <input type="text"
+                                               class="filter-input-max"
+                                               placeholder="Max"
+                                               data-column="{{ forloop.counter0 }}"
+                                               value="{{ filter_form.instance.range_filters|get_max:forloop.counter0|default_if_none:'' }}"
+                                               title="Supports regular expressions if not a number">
+                                    {% else %}
+                                        <input type="text"
+                                               class="filter-input"
+                                               placeholder="Filter"
+                                               data-column="{{ forloop.counter0 }}"
+                                               value="{{ filter_form.instance.filters|get_item:forloop.counter0|default_if_none:'' }}"
+                                               title="Supports regular expressions">
+                                    {% endif %}
+                                </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        {% for row in rows %}
+                            <tr>
+                                {% for cell, header in row|zip_lists:headers %}
+                                    <td>
+                                        {% if header == "sra link" or header == "biosample link" %}
+                                            <a href="{{ cell }}" target="_blank">{{ cell|last_part_of_url }}</a>
+                                        {% elif header == "containment" or header == "query containment ani" %}
+                                            {{ cell|floatformat:4 }}
+                                        {% elif header == "lat lon" %}
+                                            {% if cell != "NP" %}
+                                                <a href="https://www.openstreetmap.org/#map=12/{{ cell|lat_lon_for_osm }}">view map</a>
+                                            {% endif %}
+                                        {% elif cell == "NP" %}
+                                        {% else %}
+                                            {{ cell }}
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </div>
+    {% endif %}
     <script>
     function handleError(message) {
         submissionMessageDiv.style.display = 'block';
@@ -119,6 +123,7 @@
         });
     }
 
+    {% if result.file %}
     document.querySelectorAll('.filter-input, .filter-input-min, .filter-input-max').forEach(function(input) {
         input.addEventListener('input', function() {
             const column = this.getAttribute('data-column');
@@ -235,5 +240,6 @@
             handleError(error.message);
         });
     }
+    {% endif %}
     </script>
 {% endblock content %}
