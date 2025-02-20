@@ -1,10 +1,10 @@
 # mgw_api/management/commands/create_signature.py
 
-import glob
 import os
 import subprocess
 from datetime import datetime
 from itertools import product
+from pathlib import Path
 
 import pandas as pd
 from django.conf import settings
@@ -39,16 +39,17 @@ class Command(BaseCommand):
             signature = Signature.objects.get(
                 user_id=user_id, name=name, submitted=True
             )
-            LOGGER.info(f"Searching signature {signature.name}.")
+            user_path = Path(signature.file.path).parent
+            date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
             file_list = []
             for k, db in product(kmer, database):
-                if db == "RKI" or k != "21":
+                LOGGER.info(f"Args: {db} {k}")
+                if db == "RKI" or str(k) != "21":
                     continue
-                date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-                for idx, index_path in enumerate(self.get_indices(k, db)):
-                    user_path = os.path.dirname(signature.file.path)
-                    result_file = os.path.join(
-                        user_path, f"result_{signature.name}.{db}-{k}-{idx}-{date}.csv"
+                indices = self.get_indices(k, db)
+                for idx, index_path in enumerate(indices):
+                    result_file = (
+                        user_path / f"result_{signature.name}.{db}-{k}-{idx}-{date}.csv"
                     )
                     result = self.search_index(
                         result_file, signature.file.path, index_path, k, containment
@@ -64,15 +65,14 @@ class Command(BaseCommand):
             combined_file = os.path.join(
                 user_path, f"result_{signature.name}.{date}.csv"
             )
-            self.combine_results(file_list, combined_file, signature.name)
+            not_empty = self.combine_results(file_list, combined_file, signature.name)
             # Save result to django model
             relative_path = os.path.relpath(combined_file, settings.MEDIA_ROOT)
-            self.stdout.write(self.style.SUCCESS(relative_path))
             result_model = Result(
                 user=signature.user, signature=signature, name=signature.name
             )
-            result_model.file.name = relative_path
-            result_model.size = result_model.file.size
+            result_model.file.name = relative_path if not_empty else None
+            result_model.size = result_model.file.size if not_empty else 0
             result_model.kmer = kmer
             result_model.database = database
             result_model.containment = containment
@@ -86,13 +86,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"RESULT_PK: {result_pk}"))
         except Exception as e:
             LOGGER.error(f"Error processing search '{signature.name}': {e}")
+            self.stdout.write(self.style.SUCCESS("RESULT_PK: failed"))
 
     def get_indices(self, k, db):
-        index_dir = os.path.join(settings.DATA_DIR, f"{db}", "metagenomes", "index")
-        new_files = glob.glob(
-            os.path.join(index_dir, f"wort-{db.lower()}-{k}-db*.rocksdb")
-        )
-        LOGGER.debug(f"Found new indexes: {new_files}")
+        index_dir = settings.DATA_DIR / db / "metagenomes" / "index"
+        new_files = list(index_dir.glob(f"wort-{db.lower()}-{k}-db*.rocksdb"))
+        LOGGER.info(f"Found new indexes: {new_files}")
         return new_files
 
     def search_index(self, result_file, sketch_file, index_path, k, containment):
@@ -114,11 +113,11 @@ class Command(BaseCommand):
             "--threshold",
             f"{containment}",
             "--output",
-            result_file,
-            sketch_file,
-            index_path,
+            str(result_file),
+            str(sketch_file),
+            str(index_path),
         ]
-        LOGGER.debug(f"Running search command: {' '.join(cmd)}")
+        LOGGER.info(f"Running search command: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True)
         return result
 
@@ -137,9 +136,10 @@ class Command(BaseCommand):
             read_files.append(df)
         if len(read_files) == 0:
             # TODO: not sure what to do if there are no results
-            return
+            return False
         combined_results = pd.concat(read_files, axis=0, ignore_index=True)
         combined_results.drop(columns="query_name", inplace=True)
         combined_results.insert(0, "query_name", query_name)
         sorted_results = combined_results.sort_values(by="containment", ascending=False)
         sorted_results.to_csv(combined_file)
+        return True

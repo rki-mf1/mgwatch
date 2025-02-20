@@ -114,7 +114,7 @@ def get_branchwater_table(result, max_rows=None):
         "containment",
         "containment_threshold",
     ]
-    LOGGER.info(f"Reading branchwater results file: {result.file.path}")
+    # LOGGER.info(f"Reading branchwater results file: {result.file.path}")
     branchwater_results = pd.read_csv(
         result.file.path, index_col="match_name", nrows=max_rows, dtype=data_types
     )
@@ -152,15 +152,18 @@ def apply_compare(modifier, rows, column, value):
 def run_create_signature_and_search(user_id, name, fasta_id, do_sketching):
     try:
         fasta = Fasta.objects.get(id=fasta_id)
-        LOGGER.info(f"TEST fasta id: {fasta_id}")
         if do_sketching:
+            LOGGER.info(f"Calling create_signature with args: {user_id} {name}")
             call_command("create_signature", user_id, name)
         output = io.StringIO()
+        LOGGER.info(
+            f"Calling create_search with args: user_id={user_id} name={name} False"
+        )
         call_command("create_search", user_id, name, "False", stdout=output)
         output.seek(0)
         match = re.search(r"RESULT_PK:\s*(\d+)", output.getvalue())
         result_pk = int(match.group(1)) if match else None
-        LOGGER.info(f"TEST result pk: {result_pk}")
+        LOGGER.info(f"Search Result pk: {result_pk}")
         if result_pk:
             fasta.result_pk = result_pk
             fasta.processed = True
