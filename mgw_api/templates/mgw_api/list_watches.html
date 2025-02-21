@@ -5,9 +5,9 @@
         <p>
             These are your watches, searches that have been saved and will be re-run automatically whenever new datasets are added to the search index used by MetagenomeWatch. If those automatic searches return new results, you will be informed via email.
         </p>
-        {% if signatures %}
+        {% if not signatures %}
             <div>
-                <mark>No watched searches were found. Go to the <a href="{% url 'mgw_api:upload_fasta' %}">search page</a> and upload a seqeunce to do a new search, then mark it as "watched" on the results page.</mark>
+                <mark>No watched searches were found. Go to the <a href="{% url 'mgw_api:upload_fasta' %}">search page</a> and upload a sequence to do a new search, then mark it as "watched" on the results page.</mark>
             </div>
         {% else %}
             <table class="result-list">
@@ -34,7 +34,7 @@
                                 <td>{{ result.kmer }}</td>
                                 <td>{{ result.database }}</td>
                                 <td>{{ result.containment }}</td>
-                                <td>{{ result.file.size|filesizeformat }}</td>
+                                <td>{{ result.size|filesizeformat }}</td>
                                 <td>
                                     <form id="watch-form-{{ result.pk }}"
                                           method="post"

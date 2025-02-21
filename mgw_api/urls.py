@@ -9,7 +9,7 @@ urlpatterns = [
     path("", views.upload_fasta, name="upload_fasta"),
     path("login/", views.user_login, name="login"),
     path("logout/", views.user_logout, name="logout"),
-    path("uploads/", views.upload_fasta, name="upload_fasta"),
+    path("search/", views.upload_fasta, name="upload_fasta"),
     path("signatures/", views.list_signature, name="list_signature"),
     path(
         "process_signature/<int:pk>/", views.process_signature, name="process_signature"
