@@ -1,8 +1,9 @@
-# mgw_api/models.py
-
+import gzip
+import io
 import re
 from datetime import datetime
 from functools import partial
+from pathlib import Path
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -12,22 +13,32 @@ from django.db import models
 from mgw.settings import LOGGER
 
 
-def validate_fasta_content(file):
+def validate_fasta_content(fieldfile):
     # check if first two lines are in fasta format
     try:
-        first_line = file.readline().decode("utf-8")
-        second_line = file.readline().decode("utf-8")
-        if not re.match(r"^>", first_line.strip()):
-            LOGGER.error(first_line.strip())
-            LOGGER.error(second_line.strip())
+        if Path(fieldfile.path).suffix == ".gz":
+            # Input file is gzipped. Might be in memory so we need to read
+            # the actual contents and decompress them
+            fasta = gzip.decompress(fieldfile.read()).decode("utf-8")
+            fasta_io = io.StringIO(fasta)
+
+            header = fasta_io.readline().strip()
+            seq = fasta_io.readline().strip()
+        else:
+            header = fieldfile.readline().decode("utf-8").strip()
+            seq = fieldfile.readline().decode("utf-8").strip()
+
+        # Do actual validation. This is not exhaustive, it's only checking the
+        # first couple of lines as a sanity check.
+        if not re.match(r"^>", header):
+            LOGGER.error(f"header: {header}")
+            LOGGER.error(f"seq: {seq}")
             raise ValidationError(
                 "File does not start with '>' character, invalid FASTA format."
             )
-        elif not re.match(
-            r"^[ACGTRYSWKMBDHVN.-]+$", second_line.strip(), flags=re.IGNORECASE
-        ):
-            LOGGER.error(first_line.strip())
-            LOGGER.error(second_line.strip())
+        elif not re.match(r"^[ACGTRYSWKMBDHVN.-]+$", seq, flags=re.IGNORECASE):
+            LOGGER.error(f"header: {header}")
+            LOGGER.error(f"seq: {seq}")
             raise ValidationError(
                 "Sequence contains non-IUPAC characters, invalid FASTA format."
             )
@@ -46,7 +57,7 @@ class Fasta(models.Model):
     file = models.FileField(
         upload_to=user_directory_path,
         validators=[
-            FileExtensionValidator(["fa", "fasta", "fsa", "fna", "FASTA"]),
+            FileExtensionValidator(["fa", "fasta", "fsa", "fna", "gz"]),
             validate_fasta_content,
         ],
     )
@@ -113,7 +124,7 @@ class Result(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
     signature = models.ForeignKey(Signature, on_delete=models.CASCADE)
-    file = models.FileField(upload_to=user_directory_path)
+    file = models.FileField(upload_to=user_directory_path, blank=True)
     size = models.IntegerField(default=0)
     kmer = models.JSONField(default=list)
     database = models.JSONField(default=list)

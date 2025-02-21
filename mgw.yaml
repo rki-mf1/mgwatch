@@ -22,5 +22,6 @@ dependencies:
   - conda-forge::gunicorn=23.0.0
   - conda-forge::python-ldap=3.4.3
   - conda-forge::curl=8.11.1
+  - conda-forge::polars=1.22.0
   - pip:
       - django-auth-ldap==5.0.0

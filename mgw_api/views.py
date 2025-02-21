@@ -9,48 +9,45 @@ import threading
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate
+from django.contrib.auth import login
+from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import HttpResponse
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.shortcuts import redirect
+from django.shortcuts import render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 # from .forms import UploadFileForm
 # from .models import Choice, Question
-from .forms import (
-    FastaForm,
-    FilterSettingForm,
-    LoginForm,
-    SettingsForm,
-    SignupForm,
-    WatchForm,
-)
-from .functions import (
-    apply_compare,
-    apply_regex,
-    get_metadata,
-    get_numeric_columns,
-    get_table_data,
-    human_sort_key,
-    is_float,
-    run_create_signature_and_search,
-)
-from .models import Fasta, FilterSetting, Result, Settings, Signature
+from .forms import FastaForm
+from .forms import FilterSettingForm
+from .forms import LoginForm
+from .forms import SettingsForm
+from .forms import WatchForm
+from .functions import add_sra_metadata
+from .functions import apply_compare
+from .functions import apply_regex
+from .functions import get_branchwater_table
+from .functions import get_metadata
+from .functions import get_numeric_columns_pandas
+from .functions import get_table_data
+from .functions import human_sort_key
+from .functions import is_float
+from .functions import prettify_column_names
+from .functions import reorder_result_columns_sra
+from .functions import run_create_signature_and_search
+from .models import Fasta
+from .models import FilterSetting
+from .models import Result
+from .models import Settings
+from .models import Signature
 
 ################################################################
 ## account management
-
-
-def user_signup(request):
-    if request.method == "POST":
-        form = SignupForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect("mgw_api:login")
-    else:
-        form = SignupForm()
-    return render(request, "mgw_api/signup.html", {"form": form})
 
 
 def user_login(request):
@@ -333,12 +330,12 @@ def toggle_watch(request, pk):
 
 @login_required
 def result_table(request, pk):
-    ## handle settings
+    # handle settings
     sourmash_settings, created = Settings.objects.get_or_create(user=request.user)
     settings_form = SettingsForm(instance=sourmash_settings)
 
     if request.method == "POST":
-        ## handle settings
+        # handle settings
         if (
             "kmer" in request.POST
             or "database" in request.POST
@@ -351,17 +348,44 @@ def result_table(request, pk):
             else:
                 messages.error(request, "Please correct the errors below.")
     else:
-        ## handle result table
+        # handle result table
         result = get_object_or_404(Result, pk=pk, user=request.user)
-        headers, rows = get_table_data(result, max_rows=settings.MAX_SEARCH_RESULTS)
-        headers, rows = get_metadata(headers, rows)
+        watch_form = WatchForm(instance=result)
+        # Immediately stop if the search result set is empty
+        if result.size == 0:
+            return render(
+                request,
+                "mgw_api/result_table.html",
+                {
+                    "result": result,
+                    "watch_form": watch_form,
+                },
+            )
 
-        headers = [h.replace("_", " ") for h in headers]
-        numeric_columns = get_numeric_columns(rows)
+        branchwater_results = get_branchwater_table(
+            result, max_rows=settings.MAX_SEARCH_RESULTS
+        )
+        results_with_metadata = add_sra_metadata(branchwater_results)
+        results_with_metadata = reorder_result_columns_sra(results_with_metadata)
+        results_with_metadata = prettify_column_names(results_with_metadata)
+        results_with_metadata.reset_index(inplace=True)
         filter_settings, created = FilterSetting.objects.get_or_create(
             result=result, user=request.user
         )
+        sort_column = filter_settings.sort_column
+        sort_reverse = filter_settings.sort_reverse
+        # results_with_metadata = results_with_metadata.sort_values(
+        #    by=sort_column,
+        #    ascending=not sort_reverse,
+        #    na_position="last",
+        # )
+        numeric_columns = get_numeric_columns_pandas(results_with_metadata)
 
+        # Convert from DataFrame to lists for serialization
+        headers = results_with_metadata.columns.tolist()
+        rows = results_with_metadata.values.tolist()
+
+        # FIXME: adapt filtering to pandas DataFrame
         for column, value in filter_settings.filters.items():
             rows = apply_regex(rows, column, value)
         for column, range_values in filter_settings.range_filters.items():
@@ -373,19 +397,6 @@ def result_table(request, pk):
                 elif value is not None:
                     rows = apply_regex(rows, column, value)
 
-        sort_column = filter_settings.sort_column
-        sort_reverse = filter_settings.sort_reverse
-        if sort_column is not None:
-            # Check if the sort column index is invalid, and if so reset it to 0
-            if int(sort_column) >= len(rows):
-                sort_column = 0
-            rows = sorted(
-                rows,
-                key=lambda x: human_sort_key(x[int(sort_column)]),
-                reverse=sort_reverse,
-            )
-
-        watch_form = WatchForm(instance=result)
         filter_form = FilterSettingForm(instance=filter_settings)
 
         if request.headers.get("x-requested-with") == "XMLHttpRequest":
