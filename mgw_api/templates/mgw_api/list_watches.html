@@ -1,0 +1,72 @@
+{% extends "mgw_api/base.html" %}
+{% block content %}
+    <div class="watch-list">
+        <h2>Watches</h2>
+        <p>
+            These are your watches, searches that have been saved and will be re-run automatically whenever new datasets are added to the search index used by MetagenomeWatch. If those automatic searches return new results, you will be informed via email.
+        </p>
+        {% if not watches %}
+            <div>
+                <mark>No watched searches were found. Go to the <a href="{% url 'mgw_api:upload_fasta' %}">search page</a> and upload a sequence to do a new search, then mark it as "watched" on the results page.</mark>
+            </div>
+        {% else %}
+            <table class="result-list">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Updated</th>
+                        <th>K-mers</th>
+                        <th>Databases</th>
+                        <th>Containment</th>
+                        <th>Size (KB)</th>
+                        <th>Watched</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for result in watches %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.name }}</a>
+                            </td>
+                            <td>{{ result.date }} {{ result.time|date:"H:i:s" }}</td>
+                            <td>{{ result.kmer }}</td>
+                            <td>{{ result.database }}</td>
+                            <td>{{ result.containment }}</td>
+                            <td>{{ result.size|filesizeformat }}</td>
+                            <td>
+                                <form id="watch-form-{{ result.pk }}"
+                                      method="post"
+                                      action="{% url 'mgw_api:toggle_watch' result.pk %}">
+                                    {% csrf_token %}
+                                    <input type="checkbox"
+                                           name="is_watched"
+                                           {% if result.is_watched %}checked{% endif %}
+                                           onchange="submitWatchForm({{ result.pk }})">
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button onClick="window.location.href=window.location.href">Refresh Watches</button>
+        {% endif %}
+    </div>
+    <script>
+    function submitWatchForm(resultId) {
+        const form = document.getElementById(`watch-form-${resultId}`);
+        const formData = new FormData(form);
+    
+        fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+            },
+            body: formData,
+        }).then(response => {
+            if (!response.ok) {
+                handleError('Failed to update the watch status.');
+            }
+        });
+    }
+    </script>
+{% endblock content %}
