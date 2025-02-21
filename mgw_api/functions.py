@@ -170,7 +170,7 @@ def run_create_signature_and_search(user_id, name, fasta_id, do_sketching):
             fasta.status = "Complete"
             fasta.save()
         else:
-            raise Exception("Search failed, result_pk is empty!")
+            raise Exception("Search failed.")
     except Exception as e:
         LOGGER.error(f"Error during background processing: {e}")
         fasta.status = f"Error: {e}"
