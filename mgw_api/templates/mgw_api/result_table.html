@@ -21,7 +21,9 @@
         <a href="{% url 'mgw_api:delete_result' result.pk %}?next={% url 'mgw_api:result_table' result.pk %}">Delete this Result</a>
     </div>
     {% if not result.file %}
-        <p>This search found zero results. Try redoing the search with a lower containment threshold.</p>
+        <div>
+            <mark>This search found zero results. Try redoing the search with a lower containment threshold.</mark>
+        </div>
     {% else %}
         <div class="result-table">
             <div class="table-wrapper">

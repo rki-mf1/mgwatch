@@ -1,38 +1,42 @@
 {% extends "mgw_api/base.html" %}
 {% block content %}
-    {% include "mgw_api/settings.html" %}
     <div class="signature-list" id="upload-section">
-        <h2>Genomes and Results</h2>
+        <h2>Search Results</h2>
+        <p>
+            This page shows all previous searches you have done, grouped by the search/sequence name. You can set any previous search to be a Watch by ticking the "Is watched?" checkbox.
+        </p>
         {% for signature in signatures %}
             <div class="signature-header">
                 <div class="signature-name">
-                    <h3>{{ signature.name }}</h3>
+                    <h3>Sequence name: {{ signature.name }}</h3>
                 </div>
                 <div class="signature-actions">
                     {% if not signature.result_set.exists %}
                         <a href="{% url 'mgw_api:delete_signature' signature.pk %}?next={% url 'mgw_api:list_result' %}"
                            class="delete-link">delete</a>
                     {% endif %}
-                    <form class="search-form"
-                          method="post"
-                          action="{% url 'mgw_api:list_result' %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="signature_id" value="{{ signature.pk }}">
-                        <button type="submit">search</button>
-                    </form>
+                    {% if False %}
+                        <form class="search-form"
+                              method="post"
+                              action="{% url 'mgw_api:list_result' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="signature_id" value="{{ signature.pk }}">
+                            <button type="submit">Update search</button>
+                        </form>
+                    {% endif %}
                 </div>
             </div>
             {% if signature.result_set.exists %}
+                Previous searches:
                 <table class="result-list">
                     <thead>
                         <tr>
-                            <th>Name</th>
                             <th>Date</th>
                             <th>K-mers</th>
                             <th>Databases</th>
                             <th>Containment</th>
                             <th>Size (KB)</th>
-                            <th>Watched</th>
+                            <th>Is watched?</th>
                             <th>Delete</th>
                         </tr>
                     </thead>
@@ -40,9 +44,8 @@
                         {% for result in signature.sorted_results.all %}
                             <tr>
                                 <td>
-                                    <a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.name }}</a>
+                                    <a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.date }} {{ result.time|date:"H:i:s" }}</a>
                                 </td>
-                                <td>{{ result.date }} {{ result.time|date:"H:i:s" }}</td>
                                 <td>{{ result.kmer }}</td>
                                 <td>{{ result.database }}</td>
                                 <td>{{ result.containment }}</td>
@@ -67,7 +70,9 @@
                 </table>
             {% endif %}
         {% empty %}
-            <div class="no-signatures">No signature files found.</div>
+            <div class="no-signatures">
+                <mark>No previous search results files found. Go to the <a href="{% url 'mgw_api:upload_fasta' %}">search page</a> and upload a seqeunce to do a new search.</mark>
+            </div>
         {% endfor %}
     </div>
     <div class="waiting-message" id="waiting-message" style="display: none;">
