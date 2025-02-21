@@ -19,7 +19,14 @@ class FastaForm(forms.ModelForm):
                     "style": "width: calc(100% - 0px); box-sizing: border-box; height: 40px; font-size: 16px; padding-left: 10px;",
                 }
             ),
-            "file": forms.FileInput(attrs={"accept": ".fa,.fasta,.fsa,.FASTA,.fna"}),
+            # This list of suffixes sets a filter on the extensions shown in
+            # the file picker, but the user can override this by selecting to
+            # view "All files" and the file will still be accepted/uploadable
+            "file": forms.FileInput(
+                attrs={
+                    "accept": ".fa,.fasta,.fsa,.FASTA,.fna,.fa.gz,.fasta.gz,.fsa.gz,.FASTA.gz,.fna.gz"
+                }
+            ),
         }
 
 
