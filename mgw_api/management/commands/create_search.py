@@ -132,7 +132,6 @@ class Command(BaseCommand):
                 continue
             df["k-mer"] = str(k)
             df["database"] = str(db)
-            df["containment_threshold"] = str(c)
             read_files.append(df)
         if len(read_files) == 0:
             # TODO: not sure what to do if there are no results

@@ -28,7 +28,6 @@ def get_metadata(headers, rows):
         "geo_loc_name_country_calc": 0,
         "lat_lon": 0,
         "organism": 0,
-        "containment_threshold": 1,
         "releasedate": 0,
         "librarysource": 0,
     }
@@ -112,7 +111,6 @@ def get_branchwater_table(result, max_rows=None):
     branchwater_columns_for_output = [
         "query_containment_ani",
         "containment",
-        "containment_threshold",
     ]
     # LOGGER.info(f"Reading branchwater results file: {result.file.path}")
     branchwater_results = pd.read_csv(
@@ -235,7 +233,6 @@ def reorder_result_columns_sra(df):
         "geo_loc_name_country_calc",
         "lat_lon",
         "organism",
-        "containment_threshold",
         "releasedate",
         "librarysource",
     ]

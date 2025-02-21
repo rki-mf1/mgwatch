@@ -2,7 +2,9 @@
 {% block content %}
     {% load custom_filters static %}
     <div class="result-navigation">
-        <h2>{{ result.name }}</h2>
+        <h2>Name: {{ result.name }}</h2>
+        <h3>Search settings</h3>
+        <p>Containment threshold: {{ result.containment }}</p>
         <a href="{% url 'mgw_api:list_result' %}">Back to Watches</a>
         <form id="watch-form"
               method="post"
