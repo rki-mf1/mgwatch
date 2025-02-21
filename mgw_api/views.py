@@ -130,7 +130,7 @@ def upload_fasta(request):
                         return JsonResponse(
                             {
                                 "success": True,
-                                "message": "File submission successful! Processing will happen in the background.",
+                                "message": "File submission successful. Processing will happen in the background.",
                                 "fasta_id": uploaded_file_instance.id,
                             }
                         )
@@ -138,7 +138,7 @@ def upload_fasta(request):
                     return JsonResponse(
                         {
                             "success": False,
-                            "error": f"Error: file submission failed! ... {e}",
+                            "error": f"Error: file submission failed. '{e}'",
                         }
                     )
             else:
@@ -209,10 +209,10 @@ def process_signature(request, pk):
             subprocess.Popen([sys.executable, manage_py_path, "create_search"])
             messages.success(
                 request,
-                "Signature submission successful! Processing will happen in the background.",
+                "Signature submission successful. Processing will happen in the background.",
             )
         except Exception as e:
-            messages.error(request, f"Error signature submission failed! ... {e}")
+            messages.error(request, f"Error signature submission failed. '{e}'")
     return redirect("mgw_api:list_signature")
 
 
@@ -289,7 +289,7 @@ def list_result(request):
                 return JsonResponse(
                     {
                         "success": True,
-                        "message": "Signature submission successful! Processing will happen in the background.",
+                        "message": "Signature submission successful. Processing will happen in the background.",
                         "fasta_id": fasta.id,
                     }
                 )
@@ -297,7 +297,7 @@ def list_result(request):
                 return JsonResponse(
                     {
                         "success": False,
-                        "error": f"Error: file submission failed! ... {e}",
+                        "error": f"Error: file submission failed. '{e}'",
                     }
                 )
     signatures = (
