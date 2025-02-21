@@ -20,7 +20,6 @@
                         <th>Containment</th>
                         <th>Size (KB)</th>
                         <th>Watched</th>
-                        <th>Delete</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -45,13 +44,28 @@
                                            onchange="submitWatchForm({{ result.pk }})">
                                 </form>
                             </td>
-                            <td>
-                                <a href="{% url 'mgw_api:delete_result' result.pk %}?next={% url 'mgw_api:list_result' %}">delete</a>
-                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
         {% endif %}
     </div>
+    <script>
+    function submitWatchForm(resultId) {
+        const form = document.getElementById(`watch-form-${resultId}`);
+        const formData = new FormData(form);
+    
+        fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+            },
+            body: formData,
+        }).then(response => {
+            if (!response.ok) {
+                handleError('Failed to update the watch status.');
+            }
+        });
+    }
+    </script>
 {% endblock content %}
