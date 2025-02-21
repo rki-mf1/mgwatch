@@ -2,6 +2,9 @@
 {% block content %}
     <div class="signature-list" id="upload-section">
         <h2>Search Results</h2>
+        <p>
+            This page shows all previous searches you have done, grouped by the search/sequence name. You can set any previous search to be a Watch by ticking the "Is watched?" checkbox.
+        </p>
         {% for signature in signatures %}
             <div class="signature-header">
                 <div class="signature-name">
@@ -12,13 +15,15 @@
                         <a href="{% url 'mgw_api:delete_signature' signature.pk %}?next={% url 'mgw_api:list_result' %}"
                            class="delete-link">delete</a>
                     {% endif %}
-                    <form class="search-form"
-                          method="post"
-                          action="{% url 'mgw_api:list_result' %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="signature_id" value="{{ signature.pk }}">
-                        <button type="submit">Update search</button>
-                    </form>
+                    {% if False %}
+                        <form class="search-form"
+                              method="post"
+                              action="{% url 'mgw_api:list_result' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="signature_id" value="{{ signature.pk }}">
+                            <button type="submit">Update search</button>
+                        </form>
+                    {% endif %}
                 </div>
             </div>
             {% if signature.result_set.exists %}
@@ -39,7 +44,7 @@
                         {% for result in signature.sorted_results.all %}
                             <tr>
                                 <td>
-                                    {{ result.date }}<a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.time|date:"H:i:s" }}</a>
+                                    <a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.date }} {{ result.time|date:"H:i:s" }}</a>
                                 </td>
                                 <td>{{ result.kmer }}</td>
                                 <td>{{ result.database }}</td>
