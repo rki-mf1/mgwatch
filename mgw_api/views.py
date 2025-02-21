@@ -242,16 +242,13 @@ def sourmash_settings(request):
 
 @login_required
 def list_watches(request):
-    signatures = (
-        Signature.objects.filter(user=request.user)
-        .prefetch_related("result_set")
-        .filter(result__is_watched=True)
-        .order_by("-date", "-time")
+    watches = Result.objects.filter(user=request.user, is_watched=True).order_by(
+        "-date", "-time"
     )
     return render(
         request,
         "mgw_api/list_watches.html",
-        {"signatures": signatures},
+        {"watches": watches},
     )
 
 
