@@ -32,6 +32,7 @@ done
 ./scripts/dc-dev.sh down --remove-orphans
 [[ BUILD_CONTAINER -eq 0 ]] && ./scripts/build-docker.sh
 ./scripts/dc-dev.sh up -d --force-recreate
+./scripts/dev-manage.sh collectstatic --no-input
 [[ CREATE_MIGRATIONS -eq 0 ]] && ./scripts/dev-manage.sh makemigrations
 [[ MIGRATE -eq 0 ]] && ./scripts/dev-manage.sh migrate
 [[ LOAD_DATA -eq 0 ]] && ./scripts/dev-load-fixtures.sh

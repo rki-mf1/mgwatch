@@ -1,11 +1,9 @@
-{% extends "mgw_api/base.html" %}
+{% extends "mgw_api/base_result.html" %}
 {% block content %}
     {% load custom_filters static %}
     <div class="result-navigation">
         <h2>Name: {{ result.name }}</h2>
-        <h3>Search settings</h3>
         <p>Containment threshold: {{ result.containment }}</p>
-        <a href="{% url 'mgw_api:list_result' %}">Back to Watches</a>
         <form id="watch-form"
               method="post"
               action="{% url 'mgw_api:toggle_watch' result.pk %}">
@@ -15,12 +13,9 @@
                        name="is_watched"
                        {% if result.is_watched %}checked{% endif %}
                        onchange="submitWatchForm()">
-                Watched
+                Watched?
             </label>
         </form>
-        <a href="{% url 'mgw_api:download_full_table' result.pk %}">Download (all)</a>
-        <a href="{% url 'mgw_api:download_filtered_table' result.pk %}">Download (filtered)</a>
-        <a href="{% url 'mgw_api:delete_result' result.pk %}?next={% url 'mgw_api:result_table' result.pk %}">Delete this Result</a>
     </div>
     {% if not result.file %}
         <div>
@@ -29,51 +24,10 @@
     {% else %}
         <div class="result-table">
             <div class="table-wrapper">
-                <table>
+                <table id="results" class="display">
                     <thead id="table-head">
                         <tr>
-                            {% for header in headers %}
-                                <th onclick="sortTable({{ forloop.counter0 }})">
-                                    {{ header }}
-                                    <span onclick="sortTable({{ forloop.counter0 }}); event.stopPropagation();">
-                                        {% if forloop.counter0 == sort_column %}
-                                            {% if sort_reverse %}
-                                                ▼
-                                            {% else %}
-                                                ▲
-                                            {% endif %}
-                                        {% else %}
-                                        {% endif %}
-                                    </span>
-                                </th>
-                            {% endfor %}
-                        </tr>
-                        <tr>
-                            {% for header in headers %}
-                                <th>
-                                    {% if forloop.counter0|in_list:numeric_columns %}
-                                        <input type="text"
-                                               class="filter-input-min"
-                                               placeholder="Min"
-                                               data-column="{{ forloop.counter0 }}"
-                                               value="{{ filter_form.instance.range_filters|get_min:forloop.counter0|default_if_none:'' }}"
-                                               title="Supports regular expressions if not a number">
-                                        <input type="text"
-                                               class="filter-input-max"
-                                               placeholder="Max"
-                                               data-column="{{ forloop.counter0 }}"
-                                               value="{{ filter_form.instance.range_filters|get_max:forloop.counter0|default_if_none:'' }}"
-                                               title="Supports regular expressions if not a number">
-                                    {% else %}
-                                        <input type="text"
-                                               class="filter-input"
-                                               placeholder="Filter"
-                                               data-column="{{ forloop.counter0 }}"
-                                               value="{{ filter_form.instance.filters|get_item:forloop.counter0|default_if_none:'' }}"
-                                               title="Supports regular expressions">
-                                    {% endif %}
-                                </th>
-                            {% endfor %}
+                            {% for header in headers %}<th>{{ header }}</th>{% endfor %}
                         </tr>
                     </thead>
                     <tbody id="table-body">
@@ -86,10 +40,10 @@
                                         {% elif header == "containment" or header == "query containment ani" %}
                                             {{ cell|floatformat:4 }}
                                         {% elif header == "lat lon" %}
-                                            {% if cell != "NP" %}
+                                            {% if cell != "None" %}
                                                 <a href="https://www.openstreetmap.org/#map=12/{{ cell|lat_lon_for_osm }}">view map</a>
                                             {% endif %}
-                                        {% elif cell == "NP" %}
+                                        {% elif cell == "None" %}
                                         {% else %}
                                             {{ cell }}
                                         {% endif %}
@@ -101,8 +55,31 @@
                 </table>
             </div>
         </div>
+        <div>
+            Download: <a href="{% url 'mgw_api:download_full_table' result.pk %}">all</a> or <a href="{% url 'mgw_api:download_filtered_table' result.pk %}">filtered</a>
+            <br>
+            <a href="{% url 'mgw_api:delete_result' result.pk %}?next={% url 'mgw_api:result_table' result.pk %}">Delete this Result</a>
+        </div>
     {% endif %}
     <script>
+    // Remove the defaults
+    DataTable.defaults.layout = {
+        topStart: null,
+        topEnd: null,
+        bottomStart: null,
+        bottomEnd: null
+    };
+    $(document).ready( function () {
+        $('#results').DataTable( {
+            order: [[7, 'desc']],
+            layout: {
+                topStart: 'info',
+                topEnd: 'search',
+                bottomEnd: ['pageLength', 'paging']
+            }
+        });
+    } );
+
     function handleError(message) {
         submissionMessageDiv.style.display = 'block';
         submissionMessageDiv.innerHTML = `<ul class="messages"><li class="error">An error occurred: ${message}</li></ul>`;
@@ -127,123 +104,5 @@
         });
     }
 
-    {% if result.file %}
-    document.querySelectorAll('.filter-input, .filter-input-min, .filter-input-max').forEach(function(input) {
-        input.addEventListener('input', function() {
-            const column = this.getAttribute('data-column');
-            const min_input = document.querySelector(`.filter-input-min[data-column='${column}']`);
-            const max_input = document.querySelector(`.filter-input-max[data-column='${column}']`);
-    
-            const min_value = min_input ? min_input.value : null;
-            const max_value = max_input ? max_input.value : null;
-            const value = !min_input && !max_input ? this.value : null;
-    
-            fetch("{% url 'mgw_api:update_filters' result.pk %}", {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': '{{ csrf_token }}',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ column: column, min_value: min_value, max_value: max_value, value: value })
-            }).then(response => {
-                if (response.ok) {
-                    reloadTableBody();
-                } else {
-                    handleError('Failed to update filter settings.');
-                }
-            }).catch(error => {
-                handleError(error.message);
-            });
-        });
-    });
-
-    let currentSortColumn = null;
-    let currentSortReverse = false;
-    function sortTable(column) {
-        if (currentSortColumn === column) {
-            currentSortReverse = !currentSortReverse;
-        } else {
-            currentSortColumn = column;
-            currentSortReverse = false;
-        }
-    
-        fetch("{% url 'mgw_api:update_sort' result.pk %}", {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ column: column, sort_reverse: currentSortReverse })
-        }).then(response => {
-            if (response.ok) {
-                response.json().then(data => {
-                    updateSortIcons(column, currentSortReverse);
-                    reloadTableBody();
-                });
-            } else {
-                handleError('Failed to update sort settings.');
-            }
-        }).catch(error => {
-            handleError(error.message);
-        });
-    }
-
-    function updateSortIcons(sortedColumn, sortReverse) {
-        const headers = document.querySelectorAll('#table-head th span');
-        headers.forEach((header, index) => {
-            if (index === sortedColumn) {
-                header.innerHTML = sortReverse ? '▼' : '▲';
-            } else {
-                header.innerHTML = ' ';
-            }
-        });
-    }
-
-    function reloadTableBody() {
-        fetch("{% url 'mgw_api:result_table' result.pk %}", {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        }).then(response => response.json()).then(data => {
-            const tableBody = document.getElementById('table-body');
-            tableBody.innerHTML = '';
-            data.rows.forEach(row => {
-                const rowElement = document.createElement('tr');
-                row.forEach((cell, index) => {
-                    const cellElement = document.createElement('td');
-                    const header = data.headers[index].toLowerCase();
-                    if (header === 'sra link' || header === 'biosample link') {
-                        const linkElement = document.createElement('a');
-                        linkElement.href = cell;
-                        linkElement.target = '_blank';
-                        linkElement.textContent = cell.split('/').pop();
-                        cellElement.appendChild(linkElement);
-                    } else if (header === 'containment' || header === 'query containment ani') {
-                        cellElement.textContent = parseFloat(cell).toFixed(4);
-                    } else if (header === 'lat lon') {
-                        if (cell !== 'NP') {
-                            const lat_lon = cell.replace(", ", "/");
-                            const osm_link = document.createElement('a');
-                            osm_link.href = 'https://www.openstreetmap.org/#map=12/' + lat_lon;
-                            osm_link.target = '_blank';
-                            osm_link.textContent = 'view map';
-                            cellElement.appendChild(osm_link);
-                        }
-                    } else if (cell === 'NP') {
-                        cellElement.textContent = '';
-                    } else {
-                        cellElement.textContent = cell;
-                    }
-                    rowElement.appendChild(cellElement);
-                });
-                tableBody.appendChild(rowElement);
-            });
-            createCountryAndLLMap(data);
-        }).catch(error => {
-            handleError(error.message);
-        });
-    }
-    {% endif %}
     </script>
 {% endblock content %}
