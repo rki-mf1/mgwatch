@@ -75,3 +75,28 @@ article>footer {
   border-radius: calc(var(--pico-border-radius) * 2);
   /* Original: var(--pico-border-radius) */
 }
+
+body>header {
+  padding-block: 0;
+}
+
+/* Datatable tweaks */
+div.dt-search > label {
+  display: inline;
+}
+div.dt-search > input {
+  width: inherit;
+  margin-bottom: 0px;
+}
+div.dt-length > label {
+  display: inline;
+}
+div.dt-length > select {
+  width: inherit;
+}
+.dt-column-order {
+  background-color: inherit;
+  border: 0;
+  color: inherit;
+  padding: 0;
+}
