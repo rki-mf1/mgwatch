@@ -29,6 +29,9 @@
                         <tr>
                             {% for header in headers %}<th>{{ header }}</th>{% endfor %}
                         </tr>
+                        <tr>
+                            {% for header in headers %}<th>{{ header }}</th>{% endfor %}
+                        </tr>
                     </thead>
                     <tbody id="table-body">
                         {% for row in rows %}
@@ -74,8 +77,28 @@
             order: [[7, 'desc']],
             layout: {
                 topStart: 'info',
-                topEnd: 'search',
                 bottomEnd: ['pageLength', 'paging']
+            },
+            orderCellsTop: true,
+            initComplete: function () {
+                this.api()
+                    .columns()
+                    .every(function () {
+                        let column = this;
+                        let title = column.header(1).textContent;
+
+                        // Create input element
+                        let input = document.createElement('input');
+                        input.placeholder = 'filter';
+                        column.header(1).replaceChildren(input);
+
+                        // Event listener for user input
+                        input.addEventListener('keyup', () => {
+                            if (column.search() !== this.value) {
+                                column.search(input.value).draw();
+                            }
+                        });
+                    });
             }
         });
     } );
