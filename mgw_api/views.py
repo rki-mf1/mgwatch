@@ -349,7 +349,7 @@ def result_table(request, pk):
         result = get_object_or_404(Result, pk=pk, user=request.user)
         watch_form = WatchForm(instance=result)
         # Immediately stop if the search result set is empty
-        if result.size == 0:
+        if result.num_results == 0:
             return render(
                 request,
                 "mgw_api/result_table.html",

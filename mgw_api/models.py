@@ -125,7 +125,7 @@ class Result(models.Model):
     name = models.CharField(max_length=100)
     signature = models.ForeignKey(Signature, on_delete=models.CASCADE)
     file = models.FileField(upload_to=user_directory_path, blank=True)
-    size = models.IntegerField(default=0)
+    num_results = models.PositiveIntegerField(default=0)
     kmer = models.JSONField(default=list)
     database = models.JSONField(default=list)
     containment = models.FloatField(default=0.10)
