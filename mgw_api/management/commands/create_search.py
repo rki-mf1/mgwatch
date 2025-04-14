@@ -65,14 +65,14 @@ class Command(BaseCommand):
             combined_file = os.path.join(
                 user_path, f"result_{signature.name}.{date}.csv"
             )
-            not_empty = self.combine_results(file_list, combined_file, signature.name)
+            num_results = self.combine_results(file_list, combined_file, signature.name)
             # Save result to django model
             relative_path = os.path.relpath(combined_file, settings.MEDIA_ROOT)
             result_model = Result(
                 user=signature.user, signature=signature, name=signature.name
             )
-            result_model.file.name = relative_path if not_empty else None
-            result_model.size = result_model.file.size if not_empty else 0
+            result_model.file.name = relative_path if num_results > 0 else None
+            result_model.num_results = num_results
             result_model.kmer = kmer
             result_model.database = database
             result_model.containment = containment
@@ -122,6 +122,7 @@ class Command(BaseCommand):
         return result
 
     def combine_results(self, file_list, combined_file, query_name):
+        """Returns the number of results"""
         read_files = []
         for k, db, c, filename in file_list:
             try:
@@ -134,11 +135,11 @@ class Command(BaseCommand):
             df["database"] = str(db)
             read_files.append(df)
         if len(read_files) == 0:
-            # TODO: not sure what to do if there are no results
-            return False
+            return 0
         combined_results = pd.concat(read_files, axis=0, ignore_index=True)
         combined_results.drop(columns="query_name", inplace=True)
         combined_results.insert(0, "query_name", query_name)
         sorted_results = combined_results.sort_values(by="containment", ascending=False)
         sorted_results.to_csv(combined_file)
-        return True
+        num_results = sorted_results.shape[0]
+        return num_results

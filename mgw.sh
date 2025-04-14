@@ -10,7 +10,7 @@ MIGRATE=1
 SHOW_LOGS=1
 LOAD_DATA=1
 
-while getopts "bcmlh" opt; do
+while getopts "bcmldh" opt; do
   case $opt in
     b) BUILD_CONTAINER=0 ;;
     c) CREATE_MIGRATIONS=0 ;;

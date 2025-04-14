@@ -18,7 +18,7 @@
                         <th>K-mers</th>
                         <th>Databases</th>
                         <th>Containment</th>
-                        <th>Size (KB)</th>
+                        <th># results</th>
                         <th>Watched</th>
                     </tr>
                 </thead>
@@ -32,7 +32,7 @@
                             <td>{{ result.kmer }}</td>
                             <td>{{ result.database }}</td>
                             <td>{{ result.containment }}</td>
-                            <td>{{ result.size|filesizeformat }}</td>
+                            <td>{{ result.num_results }}</td>
                             <td>
                                 <form id="watch-form-{{ result.pk }}"
                                       method="post"
