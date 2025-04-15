@@ -33,9 +33,9 @@ urlpatterns = [
     path(
         "download/full/<int:pk>/", views.download_full_table, name="download_full_table"
     ),
-    path(
-        "download/filtered/<int:pk>/",
-        views.download_filtered_table,
-        name="download_filtered_table",
-    ),
+    #path(
+    #    "download/filtered/<int:pk>/",
+    #    views.download_filtered_table,
+    #    name="download_filtered_table",
+    #),
 ]

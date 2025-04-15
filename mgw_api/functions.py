@@ -1,6 +1,5 @@
 # mgw_api/functions.py
 
-import csv
 import io
 import re
 
@@ -14,41 +13,6 @@ from mgw.settings import LOGGER
 from .models import Fasta
 
 
-def get_metadata(headers, rows):
-    # 0 = in the SRA mongodb database
-    # 1 = in the search result csv file
-    column_dict = {
-        "sra_link": 0,
-        "assay_type": 0,
-        "bioproject": 0,
-        "biosample_link": 0,
-        "query_containment_ani": 1,
-        "collection_date_sam": 0,
-        "containment": 1,
-        "geo_loc_name_country_calc": 0,
-        "lat_lon": 0,
-        "organism": 0,
-        "releasedate": 0,
-        "librarysource": 0,
-    }
-    mongo_df = search_mongodb(headers, rows)
-    csv_df = search_csv(headers, rows, column_dict)
-    combined_df = pd.DataFrame()
-    for column, in_csv in column_dict.items():
-        if in_csv == 1 and column in csv_df.columns:
-            combined_df[column] = csv_df[column]
-        elif in_csv == 0 and column in mongo_df.columns:
-            combined_df[column] = mongo_df[column]
-        else:
-            LOGGER.warning(
-                "Metadata column '%s' missing. Returning an empty string.", column
-            )
-            combined_df[column] = ""
-    new_headers = combined_df.columns.tolist()
-    new_rows = combined_df.values.tolist()
-    return new_headers, new_rows
-
-
 def search_mongodb(headers, rows):
     mongo = pm.MongoClient(settings.MONGO_URI)
     db = mongo["sradb"]
@@ -58,20 +22,6 @@ def search_mongodb(headers, rows):
     mongo_df = pd.DataFrame(list(collection.find(query)))
     mongo.close()
     return mongo_df.map(convert_to_string)
-
-
-def get_table_data(result, max_rows=None):
-    table_data = []
-    with open(result.file.path, newline="") as csvfile:
-        reader = csv.reader(csvfile)
-        # The first row is a header, we don't count it
-        n_rows = -1
-        for row in reader:
-            table_data.append(row)
-            n_rows += 1
-            if max_rows and n_rows >= max_rows:
-                break
-    return table_data[0], table_data[1:]
 
 
 def get_numeric_columns(rows):
@@ -285,3 +235,14 @@ def search_csv(headers, rows, column_dict):
     csv_df = csv_df.iloc[:, qidx]
     csv_df.columns = [headers[i] for i in csv_df.columns]
     return csv_df
+
+
+def get_results_with_metadata(result, max_results=None):
+    branchwater_results = get_branchwater_table(
+        result, max_rows=max_results
+    )
+    results_with_metadata = add_sra_metadata(branchwater_results)
+    results_with_metadata = reorder_result_columns_sra(results_with_metadata)
+    results_with_metadata = prettify_column_names(results_with_metadata)
+    results_with_metadata = results_with_metadata.reset_index()
+    return results_with_metadata
