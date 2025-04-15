@@ -238,9 +238,7 @@ def search_csv(headers, rows, column_dict):
 
 
 def get_results_with_metadata(result, max_results=None):
-    branchwater_results = get_branchwater_table(
-        result, max_rows=max_results
-    )
+    branchwater_results = get_branchwater_table(result, max_rows=max_results)
     results_with_metadata = add_sra_metadata(branchwater_results)
     results_with_metadata = reorder_result_columns_sra(results_with_metadata)
     results_with_metadata = prettify_column_names(results_with_metadata)

@@ -494,11 +494,11 @@ def download_full_table(request, pk):
 # @login_required
 # def download_filtered_table(request, pk):
 #     result = get_object_or_404(Result, pk=pk, user=request.user)
-# 
+#
 #     results_with_metadata = get_results_with_metadata(result)
 #     headers = results_with_metadata.columns.tolist()
 #     rows = results_with_metadata.values.tolist()
-# 
+#
 #     filter_settings = get_object_or_404(FilterSetting, result=result, user=request.user)
 #     for column, value in filter_settings.filters.items():
 #         rows = apply_regex(rows, column, value)
