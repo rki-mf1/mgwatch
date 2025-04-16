@@ -3,6 +3,7 @@
 import csv
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -21,24 +22,16 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-# from .forms import UploadFileForm
-# from .models import Choice, Question
 from .forms import FastaForm
 from .forms import FilterSettingForm
 from .forms import LoginForm
 from .forms import SettingsForm
 from .forms import WatchForm
-from .functions import add_sra_metadata
 from .functions import apply_compare
 from .functions import apply_regex
-from .functions import get_branchwater_table
-from .functions import get_metadata
 from .functions import get_numeric_columns_pandas
-from .functions import get_table_data
-from .functions import human_sort_key
+from .functions import get_results_with_metadata
 from .functions import is_float
-from .functions import prettify_column_names
-from .functions import reorder_result_columns_sra
 from .functions import run_create_signature_and_search
 from .models import Fasta
 from .models import FilterSetting
@@ -358,14 +351,9 @@ def result_table(request, pk):
                     "watch_form": watch_form,
                 },
             )
-
-        branchwater_results = get_branchwater_table(
-            result, max_rows=settings.MAX_SEARCH_RESULTS
+        results_with_metadata = get_results_with_metadata(
+            result, max_results=settings.MAX_SEARCH_RESULTS
         )
-        results_with_metadata = add_sra_metadata(branchwater_results)
-        results_with_metadata = reorder_result_columns_sra(results_with_metadata)
-        results_with_metadata = prettify_column_names(results_with_metadata)
-        results_with_metadata.reset_index(inplace=True)
         filter_settings, created = FilterSetting.objects.get_or_create(
             result=result, user=request.user
         )
@@ -486,9 +474,13 @@ def delete_result(request, pk):
 @login_required
 def download_full_table(request, pk):
     result = get_object_or_404(Result, pk=pk, user=request.user)
-    headers, rows = get_table_data(result)
-    headers, rows = get_metadata(headers, rows)
-    filename = f"{result.name}-MGwatch_complete.tsv".replace(" ", "_")
+
+    results_with_metadata = get_results_with_metadata(result)
+    headers = results_with_metadata.columns.tolist()
+    rows = results_with_metadata.values.tolist()
+
+    safe_name = re.sub("[^A-Za-z0-9]", "-", result.name)
+    filename = f"{safe_name}-mgwatch-full.tsv"
     response = HttpResponse(content_type="text/tab-separated-values")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     writer = csv.writer(response, delimiter="\t")
@@ -498,38 +490,43 @@ def download_full_table(request, pk):
     return response
 
 
-@login_required
-def download_filtered_table(request, pk):
-    result = get_object_or_404(Result, pk=pk, user=request.user)
-    headers, rows = get_table_data(result)
-    headers, rows = get_metadata(headers, rows)
-    filter_settings = get_object_or_404(FilterSetting, result=result, user=request.user)
-    for column, value in filter_settings.filters.items():
-        rows = apply_regex(rows, column, value)
-    for column, range_values in filter_settings.range_filters.items():
-        for m, value in zip([1, -1], range_values):
-            if value == "":
-                value = None
-            if is_float(value):
-                rows = [row for row in rows if apply_compare(m, row, column, value)]
-            elif value is not None:
-                rows = apply_regex(rows, column, value)
-    sort_column = filter_settings.sort_column
-    sort_reverse = filter_settings.sort_reverse
-    if sort_column is not None:
-        # Check if the sort column index is invalid, and if so reset it to 0
-        if int(sort_column) >= len(rows):
-            sort_column = 0
-        rows = sorted(
-            rows,
-            key=lambda x: human_sort_key(x[int(sort_column)]),
-            reverse=sort_reverse,
-        )
-    filename = f"{result.name}-MGwatch_filtered.tsv".replace(" ", "_")
-    response = HttpResponse(content_type="text/tab-separated-values")
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    writer = csv.writer(response, delimiter="\t")
-    writer.writerow(headers)
-    for row in rows:
-        writer.writerow(row)
-    return response
+# Temporarily disabled
+# @login_required
+# def download_filtered_table(request, pk):
+#     result = get_object_or_404(Result, pk=pk, user=request.user)
+#
+#     results_with_metadata = get_results_with_metadata(result)
+#     headers = results_with_metadata.columns.tolist()
+#     rows = results_with_metadata.values.tolist()
+#
+#     filter_settings = get_object_or_404(FilterSetting, result=result, user=request.user)
+#     for column, value in filter_settings.filters.items():
+#         rows = apply_regex(rows, column, value)
+#     for column, range_values in filter_settings.range_filters.items():
+#         for m, value in zip([1, -1], range_values):
+#             if value == "":
+#                 value = None
+#             if is_float(value):
+#                 rows = [row for row in rows if apply_compare(m, row, column, value)]
+#             elif value is not None:
+#                 rows = apply_regex(rows, column, value)
+#     sort_column = filter_settings.sort_column
+#     sort_reverse = filter_settings.sort_reverse
+#     if sort_column is not None:
+#         # Check if the sort column index is invalid, and if so reset it to 0
+#         if int(sort_column) >= len(rows):
+#             sort_column = 0
+#         rows = sorted(
+#             rows,
+#             key=lambda x: human_sort_key(x[int(sort_column)]),
+#             reverse=sort_reverse,
+#         )
+#     safe_name = re.sub("[^A-Za-z0-9]", "-", result.name)
+#     filename = f"{safe_name}-mgwatch-filtered.tsv"
+#     response = HttpResponse(content_type="text/tab-separated-values")
+#     response["Content-Disposition"] = f'attachment; filename="{filename}"'
+#     writer = csv.writer(response, delimiter="\t")
+#     writer.writerow(headers)
+#     for row in rows:
+#         writer.writerow(row)
+#     return response

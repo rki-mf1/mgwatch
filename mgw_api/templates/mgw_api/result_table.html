@@ -56,7 +56,7 @@
             </div>
         </div>
         <div>
-            Download: <a href="{% url 'mgw_api:download_full_table' result.pk %}">all</a> or <a href="{% url 'mgw_api:download_filtered_table' result.pk %}">filtered</a>
+            Download: <a href="{% url 'mgw_api:download_full_table' result.pk %}">full unfiltered results (.tsv format)</a>
             <br>
             <a href="{% url 'mgw_api:delete_result' result.pk %}?next={% url 'mgw_api:result_table' result.pk %}">Delete this Result</a>
         </div>
