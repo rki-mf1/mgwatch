@@ -3,6 +3,7 @@
 import io
 import re
 
+import numpy as np
 import pandas as pd
 import pymongo as pm
 from django.conf import settings
@@ -211,6 +212,8 @@ def get_sra_fields(sra_accessions, fields):
         )
     mongo.close()
     sra_metadata = pd.DataFrame(results)
+    pd.set_option("display.max_columns", None)
+    LOGGER.info(f"get_sra_fields: {sra_metadata}")
     sra_metadata.set_index("_id", inplace=True)
     sra_metadata.rename_axis("sra_accession", inplace=True)
     missing_columns = set(fields) - set(sra_metadata.columns)
@@ -219,14 +222,13 @@ def get_sra_fields(sra_accessions, fields):
             "Not all SRA metadata fields were found in the SRA mongodb. Returning the subset of columns that were found."
         )
         sra_metadata[list(missing_columns)] = ""
-    LOGGER.info(f"get_sra_fields: {sra_metadata}")
     return sra_metadata.map(convert_to_string)
 
 
 def convert_to_string(value):
     if isinstance(value, list):
         return ", ".join(map(str, value))
-    return str(value)
+    return value
 
 
 def search_csv(headers, rows, column_dict):

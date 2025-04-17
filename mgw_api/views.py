@@ -1,6 +1,5 @@
 # mgw_api/views.py
 
-import csv
 import json
 import os
 import re
@@ -474,19 +473,12 @@ def delete_result(request, pk):
 @login_required
 def download_full_table(request, pk):
     result = get_object_or_404(Result, pk=pk, user=request.user)
-
     results_with_metadata = get_results_with_metadata(result)
-    headers = results_with_metadata.columns.tolist()
-    rows = results_with_metadata.values.tolist()
-
     safe_name = re.sub("[^A-Za-z0-9]", "-", result.name)
     filename = f"{safe_name}-mgwatch-full.tsv"
     response = HttpResponse(content_type="text/tab-separated-values")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    writer = csv.writer(response, delimiter="\t")
-    writer.writerow(headers)
-    for row in rows:
-        writer.writerow(row)
+    results_with_metadata.to_csv(response, sep="\t", index=False)
     return response
 
 
