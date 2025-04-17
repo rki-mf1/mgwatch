@@ -353,6 +353,7 @@ def result_table(request, pk):
         results_with_metadata = get_results_with_metadata(
             result, max_results=settings.MAX_SEARCH_RESULTS
         )
+        results_with_metadata = results_with_metadata.fillna("")
         filter_settings, created = FilterSetting.objects.get_or_create(
             result=result, user=request.user
         )
