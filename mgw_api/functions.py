@@ -3,7 +3,6 @@
 import io
 import re
 
-import numpy as np
 import pandas as pd
 import pymongo as pm
 from django.conf import settings
