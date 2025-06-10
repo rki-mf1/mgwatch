@@ -151,10 +151,10 @@ def prettify_column_names(df):
 def add_sra_metadata(branchwater_results):
     branchwater_results.rename_axis("sra_accession", inplace=True)
     sra_columns = [
-        "sra_link",
+        "sra_accession",
+        "sra_bioproject",
+        "sra_biosample",
         "assay_type",
-        "bioproject",
-        "biosample_link",
         "collection_date_sam",
         "geo_loc_name_country_calc",
         "lat_lon",
@@ -165,6 +165,7 @@ def add_sra_metadata(branchwater_results):
     sra_accessions = branchwater_results.index.to_list()
     sra_metadata = get_sra_fields(sra_accessions, sra_columns)
     results_with_metadata = branchwater_results.join(sra_metadata, on="sra_accession")
+    results_with_metadata = results_with_metadata.reset_index(drop=True)
     LOGGER.info(f"branchwater_results: {branchwater_results}")
     LOGGER.info(f"sra_metadata: {sra_metadata}")
     LOGGER.info(f"joined: {results_with_metadata}")
@@ -173,10 +174,10 @@ def add_sra_metadata(branchwater_results):
 
 def reorder_result_columns_sra(df):
     output_ordering = [
-        "sra_link",
+        "sra_accession",
+        "sra_bioproject",
+        "sra_biosample",
         "assay_type",
-        "bioproject",
-        "biosample_link",
         "query_containment_ani",
         "collection_date_sam",
         "containment",
@@ -214,7 +215,6 @@ def get_sra_fields(sra_accessions, fields):
     pd.set_option("display.max_columns", None)
     LOGGER.info(f"get_sra_fields: {sra_metadata}")
     sra_metadata.set_index("_id", inplace=True)
-    sra_metadata.rename_axis("sra_accession", inplace=True)
     missing_columns = set(fields) - set(sra_metadata.columns)
     if len(missing_columns) > 0:
         LOGGER.warning(
@@ -243,5 +243,4 @@ def get_results_with_metadata(result, max_results=None):
     results_with_metadata = add_sra_metadata(branchwater_results)
     results_with_metadata = reorder_result_columns_sra(results_with_metadata)
     results_with_metadata = prettify_column_names(results_with_metadata)
-    results_with_metadata = results_with_metadata.reset_index()
     return results_with_metadata

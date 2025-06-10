@@ -157,27 +157,11 @@ class Command(BaseCommand):
                 .unnest("jattr_decoded")  # Unnest to split struct into separate columns
                 .with_columns(
                     [
-                        pl.when(pl.col("acc").is_not_null())
-                        .then(
-                            pl.format(
-                                "https://www.ncbi.nlm.nih.gov/sra/{}", pl.col("acc")
-                            )
-                        )
-                        .otherwise(None)
-                        .alias("sra_link"),
-                        pl.when(pl.col("biosample").is_not_null())
-                        .then(
-                            pl.format(
-                                "https://www.ncbi.nlm.nih.gov/biosample/{}",
-                                pl.col("biosample"),
-                            )
-                        )
-                        .otherwise(None)
-                        .alias("biosample_link"),
+                        (pl.col("acc").alias("_id")),
+                        (pl.col("acc").alias("sra_accession")),
+                        (pl.col("biosample").alias("sra_biosample")),
+                        (pl.col("bioproject").alias("sra_bioproject")),
                     ]
-                )
-                .with_columns(
-                    [pl.col("acc").alias("_id")]
                 )  # assign acc to the special mongodb _id field
             )
 
