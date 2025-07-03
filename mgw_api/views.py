@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 
+import numpy as np
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate
@@ -353,6 +354,8 @@ def result_table(request, pk):
         results_with_metadata = get_results_with_metadata(
             result, max_results=settings.MAX_SEARCH_RESULTS
         )
+        # We do this mainly to convert NaT to None in order to stop a crash
+        results_with_metadata = results_with_metadata.replace({np.nan: None})
         filter_settings, created = FilterSetting.objects.get_or_create(
             result=result, user=request.user
         )
