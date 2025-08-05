@@ -1,5 +1,6 @@
 # mgw_api/management/commands/create_signature.py
 
+import inspect
 import os
 import subprocess
 from datetime import datetime
@@ -8,9 +9,12 @@ from pathlib import Path
 
 import pandas as pd
 from django.conf import settings
+from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
+from django.urls import reverse
 
 from mgw.settings import LOGGER
+from mgw.settings import MGW_URL
 from mgw_api.models import Result
 from mgw_api.models import Settings
 from mgw_api.models import Signature
@@ -82,6 +86,8 @@ class Command(BaseCommand):
             signature.submitted = False
             signature.save()
             LOGGER.info(f"Search finished with result_pk = {result_pk}.")
+            # Notify the user via email that their search is complete
+            self.send_notification(result_model)
             ## Do NOT remove this line:
             self.stdout.write(self.style.SUCCESS(f"RESULT_PK: {result_pk}"))
         except Exception as e:
@@ -143,3 +149,36 @@ class Command(BaseCommand):
         sorted_results.to_csv(combined_file)
         num_results = sorted_results.shape[0]
         return num_results
+
+    def send_notification(self, result):
+        user = result.user
+        absolute_url = reverse("mgw_api:result_table", kwargs={"pk": result.pk})
+        result_page = f"{MGW_URL}{absolute_url}"
+        LOGGER.info(
+            f"Preparing to send email to {user} that search finished and can be viewed at {result_page} ..."
+        )
+        subject = f'MetagenomeWatch: Search completed for search named "{result.name}"'
+        message = inspect.cleandoc(f"""
+        Dear MetagenomeWatch user {user.username},
+
+        Your search "{result.name}" has completed. You can view the results here: {result_page}
+
+        Search details:
+            Name: {result.name}
+            K-mer: {result.kmer}
+            Database: {result.database}
+            Containment threshold: {result.containment}
+
+        Best wishes,
+        The MetagenomeWatch Team
+        """)
+        from_email = settings.DEFAULT_FROM_EMAIL
+        recipient_list = [user.email]
+        send_mail(
+            subject,
+            message,
+            from_email,
+            recipient_list,
+            fail_silently=False,
+        )
+        LOGGER.info("Email sent successfully")
