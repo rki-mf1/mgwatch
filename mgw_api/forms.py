@@ -37,10 +37,7 @@ class LoginForm(forms.Form):
 
 class SettingsForm(forms.ModelForm):
     kmer = forms.MultipleChoiceField(
-        choices=[(21, "21 k-mer")],
-        # We currently only have indexes for 21-mers. Hide the other k-mer
-        # lengths for now.
-        # choices=[(21, "21 k-mer"), (31, "31 k-mer"), (51, "51 k-mer")],
+        choices=[(21, "21-mers"), (31, "31-mers"), (51, "51-mers")],
         widget=forms.CheckboxSelectMultiple,
         initial=[21],
     )
