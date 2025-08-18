@@ -47,9 +47,7 @@ class Command(BaseCommand):
             date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
             file_list = []
             for k, db in product(kmer, database):
-                LOGGER.info(f"Args: {db} {k}")
-                if db == "RKI" or str(k) != "21":
-                    continue
+                LOGGER.info(f"Searching the following dataset: database={db} kmer={k}")
                 indices = self.get_indices(k, db)
                 for idx, index_path in enumerate(indices):
                     result_file = (
