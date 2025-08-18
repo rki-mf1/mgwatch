@@ -163,6 +163,7 @@ class Command(BaseCommand):
 
         Search details:
             Name: {result.name}
+            Number of results: {result.num_results}
             K-mer: {result.kmer}
             Database: {result.database}
             Containment threshold: {result.containment}
