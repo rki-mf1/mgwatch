@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 from datetime import timedelta
 
+import httpx
 import pymongo as pm
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -46,9 +47,16 @@ class Command(BaseCommand):
             timeout_seconds = 30
             database = "SRA"
             today = datetime.today() - timedelta(days=2)
-            today = today.strftime("%Y-%m-%d")
-            start_date = today if settings.START_DATE == "auto" else settings.START_DATE
-            end_date = today if settings.START_DATE == "auto" else settings.END_DATE
+            start_date = (
+                today
+                if settings.START_DATE == "auto"
+                else datetime.fromisoformat(settings.START_DATE)
+            )
+            end_date = (
+                today
+                if settings.START_DATE == "auto"
+                else datetime.fromisoformat(settings.END_DATE)
+            )
             metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
             manifest = metagenomes_dir / "manifest.pcl"
             man_succ = metagenomes_dir / "update_successful.pcl"
@@ -77,6 +85,10 @@ class Command(BaseCommand):
                     f"There are currently {len(missing_IDs)} IDs that are not in the index manifest."
                 )
 
+            # Only try to download accessions that are known to be available from wort
+            wra_ids_in_wort = self.get_wort_accessions()
+            missing_IDs = missing_IDs & wra_ids_in_wort
+
             retry_failed = kwargs["retry_failed"] or not settings.WORT_SKIP_FAILED
             self.download_from_wort(
                 dir_paths,
@@ -103,6 +115,14 @@ class Command(BaseCommand):
                 return False
         except Exception:
             return False
+
+    def get_wort_accessions(self):
+        wort_accessions_endpoint = (
+            "https://api.branchwater-dev.sourmash.bio/metadata/accessions"
+        )
+        r = httpx.get(wort_accessions_endpoint)
+        accessions = set(r.raise_for_status().text.split())
+        return accessions
 
     def handle_dirs(self, database, dir_names):
         dir_paths = {
