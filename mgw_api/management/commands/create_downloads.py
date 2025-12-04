@@ -195,8 +195,8 @@ class Command(BaseCommand):
         retry_failed=False,
     ):
         LOGGER.info(f"Requesting download of {len(SRA_IDs)} signatures.")
-        IDs_succ = self.load_pickle(man_succ) if man_succ.exists() else set()
-        IDs_fail = self.load_pickle(man_fail) if man_fail.exists() else set()
+        IDs_succ = set(self.load_pickle(man_succ)) if man_succ.exists() else set()
+        IDs_fail = set(self.load_pickle(man_fail)) if man_fail.exists() else set()
         SRA_IDs = SRA_IDs - IDs_succ
         if not retry_failed:
             SRA_IDs = list(SRA_IDs - IDs_fail)
@@ -210,9 +210,9 @@ class Command(BaseCommand):
         signature_endpoint = "https://wort.sourmash.bio/v1/view/sra"
         urls = [f"{signature_endpoint}/{id}" for id in SRA_IDs]
         LOGGER.info(f"Async download of {len(urls)} starting... first url {urls[0]}")
-        retval = asyncio.run(self.fetch_all(urls, target_dir))
-        LOGGER.info(f"Return values: {retval}")
-        # TODO: Update success and failure pickle files before finishing
+        asyncio.run(
+            self.fetch_all(urls, target_dir, IDs_succ, IDs_fail, man_succ, man_fail)
+        )
 
     def save_pickle(self, data, file):
         with open(file, "wb") as outpcl:
@@ -223,27 +223,74 @@ class Command(BaseCommand):
             ID_succ = pickle.load(inpcl)
         return ID_succ
 
-    async def fetch(self, session, url, target_dir):
+    async def fetch(
+        self,
+        session,
+        url,
+        target_dir,
+        IDs_succ,
+        IDs_fail,
+        man_succ,
+        man_fail,
+        lock,
+    ):
         # We need the SRA identifier to name our output file. This is a bit hacky.
         id = url.split("/")[-1]
-        async with session.get(url, ssl=ssl.SSLContext()) as response:
-            # Write to a temporary file and only move it to the final location
-            # when the transfer is completed
-            async with aiofiles.tempfile.NamedTemporaryFile("wb", delete=False) as f:
-                async for chunk in response.content.iter_chunked(1024 * 1024):
-                    await f.write(chunk)
-                await f.flush()
-                LOGGER.info(
-                    f"Download of {url} complete. Moving {f.name} to {target_dir}/{id}.sig"
-                )
-                return await asyncio.to_thread(
-                    shutil.move, f.name, f"{target_dir}/{id}.sig"
-                )
+        try:
+            async with session.get(url, ssl=ssl.SSLContext()) as response:
+                status = response.status
+                if status < 200 or status >= 300:
+                    LOGGER.error(f"Download failed for {url} with status {status}")
+                    async with lock:
+                        IDs_fail.add(id)
+                        await asyncio.to_thread(self.save_pickle, IDs_fail, man_fail)
+                    return {
+                        "id": id,
+                        "url": url,
+                        "status": status,
+                        "error": "non-success status",
+                    }
 
-    async def fetch_all(self, urls, target_dir):
+                # Write to a temporary file and only move it to the final location
+                # when the transfer is completed
+                async with aiofiles.tempfile.NamedTemporaryFile(
+                    "wb", delete=False
+                ) as f:
+                    async for chunk in response.content.iter_chunked(1024 * 1024):
+                        await f.write(chunk)
+                    await f.flush()
+                    dest = f"{target_dir}/{id}.sig.gz"
+                    LOGGER.info(
+                        f"Download of {url} complete. Moving {f.name} to {dest}"
+                    )
+                    await asyncio.to_thread(shutil.move, f.name, dest)
+                    async with lock:
+                        IDs_succ.add(id)
+                        await asyncio.to_thread(self.save_pickle, IDs_succ, man_succ)
+                    return {"id": id, "url": url, "status": status, "path": dest}
+        except Exception as exc:
+            LOGGER.error(f"Download exception for {url}: {exc}")
+            async with lock:
+                IDs_fail.add(id)
+                await asyncio.to_thread(self.save_pickle, IDs_fail, man_fail)
+            return {"id": id, "url": url, "status": None, "error": str(exc)}
+
+    async def fetch_all(self, urls, target_dir, IDs_succ, IDs_fail, man_succ, man_fail):
+        lock = asyncio.Lock()
         async with aiohttp.ClientSession() as session:
-            results = await asyncio.gather(
-                *[self.fetch(session, url, target_dir) for url in urls],
-                return_exceptions=True,
-            )
+            tasks = [
+                self.fetch(
+                    session,
+                    url,
+                    target_dir,
+                    IDs_succ,
+                    IDs_fail,
+                    man_succ,
+                    man_fail,
+                    lock,
+                )
+                for url in urls
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=False)
+            # Return both successes and any failed downloads/non-success statuses
             return results
