@@ -1,12 +1,16 @@
+import asyncio
 import glob
-import gzip
 import os
 import pickle
+import shutil
+import ssl
 import subprocess
-import time
 from datetime import datetime
 from datetime import timedelta
 
+import aiofiles
+import aiohttp
+import httpx
 import pymongo as pm
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -46,9 +50,16 @@ class Command(BaseCommand):
             timeout_seconds = 30
             database = "SRA"
             today = datetime.today() - timedelta(days=2)
-            today = today.strftime("%Y-%m-%d")
-            start_date = today if settings.START_DATE == "auto" else settings.START_DATE
-            end_date = today if settings.START_DATE == "auto" else settings.END_DATE
+            start_date = (
+                today
+                if settings.START_DATE == "auto"
+                else datetime.fromisoformat(settings.START_DATE)
+            )
+            end_date = (
+                today
+                if settings.START_DATE == "auto"
+                else datetime.fromisoformat(settings.END_DATE)
+            )
             metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
             manifest = metagenomes_dir / "manifest.pcl"
             man_succ = metagenomes_dir / "update_successful.pcl"
@@ -77,6 +88,10 @@ class Command(BaseCommand):
                     f"There are currently {len(missing_IDs)} IDs that are not in the index manifest."
                 )
 
+            # Only try to download accessions that are known to be available from wort
+            wra_ids_in_wort = self.get_wort_accessions()
+            missing_IDs = missing_IDs & wra_ids_in_wort
+
             retry_failed = kwargs["retry_failed"] or not settings.WORT_SKIP_FAILED
             self.download_from_wort(
                 dir_paths,
@@ -88,7 +103,7 @@ class Command(BaseCommand):
             )
             LOGGER.info("Creating downloads finished.")
         except Exception as e:
-            LOGGER.error(f"Error downloading signatures '{settings.DATA_DIR}': {e}")
+            LOGGER.error(f"Error downloading signatures to '{settings.DATA_DIR}': {e}")
 
     def check_wort_up(self, url):
         """Try to download a known-good SRA siganture, to check if the wort
@@ -103,6 +118,14 @@ class Command(BaseCommand):
                 return False
         except Exception:
             return False
+
+    def get_wort_accessions(self):
+        wort_accessions_endpoint = (
+            "https://api.branchwater-dev.sourmash.bio/metadata/accessions"
+        )
+        r = httpx.get(wort_accessions_endpoint)
+        accessions = set(r.raise_for_status().text.split())
+        return accessions
 
     def handle_dirs(self, database, dir_names):
         dir_paths = {
@@ -171,63 +194,25 @@ class Command(BaseCommand):
         timeout_seconds,
         retry_failed=False,
     ):
-        IDs_succ = self.load_pickle(man_succ) if man_succ.exists() else set()
-        IDs_fail = self.load_pickle(man_fail) if man_fail.exists() else set()
+        LOGGER.info(f"Requesting download of {len(SRA_IDs)} signatures.")
+        IDs_succ = set(self.load_pickle(man_succ)) if man_succ.exists() else set()
+        IDs_fail = set(self.load_pickle(man_fail)) if man_fail.exists() else set()
         SRA_IDs = SRA_IDs - IDs_succ
         if not retry_failed:
             SRA_IDs = list(SRA_IDs - IDs_fail)
         if settings.MAX_DOWNLOADS and settings.MAX_DOWNLOADS < len(SRA_IDs):
             SRA_IDs = SRA_IDs[: settings.MAX_DOWNLOADS]
-        slen = len(SRA_IDs)
-        for i, SRA_ID in enumerate(SRA_IDs, start=1):
-            LOGGER.info(f"... {i} of {slen} ID {SRA_ID} ...")
-            attempts, success = 0, False
-            while not success:
-                attempts += 1
-                success = self.call_curl_download(dir_paths, SRA_ID, timeout_seconds)
-                if attempts < settings.WORT_ATTEMPTS and not success:
-                    time.sleep(1)
-                else:
-                    break
-            if success:
-                IDs_succ.add(SRA_ID)
-                self.save_pickle(IDs_succ, man_succ)
-            else:
-                IDs_fail.add(SRA_ID)
-                self.save_pickle(IDs_fail, man_fail)
-        LOGGER.info(f"Successful downloads: {len(IDs_succ)}")
-        LOGGER.info(f"Failed downloads: {len(IDs_fail)}")
-
-    def call_curl_download(self, dir_paths, SRA_ID, timeout_seconds=3600):
-        url = f"https://wort.sourmash.bio/v1/view/sra/{SRA_ID}"
-        output_file = os.path.join(dir_paths["updates"], f"{SRA_ID}.sig.gz")
-        cmd = [
-            "curl",
-            "--max-time",
-            str(timeout_seconds),
-            "-JLf",
-            url,
-            "-o",
-            output_file,
-        ]
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode == 0:
-                # wort sometime returns a .sig.gz file that is a gzipped empty
-                # file. Check for this specifically.
-                with gzip.open(output_file, "r") as f:
-                    is_empty = len(f.read(1)) == 0
-                if is_empty:
-                    os.remove(output_file)
-                    print(f"Downloaded wort file is empty for {SRA_ID}")
-                    return False
-                return True
-            else:
-                print(f"Failed to download {SRA_ID}: Exit code {result.returncode}")
-                return False
-        except Exception as e:
-            print(f"Error occurred while downloading {SRA_ID}: {e}")
-            return False
+        LOGGER.info(
+            f"Initiating download of {len(SRA_IDs)} signatures (already downloaded IDs and failed removed)."
+        )
+        # Where the downloaded files will be placed
+        target_dir = dir_paths["updates"]
+        signature_endpoint = "https://wort.sourmash.bio/v1/view/sra"
+        urls = [f"{signature_endpoint}/{id}" for id in SRA_IDs]
+        LOGGER.info(f"Async download of {len(urls)} starting... first url {urls[0]}")
+        asyncio.run(
+            self.fetch_all(urls, target_dir, IDs_succ, IDs_fail, man_succ, man_fail)
+        )
 
     def save_pickle(self, data, file):
         with open(file, "wb") as outpcl:
@@ -237,3 +222,75 @@ class Command(BaseCommand):
         with open(file, "rb") as inpcl:
             ID_succ = pickle.load(inpcl)
         return ID_succ
+
+    async def fetch(
+        self,
+        session,
+        url,
+        target_dir,
+        IDs_succ,
+        IDs_fail,
+        man_succ,
+        man_fail,
+        lock,
+    ):
+        # We need the SRA identifier to name our output file. This is a bit hacky.
+        id = url.split("/")[-1]
+        try:
+            async with session.get(url, ssl=ssl.SSLContext()) as response:
+                status = response.status
+                if status < 200 or status >= 300:
+                    LOGGER.error(f"Download failed for {url} with status {status}")
+                    async with lock:
+                        IDs_fail.add(id)
+                        await asyncio.to_thread(self.save_pickle, IDs_fail, man_fail)
+                    return {
+                        "id": id,
+                        "url": url,
+                        "status": status,
+                        "error": "non-success status",
+                    }
+
+                # Write to a temporary file and only move it to the final location
+                # when the transfer is completed
+                async with aiofiles.tempfile.NamedTemporaryFile(
+                    "wb", delete=False
+                ) as f:
+                    async for chunk in response.content.iter_chunked(1024 * 1024):
+                        await f.write(chunk)
+                    await f.flush()
+                    dest = f"{target_dir}/{id}.sig.gz"
+                    LOGGER.info(
+                        f"Download of {url} complete. Moving {f.name} to {dest}"
+                    )
+                    await asyncio.to_thread(shutil.move, f.name, dest)
+                    async with lock:
+                        IDs_succ.add(id)
+                        await asyncio.to_thread(self.save_pickle, IDs_succ, man_succ)
+                    return {"id": id, "url": url, "status": status, "path": dest}
+        except Exception as exc:
+            LOGGER.error(f"Download exception for {url}: {exc}")
+            async with lock:
+                IDs_fail.add(id)
+                await asyncio.to_thread(self.save_pickle, IDs_fail, man_fail)
+            return {"id": id, "url": url, "status": None, "error": str(exc)}
+
+    async def fetch_all(self, urls, target_dir, IDs_succ, IDs_fail, man_succ, man_fail):
+        lock = asyncio.Lock()
+        async with aiohttp.ClientSession() as session:
+            tasks = [
+                self.fetch(
+                    session,
+                    url,
+                    target_dir,
+                    IDs_succ,
+                    IDs_fail,
+                    man_succ,
+                    man_fail,
+                    lock,
+                )
+                for url in urls
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=False)
+            # Return both successes and any failed downloads/non-success statuses
+            return results
