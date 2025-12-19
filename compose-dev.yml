@@ -30,7 +30,7 @@ services:
           target: /code/mgw
           initial_sync: true
         - action: rebuild
-          path: mgw.yaml
+          path: environment.yml
   mgwatch-mongodb:
     ports:
       - "27018:27017"

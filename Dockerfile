@@ -4,8 +4,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt update --allow-releaseinfo-change && apt install -y procps wget gzip pigz bc cron && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 WORKDIR /code
-COPY mgw.yaml .
-RUN conda env create -n mgw -f mgw.yaml && conda clean --all -y
+COPY environment.yml .
+RUN conda env create -n mgw -f environment.yml && conda clean --all -y
 COPY manage.py README.md vars.env .
 COPY templates/ /code/templates
 COPY mgw/ /code/mgw
