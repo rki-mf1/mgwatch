@@ -1,6 +1,15 @@
 {% extends "mgw_api/base.html" %}
 {% block title %}Login{% endblock %}
 {% block content %}
+    <div class="help-section">
+        <h2>What is this?</h2>
+        <p>
+            MetagenomeWatch gives you the ability to search nearly all publicly available metagenome sequencing data sets. You only need to provide a genomic sequence (<a href="https://en.wikipedia.org/wiki/FASTA_format">FASTA</a> format, <em>minimum</em> length approximately 20 kilobases), and then within a couple of minutes we can tell you which public datasets have similar sequences.
+        </p>
+        <p>
+            You can also have MetagenomeWatch automatically keep an eye on the public databases for you. It can search any new public datasets for your sequences and send you an email when something new comes up.
+        </p>
+    </div>
     <div class="login-section">
         <h2>Login</h2>
         <form method="post">
