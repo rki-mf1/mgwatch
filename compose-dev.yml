@@ -5,16 +5,35 @@
 # rebuild the container.
 services:
   mgwatch-backend:
-    volumes:
-      # Overlay the code directory so that you can directly edit code and not
-      # need to rebuild the docker container. It will be live-reloaded by the
-      # django runserver dev server started below.
-      - .:/code
     ports:
       # To access the backend directly, normally can use localhost:8000 via the
       # nginx proxy
-      - "9080:9080"
+      - "9081:9080"
     command: ["conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw ./manage.py runserver 0.0.0.0:9080"]
+    build: .
+    develop:
+      watch:
+        - action: sync
+          path: ./mgw
+          target: /code/mgw
+          initial_sync: true
+        - action: sync
+          path: ./mgw_api
+          target: /code/mgw_api
+          initial_sync: true
+        - action: sync
+          path: ./templates
+          target: /code/templates
+          initial_sync: true
+        - action: sync
+          path: ./mgw
+          target: /code/mgw
+          initial_sync: true
+        - action: rebuild
+          path: mgw.yaml
   mgwatch-mongodb:
     ports:
-      - "27017:27017"
+      - "27018:27017"
+  mgwatch-proxy:
+    ports: !override
+      - 8889:8000
