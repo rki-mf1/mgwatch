@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM condaforge/miniforge3:25.11.0-0
 ARG DEBIAN_FRONTEND=noninteractive
 

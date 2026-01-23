@@ -4,10 +4,10 @@
 
 All subfolders of `backend-data/SRA/metagenomes`:
 
-- `failed/`: ?
+- `indexing-failed/`: signatures that branchwater failed to index
 - `index/`: Branchwater indexes
 - `lists/`: lists of SRA IDs explaining what is contained in the indexes generated from data received from Titus et al. Not used in the future.
-- `manifest.pcl`: a list of all SRA indexes that are stored in all indexes (the union of manifests/*.pcl file contents)
+- `manifest.pickle`: a list of all SRA indexes that are stored in all indexes (the union of manifests/*.pcl file contents)
 - `manifests/`: list of SRA indexes that are stored in each matching index file (in index/)
 - `signatures/`: signatures downloaded from wort that have been indexed
 - `updates/`: signatures downloaded from wort but not yet indexed
@@ -49,9 +49,9 @@ This will first download the newest NCBI metadata collection on aws and then int
 
 Depending on the user settings, this will either download the *wort* signatures of a specific date range (`START_DATE` to `END_DATE`) or the current date minus two days (`START_DATE=0`). This is to account for the metadata being 1 day behind and to adjust for the current 1 AM update time.
 
-The script will get all SRA IDs of the specified date range from the updated MongoDB and from the `manifest.pcl` which is either empty if `INDEX_FROM_SCRATCH` setting was enabled or contains all current index SRA IDs which were initially added through the one time `create_manifest.py` command.
+The script will get all SRA IDs of the specified date range from the updated MongoDB and from the `manifest.pickle` which is either empty if `INDEX_FROM_SCRATCH` setting was enabled or contains all current index SRA IDs which were initially added through the one time `create_manifest.py` command.
 
-New *wort* signatures will be stored in `data/SRA/metagenomes/updates/`. Successful download IDs will be stored inside `update_successful.pcl` and failed download IDs will be stored inside `update_failed.pcl`. The IDs from both files will be ignored if the command fails and resumes downloads. Failed downloads can be re-enabled by setting the `WORT_SKIP_FAILED` to `False`. The `update_successful.pcl` file will be emptied at the end of the `create_index.py` command when the new SRA IDs have been stored inside the manifest files.
+New *wort* signatures will be stored in `data/SRA/metagenomes/updates/`. Successful download IDs will be stored inside `download_successful.pickle` and failed download IDs will be stored inside `download_failed.pickle`. The IDs from both files will be ignored if the command fails and resumes downloads. Failed downloads can be re-enabled by setting the `WORT_SKIP_FAILED` to `False`. The `download_successful.pickle` file will be emptied at the end of the `create_index.py` command when the new SRA IDs have been stored inside the manifest files.
 
 There are several further settings that can be changed for the download.
 - `LIB_SOURCE` only download signatures with a specific libsource value
@@ -60,7 +60,7 @@ There are several further settings that can be changed for the download.
 
 ### 3. Creating index
 
-The script will check the current manifest ID inside the `data/SRA/metagenomes/manifests/` directory. This will be currently set to `38` for `wort-sra-kmer-db38.pcl`. There is also a settings parameter (`INDEX_MIN_ITERATOR`) that sets the current minimum index number to `38` as a precaution.
+The script will check the current manifest ID inside the `data/SRA/metagenomes/manifests/` directory. This will be currently set to `38` for `wort-sra-kmer-db38.pickle`. There is also a settings parameter (`INDEX_MIN_ITERATOR`) that sets the current minimum index number to `38` as a precaution.
 
 The script will read the SRA IDs from the current manifest number and the SRA files that are inside the `data/SRA/metagenomes/updates/` directory and combines them to create the `sig-list.txt` file which then contains the signature paths for the new index generation. If the number of the current and the new signatures exceed 100.000, the script will automatically increase the iterator to the next number.
 

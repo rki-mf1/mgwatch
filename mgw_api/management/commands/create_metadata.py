@@ -119,7 +119,7 @@ class Command(BaseCommand):
         if indexed_only:
             database = "SRA"
             indexed_ids_file = (
-                settings.DATA_DIR / database / "metagenomes" / "manifest.pcl"
+                settings.DATA_DIR / database / "metagenomes" / "manifest.pickle"
             )
             if indexed_ids_file.exists():
                 try:

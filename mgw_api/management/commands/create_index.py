@@ -19,16 +19,17 @@ class Command(BaseCommand):
             database = "SRA"
             metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
             sig_list = metagenomes_dir / "sig-list.txt"
-            manifest = metagenomes_dir / "manifest.pcl"
+            manifest = metagenomes_dir / "manifest.pickle"
             dir_paths = self.handle_dirs(
-                database, ["updates", "index", "signatures", "failed", "manifests"]
+                database,
+                ["updates", "index", "signatures", "indexing-failed", "manifests"],
             )
             mani_list = self.get_manifest(manifest)
             last_sig_files, last_num = self.get_last_index(dir_paths)
-            LOGGER.debug(f"Already in most recent index: {last_sig_files}")
+            LOGGER.debug(f"Already in most recent index: {len(last_sig_files)}")
             new_sig_files = self.check_updates(dir_paths)
             LOGGER.debug(
-                f"Will be added to the above and index rebuilt: {new_sig_files}"
+                f"Will be added to the above and index rebuilt: {len(new_sig_files)}"
             )
             if new_sig_files:
                 sig_files = last_sig_files + new_sig_files
@@ -36,7 +37,7 @@ class Command(BaseCommand):
                 for i in range(0, len(sig_files), settings.INDEX_MAX_SIGNATURES):
                     new_files = sig_files[i : i + settings.INDEX_MAX_SIGNATURES]
                     self.create_list(new_files, sig_list)
-                    LOGGER.info(f"Sigs: {len(new_files)} | Num: {last_num+i}")
+                    LOGGER.info(f"Sigs: {len(new_files)} | Index number: {last_num+i}")
                     retvals = [
                         self.update_index(
                             dir_paths, sig_list, database, k, last_num + i
@@ -44,7 +45,9 @@ class Command(BaseCommand):
                         for k in kmers
                     ]
                     indexing_succeeded = all([val == 0 for val in retvals])
-                    target_dir = "signatures" if indexing_succeeded else "failed"
+                    target_dir = (
+                        "signatures" if indexing_succeeded else "indexing-failed"
+                    )
                     self.move_files(new_files, dir_paths, target_dir)
                     if indexing_succeeded:
                         self.update_manifests(
@@ -66,7 +69,7 @@ class Command(BaseCommand):
                             settings.DATA_DIR,
                             database,
                             "metagenomes",
-                            "update_successful.pcl",
+                            "download_successful.pickle",
                         ),
                     )
                 LOGGER.info(f"Updating index finished, current index is #{last_num+i}.")
@@ -96,28 +99,29 @@ class Command(BaseCommand):
 
     def get_last_index(self, dir_paths):
         LOGGER.info("Getting last index number and content.")
-        manifests = list(dir_paths["manifests"].glob("wort-sra-kmer-db*.pcl"))
-        print(manifests)
+        manifests = list(dir_paths["manifests"].glob("wort-sra-kmer-db*.pickle"))
         if not manifests:
             # There is no manifest. We start it at 0 or the minimum value specified in the settings
             last_num = max(settings.INDEX_MIN_ITERATOR, 0)
             last_sig_files = []
             return last_sig_files, last_num
 
-        last_num = max([int(f.name.split("db")[1].split(".pcl")[0]) for f in manifests])
+        last_num = max(
+            [int(f.name.split("db")[1].split(".pickle")[0]) for f in manifests]
+        )
         last_num = max(settings.INDEX_MIN_ITERATOR, last_num)
         last_sigs = os.path.join(
-            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pcl"
+            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pickle"
         )
         with open(last_sigs, "rb") as pcl_in:
             last_sig_IDs = pickle.load(pcl_in)
         last_sig_files = [
-            os.path.join(dir_paths["signatures"], f"{ID}.sig.gz") for ID in last_sig_IDs
+            os.path.join(dir_paths["signatures"], f"{ID}.sig") for ID in last_sig_IDs
         ]
         return last_sig_files, last_num
 
     def check_updates(self, dir_paths):
-        return glob.glob(os.path.join(dir_paths["updates"], "*.sig.gz"))
+        return glob.glob(os.path.join(dir_paths["updates"], "*.sig"))
 
     def create_list(self, new_files, sig_list):
         with open(sig_list, "w") as sl:
@@ -128,7 +132,7 @@ class Command(BaseCommand):
         idx = os.path.join(
             dir_paths["index"], f"wort-{database_lower}-{k}-db{last_num}.rocksdb"
         )
-        LOGGER.info(f"Creating index {idx}.")
+        LOGGER.info(f"Creating branchwater index {idx}.")
         LOGGER.info(f"Signature list {sig_list}.")
         if os.path.isdir(idx) and idx[-8:] == ".rocksdb":
             shutil.rmtree(idx)
@@ -139,16 +143,18 @@ class Command(BaseCommand):
             "index",
             "--ksize",
             f"{k}",
-            sig_list,
             "--moltype",
             "DNA",
             "--scaled",
             "1000",
             "--cores",
             f"{cpus}",
+            "--no-store-sketches",
             "--output",
-            idx,
+            f"{idx}",
+            f"{sig_list}",
         ]
+        LOGGER.debug(f"Running sourmash: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True)
         LOGGER.debug(
             f"sourmash branchwater index building output:\nstdout: {result.stdout}\nstderr: {result.stderr}"
@@ -159,7 +165,7 @@ class Command(BaseCommand):
         for file in file_list:
             base_name = os.path.basename(file)
             name, ext = os.path.splitext(base_name)
-            if target_dir == "failed":
+            if target_dir == "indexing-failed":
                 now = datetime.now()
                 now.strftime(".%Y%m%d-%H%M%S")
             else:
@@ -168,9 +174,9 @@ class Command(BaseCommand):
             shutil.move(file, destination)
 
     def update_manifests(self, new_files, mani_list, manifest, dir_paths, last_num):
-        new_files = [os.path.basename(file).split(".sig.gz")[0] for file in new_files]
+        new_files = [os.path.basename(file).split(".sig")[0] for file in new_files]
         last_sigs = os.path.join(
-            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pcl"
+            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pickle"
         )
         with open(last_sigs, "wb") as pcl_out:
             pickle.dump(new_files, pcl_out, protocol=4)
