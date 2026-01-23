@@ -19,7 +19,7 @@ class Command(BaseCommand):
             database = "SRA"
             metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
             sig_list = metagenomes_dir / "sig-list.txt"
-            manifest = metagenomes_dir / "manifest.pickel"
+            manifest = metagenomes_dir / "manifest.pickle"
             dir_paths = self.handle_dirs(
                 database,
                 ["updates", "index", "signatures", "indexing-failed", "manifests"],
