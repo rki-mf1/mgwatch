@@ -4,7 +4,7 @@
 
 All subfolders of `backend-data/SRA/metagenomes`:
 
-- `failed/`: ?
+- `indexing-failed/`: signatures that branchwater failed to index
 - `index/`: Branchwater indexes
 - `lists/`: lists of SRA IDs explaining what is contained in the indexes generated from data received from Titus et al. Not used in the future.
 - `manifest.pcl`: a list of all SRA indexes that are stored in all indexes (the union of manifests/*.pcl file contents)

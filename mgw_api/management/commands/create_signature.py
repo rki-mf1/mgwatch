@@ -26,7 +26,7 @@ class Command(BaseCommand):
             date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
             user_path = os.path.dirname(fasta.file.path)
             signature_file = os.path.join(
-                user_path, f"signature_{fasta.name}.{date}.sig.gz"
+                user_path, f"signature_{fasta.name}.{date}.sig"
             )
             LOGGER.debug(signature_file)
             result = self.calculate_signatures(fasta.file.path, signature_file)

@@ -5,12 +5,13 @@ import pickle
 import shutil
 import ssl
 import subprocess
+import time
 from datetime import datetime
 from datetime import timedelta
 
 import aiofiles
 import aiohttp
-import httpx
+import polars as pl
 import pymongo as pm
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -65,7 +66,8 @@ class Command(BaseCommand):
             man_succ = metagenomes_dir / "update_successful.pcl"
             man_fail = metagenomes_dir / "update_failed.pcl"
             dir_paths = self.handle_dirs(
-                database, ["updates", "index", "signatures", "failed", "manifests"]
+                database,
+                ["updates", "index", "signatures", "indexing-failed", "manifests"],
             )
             mani_list = set(self.get_manifest(manifest))
             if kwargs["ids"]:
@@ -82,15 +84,24 @@ class Command(BaseCommand):
                     raise Exception(
                         "There is no index available and creating one from scratch is disabled."
                     )
-                mongo_IDs = self.get_mongoIDs(start_date, end_date)
-                missing_IDs = set(mongo_IDs) - set(mani_list)
-                LOGGER.info(
-                    f"There are currently {len(missing_IDs)} IDs that are not in the index manifest."
-                )
+
+            mongo_IDs = self.get_mongoIDs(start_date, end_date)
+            missing_IDs = set(mongo_IDs) - set(mani_list)
+            LOGGER.info(
+                f"SRA accessions we want from the SRA database: {len(mongo_IDs)}"
+            )
+            LOGGER.info(
+                f"SRA signatures we already have downloaded and are in the branchwater index: {len(mani_list)}"
+            )
+            LOGGER.info(f"SRA signatures we still need to download: {len(missing_IDs)}")
 
             # Only try to download accessions that are known to be available from wort
-            wra_ids_in_wort = self.get_wort_accessions()
-            missing_IDs = missing_IDs & wra_ids_in_wort
+            sra_ids_in_wort = self.get_wort_accessions()
+            LOGGER.info(f"SRA signatures in wort: {len(sra_ids_in_wort)}")
+            missing_IDs = missing_IDs & sra_ids_in_wort
+            LOGGER.info(
+                f"SRA signatures we want, that are also in wort: {len(missing_IDs)}"
+            )
 
             retry_failed = kwargs["retry_failed"] or not settings.WORT_SKIP_FAILED
             self.download_from_wort(
@@ -120,12 +131,16 @@ class Command(BaseCommand):
             return False
 
     def get_wort_accessions(self):
-        wort_accessions_endpoint = (
-            "https://api.branchwater-dev.sourmash.bio/metadata/accessions"
+        wort_manifest_url = "https://s3.bi.denbi.de/wort-sra/SOURMASH-MANIFEST.parquet"
+        accessions = (
+            pl.scan_parquet(wort_manifest_url)
+            .select(pl.col("name").str.extract(r"([\w.]+)", 1).alias("accession"))
+            .collect()
+            .get_column("accession")
+            .unique()
+            .to_list()
         )
-        r = httpx.get(wort_accessions_endpoint)
-        accessions = set(r.raise_for_status().text.split())
-        return accessions
+        return set(accessions)
 
     def handle_dirs(self, database, dir_names):
         dir_paths = {
@@ -181,7 +196,7 @@ class Command(BaseCommand):
         mongo_IDs = [doc["_id"] for doc in ids]
         mongo.close()
         LOGGER.info(
-            f"There are currently {len(mongo_IDs)} IDs in the mongoDB between {start_date} and {end_date}."
+            f"There are currently {len(mongo_IDs)} SRA accessions in the mongoDB between {start_date} and {end_date}."
         )
         return mongo_IDs
 
@@ -197,10 +212,18 @@ class Command(BaseCommand):
         LOGGER.info(f"Requesting download of {len(SRA_IDs)} signatures.")
         IDs_succ = set(self.load_pickle(man_succ)) if man_succ.exists() else set()
         IDs_fail = set(self.load_pickle(man_fail)) if man_fail.exists() else set()
+        LOGGER.info(
+            f"SRA accessions that we failed to download in the past: {len(IDs_fail)}"
+        )
+        LOGGER.info(f"SRA accessions that we successfully downloaded: {len(IDs_succ)}")
         SRA_IDs = SRA_IDs - IDs_succ
+        num_requested_ids_without_max = len(SRA_IDs)
         if not retry_failed:
             SRA_IDs = list(SRA_IDs - IDs_fail)
         if settings.MAX_DOWNLOADS and settings.MAX_DOWNLOADS < len(SRA_IDs):
+            LOGGER.info(
+                f"Subsetting the number of signatures we are going to download to {settings.MAX_DOWNLOADS}"
+            )
             SRA_IDs = SRA_IDs[: settings.MAX_DOWNLOADS]
         LOGGER.info(
             f"Initiating download of {len(SRA_IDs)} signatures (already downloaded IDs and failed removed)."
@@ -210,8 +233,15 @@ class Command(BaseCommand):
         signature_endpoint = "https://wort.sourmash.bio/v1/view/sra"
         urls = [f"{signature_endpoint}/{id}" for id in SRA_IDs]
         LOGGER.info(f"Async download of {len(urls)} starting... first url {urls[0]}")
+        start_time = time.time()
         asyncio.run(
             self.fetch_all(urls, target_dir, IDs_succ, IDs_fail, man_succ, man_fail)
+        )
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        time_per_signature = elapsed_time / len(urls)
+        LOGGER.info(
+            f"Download finished. Total runtime was {elapsed_time:.2f} seconds. {time_per_signature:.2f} per signature. Downloading the full requested set of SRA IDs ({num_requested_ids_without_max}) would have taken {time_per_signature * num_requested_ids_without_max / 60:.2f} minutes, or {time_per_signature * num_requested_ids_without_max / (60 * 60 * 24):.2f} days."
         )
 
     def save_pickle(self, data, file):
@@ -259,7 +289,7 @@ class Command(BaseCommand):
                     async for chunk in response.content.iter_chunked(1024 * 1024):
                         await f.write(chunk)
                     await f.flush()
-                    dest = f"{target_dir}/{id}.sig.gz"
+                    dest = f"{target_dir}/{id}.sig"
                     LOGGER.info(
                         f"Download of {url} complete. Moving {f.name} to {dest}"
                     )

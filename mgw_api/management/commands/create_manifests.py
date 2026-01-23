@@ -23,7 +23,14 @@ class Command(BaseCommand):
             )
             dir_paths = self.handle_dirs(
                 database,
-                ["updates", "index", "signatures", "failed", "lists", "manifests"],
+                [
+                    "updates",
+                    "index",
+                    "signatures",
+                    "indexing-failed",
+                    "lists",
+                    "manifests",
+                ],
             )
             self.create_initial_manifests(manifest, dir_paths)
             LOGGER.info("Creating manifests finished.")
