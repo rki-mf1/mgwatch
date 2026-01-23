@@ -62,9 +62,9 @@ class Command(BaseCommand):
                 else datetime.fromisoformat(settings.END_DATE)
             )
             metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
-            manifest = metagenomes_dir / "manifest.pcl"
-            man_succ = metagenomes_dir / "update_successful.pcl"
-            man_fail = metagenomes_dir / "update_failed.pcl"
+            manifest = metagenomes_dir / "manifest.pickle"
+            man_succ = metagenomes_dir / "download_successful.pickle"
+            man_fail = metagenomes_dir / "download_failed.pickle"
             dir_paths = self.handle_dirs(
                 database,
                 ["updates", "index", "signatures", "indexing-failed", "manifests"],
@@ -85,11 +85,11 @@ class Command(BaseCommand):
                         "There is no index available and creating one from scratch is disabled."
                     )
 
-            mongo_IDs = self.get_mongoIDs(start_date, end_date)
-            missing_IDs = set(mongo_IDs) - set(mani_list)
-            LOGGER.info(
-                f"SRA accessions we want from the SRA database: {len(mongo_IDs)}"
-            )
+                mongo_IDs = self.get_mongoIDs(start_date, end_date)
+                missing_IDs = set(mongo_IDs) - set(mani_list)
+                LOGGER.info(
+                    f"SRA accessions we want from the SRA database: {len(mongo_IDs)}"
+                )
             LOGGER.info(
                 f"SRA signatures we already have downloaded and are in the branchwater index: {len(mani_list)}"
             )
@@ -158,8 +158,8 @@ class Command(BaseCommand):
         if not os.path.exists(manifest):
             mani_list = list()
         else:
-            with open(manifest, "rb") as pcl_in:
-                mani_list = pickle.load(pcl_in)
+            with open(manifest, "rb") as pickle_in:
+                mani_list = pickle.load(pickle_in)
         LOGGER.info(f"There are currently {len(mani_list)} IDs in the index manifest.")
         return mani_list
 
@@ -167,17 +167,17 @@ class Command(BaseCommand):
         LOGGER.info("Getting last index number and content.")
         last_num = max(
             [
-                int(os.path.basename(f).split("db")[1].split(".pcl")[0])
+                int(os.path.basename(f).split("db")[1].split(".pickle")[0])
                 for f in glob.glob(
-                    os.path.join(dir_paths["manifests"], "wort-sra-kmer-db*.pcl")
+                    os.path.join(dir_paths["manifests"], "wort-sra-kmer-db*.pickle")
                 )
             ]
         )
         last_sigs = os.path.join(
-            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pcl"
+            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pickle"
         )
-        with open(last_sigs, "rb") as pcl_in:
-            sig_list = pickle.load(pcl_in)
+        with open(last_sigs, "rb") as pickle_in:
+            sig_list = pickle.load(pickle_in)
         return sig_list, last_num
 
     def get_mongoIDs(self, start_date, end_date):
@@ -245,12 +245,12 @@ class Command(BaseCommand):
         )
 
     def save_pickle(self, data, file):
-        with open(file, "wb") as outpcl:
-            pickle.dump(data, outpcl, protocol=4)
+        with open(file, "wb") as out_pickle:
+            pickle.dump(data, out_pickle, protocol=4)
 
     def load_pickle(self, file):
-        with open(file, "rb") as inpcl:
-            ID_succ = pickle.load(inpcl)
+        with open(file, "rb") as in_pickle:
+            ID_succ = pickle.load(in_pickle)
         return ID_succ
 
     async def fetch(

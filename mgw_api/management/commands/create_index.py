@@ -19,7 +19,7 @@ class Command(BaseCommand):
             database = "SRA"
             metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
             sig_list = metagenomes_dir / "sig-list.txt"
-            manifest = metagenomes_dir / "manifest.pcl"
+            manifest = metagenomes_dir / "manifest.pickel"
             dir_paths = self.handle_dirs(
                 database,
                 ["updates", "index", "signatures", "indexing-failed", "manifests"],
@@ -69,7 +69,7 @@ class Command(BaseCommand):
                             settings.DATA_DIR,
                             database,
                             "metagenomes",
-                            "update_successful.pcl",
+                            "download_successful.pickle",
                         ),
                     )
                 LOGGER.info(f"Updating index finished, current index is #{last_num+i}.")
@@ -99,22 +99,24 @@ class Command(BaseCommand):
 
     def get_last_index(self, dir_paths):
         LOGGER.info("Getting last index number and content.")
-        manifests = list(dir_paths["manifests"].glob("wort-sra-kmer-db*.pcl"))
+        manifests = list(dir_paths["manifests"].glob("wort-sra-kmer-db*.pickle"))
         if not manifests:
             # There is no manifest. We start it at 0 or the minimum value specified in the settings
             last_num = max(settings.INDEX_MIN_ITERATOR, 0)
             last_sig_files = []
             return last_sig_files, last_num
 
-        last_num = max([int(f.name.split("db")[1].split(".pcl")[0]) for f in manifests])
+        last_num = max(
+            [int(f.name.split("db")[1].split(".pickle")[0]) for f in manifests]
+        )
         last_num = max(settings.INDEX_MIN_ITERATOR, last_num)
         last_sigs = os.path.join(
-            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pcl"
+            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pickle"
         )
         with open(last_sigs, "rb") as pcl_in:
             last_sig_IDs = pickle.load(pcl_in)
         last_sig_files = [
-            os.path.join(dir_paths["signatures"], f"{ID}") for ID in last_sig_IDs
+            os.path.join(dir_paths["signatures"], f"{ID}.sig") for ID in last_sig_IDs
         ]
         return last_sig_files, last_num
 
@@ -174,7 +176,7 @@ class Command(BaseCommand):
     def update_manifests(self, new_files, mani_list, manifest, dir_paths, last_num):
         new_files = [os.path.basename(file).split(".sig")[0] for file in new_files]
         last_sigs = os.path.join(
-            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pcl"
+            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pickle"
         )
         with open(last_sigs, "wb") as pcl_out:
             pickle.dump(new_files, pcl_out, protocol=4)

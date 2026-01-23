@@ -19,7 +19,7 @@ class Command(BaseCommand):
         try:
             database = "SRA"
             manifest = os.path.join(
-                settings.DATA_DIR, database, "metagenomes", "manifest.pcl"
+                settings.DATA_DIR, database, "metagenomes", "manifest.pickle"
             )
             dir_paths = self.handle_dirs(
                 database,
@@ -87,7 +87,7 @@ class Command(BaseCommand):
             for i, IDs in manifest_dict.items():
                 self.save_pickle(
                     IDs,
-                    os.path.join(dir_paths["manifests"], f"wort-sra-kmer-db{i}.pcl"),
+                    os.path.join(dir_paths["manifests"], f"wort-sra-kmer-db{i}.pickle"),
                 )
             LOGGER.info(
                 f"Finished, creating new starting manifest {len(manifest_dict)} for further updates."
@@ -95,7 +95,8 @@ class Command(BaseCommand):
             self.save_pickle(
                 [],
                 os.path.join(
-                    dir_paths["manifests"], f"wort-sra-kmer-db{len(manifest_dict)}.pcl"
+                    dir_paths["manifests"],
+                    f"wort-sra-kmer-db{len(manifest_dict)}.pickle",
                 ),
             )
 
