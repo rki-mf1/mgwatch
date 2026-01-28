@@ -307,7 +307,7 @@ class Command(BaseCommand):
 
     async def fetch_all(self, urls, target_dir, IDs_succ, IDs_fail, man_succ, man_fail):
         lock = asyncio.Lock()
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env=True) as session:
             tasks = [
                 self.fetch(
                     session,
