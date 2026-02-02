@@ -72,7 +72,7 @@ class Command(BaseCommand):
             mani_list = set(self.get_manifest(manifest))
             if kwargs["ids"]:
                 LOGGER.info(
-                    "Only downloading signatures for specific IDs, as requested ..."
+                    "Only downloading signatures for specific IDs, as requested."
                 )
                 missing_IDs = set(kwargs["ids"]) - mani_list
                 LOGGER.info(f"Number of missing IDs: {len(missing_IDs)}")
@@ -168,14 +168,10 @@ class Command(BaseCommand):
         last_num = max(
             [
                 int(os.path.basename(f).split("db")[1].split(".pickle")[0])
-                for f in glob.glob(
-                    os.path.join(dir_paths["manifests"], "wort-sra-kmer-db*.pickle")
-                )
+                for f in glob.glob(os.path.join(dir_paths["manifests"], "db*.pickle"))
             ]
         )
-        last_sigs = os.path.join(
-            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pickle"
-        )
+        last_sigs = os.path.join(dir_paths["manifests"], f"db{last_num}.pickle")
         with open(last_sigs, "rb") as pickle_in:
             sig_list = pickle.load(pickle_in)
         return sig_list, last_num
@@ -232,7 +228,7 @@ class Command(BaseCommand):
         target_dir = dir_paths["updates"]
         signature_endpoint = "https://wort.sourmash.bio/v1/view/sra"
         urls = [f"{signature_endpoint}/{id}" for id in SRA_IDs]
-        LOGGER.info(f"Async download of {len(urls)} starting... first url {urls[0]}")
+        LOGGER.info(f"Async download of {len(urls)} starting. First url {urls[0]}")
         start_time = time.time()
         asyncio.run(
             self.fetch_all(urls, target_dir, IDs_succ, IDs_fail, man_succ, man_fail)
