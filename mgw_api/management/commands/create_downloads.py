@@ -226,7 +226,7 @@ class Command(BaseCommand):
         if not retry_failed:
             SRA_IDs = list(SRA_IDs - IDs_fail)
         # Use MAX_DOWNLOADS setting if we didn't pass in a limit on the command line
-        if not max_downloads and settings.MAX_DOWNLOADS:
+        if max_downloads is None and settings.MAX_DOWNLOADS:
             max_downloads = settings.MAX_DOWNLOADS
         if max_downloads and max_downloads < len(SRA_IDs):
             LOGGER.info(
