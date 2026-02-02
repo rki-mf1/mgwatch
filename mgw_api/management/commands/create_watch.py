@@ -71,7 +71,7 @@ class Command(BaseCommand):
         absolute_url = reverse("mgw_api:result_table", kwargs={"pk": new_result.pk})
         result_page = f"{MGW_URL}{absolute_url}"
         LOGGER.info(
-            f"Preparing to send email to {user} with new results at {result_page} ..."
+            f"Preparing to send email to {user} with new results at {result_page}"
         )
         subject = f"MetagenomeWatch: Found new results for watch {new_result.name}"
         message = inspect.cleandoc(f"""

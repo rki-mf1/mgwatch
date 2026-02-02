@@ -94,7 +94,7 @@ class Command(BaseCommand):
 
     def get_indices(self, k, db):
         index_dir = settings.DATA_DIR / db / "metagenomes" / "index"
-        new_files = list(index_dir.glob(f"wort-{db.lower()}-{k}-db*.rocksdb"))
+        new_files = list(index_dir.glob(f"{k}mers-db*.rocksdb"))
         LOGGER.info(f"Found new indexes: {new_files}")
         return new_files
 
@@ -153,7 +153,7 @@ class Command(BaseCommand):
         absolute_url = reverse("mgw_api:result_table", kwargs={"pk": result.pk})
         result_page = f"{MGW_URL}{absolute_url}"
         LOGGER.info(
-            f"Preparing to send email to {user} that search finished and can be viewed at {result_page} ..."
+            f"Preparing to send email to {user} that search finished and can be viewed at {result_page}"
         )
         subject = f'MetagenomeWatch: Search completed for search named "{result.name}"'
         message = inspect.cleandoc(f"""

@@ -15,6 +15,13 @@ from mgw.settings import LOGGER
 
 
 class Command(BaseCommand):
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Skip checking if the number of indexes matches number of manifest files",
+        )
+
     def handle(self, *args, **kwargs):
         try:
             database = "SRA"
@@ -32,7 +39,7 @@ class Command(BaseCommand):
                     "manifests",
                 ],
             )
-            self.create_initial_manifests(manifest, dir_paths)
+            self.create_initial_manifests(manifest, dir_paths, kwargs["force"])
             LOGGER.info("Creating manifests finished.")
         except Exception as e:
             LOGGER.error(f"Error creating manifests '{settings.DATA_DIR}': {e}")
@@ -48,23 +55,28 @@ class Command(BaseCommand):
                 os.chmod(dir_path, 0o700)
         return dir_paths
 
-    def create_initial_manifests(self, manifest, dir_paths):
+    def create_initial_manifests(self, manifest, dir_paths, force):
         manifest_IDs, index_paths, index_lists = (
             list(),
             os.listdir(dir_paths["index"]),
             os.listdir(dir_paths["lists"]),
         )
+        # currently we have 3 indexes for every sample: one for each k-mer length (21, 31, 51)
+        # FIXME: this should not be hard coded
+        indexes_per_sample = 3
         if os.path.exists(manifest):
-            LOGGER.info("Manifest found, reading ...")
+            LOGGER.info("Manifest found, reading it.")
             with open(manifest, "rb") as pcl_in:
                 manifest_IDs = pickle.load(pcl_in)
-            LOGGER.info(f"Manifest has {len(manifest_IDs)} IDs ...")
+            LOGGER.info(f"Manifest has {len(manifest_IDs)} IDs.")
         if not manifest_IDs and not index_paths:
-            LOGGER.info("No index and no manifest, creating empty manifest ...")
+            LOGGER.info("No index and no manifest, creating empty manifest.")
             self.save_pickle([], manifest)
         if not manifest_IDs and index_paths:
-            LOGGER.info("Index found, but no manifest, creating manifest ...")
-            if len(index_paths) != len(index_lists):
+            LOGGER.info("Index found, but no manifest, creating manifest.")
+            if not force and len(index_paths) != (
+                indexes_per_sample * len(index_lists)
+            ):
                 raise Exception(
                     "The number of indices and index lists are not the same."
                 )
@@ -87,16 +99,16 @@ class Command(BaseCommand):
             for i, IDs in manifest_dict.items():
                 self.save_pickle(
                     IDs,
-                    os.path.join(dir_paths["manifests"], f"wort-sra-kmer-db{i}.pickle"),
+                    os.path.join(dir_paths["manifests"], f"db{i}.pickle"),
                 )
             LOGGER.info(
-                f"Finished, creating new starting manifest {len(manifest_dict)} for further updates."
+                f"Finished, creating new empty starting manifest {len(manifest_dict)} for further updates."
             )
             self.save_pickle(
                 [],
                 os.path.join(
                     dir_paths["manifests"],
-                    f"wort-sra-kmer-db{len(manifest_dict)}.pickle",
+                    f"db{len(manifest_dict)}.pickle",
                 ),
             )
 

@@ -39,9 +39,7 @@ class Command(BaseCommand):
                     self.create_list(new_files, sig_list)
                     LOGGER.info(f"Sigs: {len(new_files)} | Index number: {last_num+i}")
                     retvals = [
-                        self.update_index(
-                            dir_paths, sig_list, database, k, last_num + i
-                        )
+                        self.update_index(dir_paths, sig_list, k, last_num + i)
                         for k in kmers
                     ]
                     indexing_succeeded = all([val == 0 for val in retvals])
@@ -99,7 +97,7 @@ class Command(BaseCommand):
 
     def get_last_index(self, dir_paths):
         LOGGER.info("Getting last index number and content.")
-        manifests = list(dir_paths["manifests"].glob("wort-sra-kmer-db*.pickle"))
+        manifests = list(dir_paths["manifests"].glob("db*.pickle"))
         if not manifests:
             # There is no manifest. We start it at 0 or the minimum value specified in the settings
             last_num = max(settings.INDEX_MIN_ITERATOR, 0)
@@ -110,9 +108,7 @@ class Command(BaseCommand):
             [int(f.name.split("db")[1].split(".pickle")[0]) for f in manifests]
         )
         last_num = max(settings.INDEX_MIN_ITERATOR, last_num)
-        last_sigs = os.path.join(
-            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pickle"
-        )
+        last_sigs = os.path.join(dir_paths["manifests"], f"db{last_num}.pickle")
         with open(last_sigs, "rb") as pcl_in:
             last_sig_IDs = pickle.load(pcl_in)
         last_sig_files = [
@@ -127,11 +123,8 @@ class Command(BaseCommand):
         with open(sig_list, "w") as sl:
             sl.writelines(f"{fp}\n" for fp in new_files)
 
-    def update_index(self, dir_paths, sig_list, database, k, last_num):
-        database_lower = database.lower()
-        idx = os.path.join(
-            dir_paths["index"], f"wort-{database_lower}-{k}-db{last_num}.rocksdb"
-        )
+    def update_index(self, dir_paths, sig_list, k, last_num):
+        idx = os.path.join(dir_paths["index"], f"{k}mers-db{last_num}.rocksdb")
         LOGGER.info(f"Creating branchwater index {idx}.")
         LOGGER.info(f"Signature list {sig_list}.")
         if os.path.isdir(idx) and idx[-8:] == ".rocksdb":
@@ -175,9 +168,7 @@ class Command(BaseCommand):
 
     def update_manifests(self, new_files, mani_list, manifest, dir_paths, last_num):
         new_files = [os.path.basename(file).split(".sig")[0] for file in new_files]
-        last_sigs = os.path.join(
-            dir_paths["manifests"], f"wort-sra-kmer-db{last_num}.pickle"
-        )
+        last_sigs = os.path.join(dir_paths["manifests"], f"db{last_num}.pickle")
         with open(last_sigs, "wb") as pcl_out:
             pickle.dump(new_files, pcl_out, protocol=4)
         sig_files = list(set(mani_list) | set(new_files))
