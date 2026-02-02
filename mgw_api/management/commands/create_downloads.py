@@ -26,6 +26,13 @@ from mgw.settings import LOGGER
 class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
+            "-n",
+            "--max-downloads",
+            default=None,
+            type=int,
+            help="Download at most this number of signatures",
+        )
+        parser.add_argument(
             "--ids",
             nargs="+",
             help="Only download signatures for these specific SRA IDs",
@@ -111,6 +118,7 @@ class Command(BaseCommand):
                 man_fail,
                 timeout_seconds,
                 retry_failed,
+                kwargs["max_downloads"],
             )
             LOGGER.info("Creating downloads finished.")
         except Exception as e:
@@ -204,6 +212,7 @@ class Command(BaseCommand):
         man_fail,
         timeout_seconds,
         retry_failed=False,
+        max_downloads=None,
     ):
         LOGGER.info(f"Requesting download of {len(SRA_IDs)} signatures.")
         IDs_succ = set(self.load_pickle(man_succ)) if man_succ.exists() else set()
@@ -216,11 +225,14 @@ class Command(BaseCommand):
         num_requested_ids_without_max = len(SRA_IDs)
         if not retry_failed:
             SRA_IDs = list(SRA_IDs - IDs_fail)
-        if settings.MAX_DOWNLOADS and settings.MAX_DOWNLOADS < len(SRA_IDs):
+        # Use MAX_DOWNLOADS setting if we didn't pass in a limit on the command line
+        if not max_downloads and settings.MAX_DOWNLOADS:
+            max_downloads = settings.MAX_DOWNLOADS
+        if max_downloads and max_downloads < len(SRA_IDs):
             LOGGER.info(
-                f"Subsetting the number of signatures we are going to download to {settings.MAX_DOWNLOADS}"
+                f"Subsetting the number of signatures we are going to download to {max_downloads}"
             )
-            SRA_IDs = SRA_IDs[: settings.MAX_DOWNLOADS]
+            SRA_IDs = SRA_IDs[:max_downloads]
         LOGGER.info(
             f"Initiating download of {len(SRA_IDs)} signatures (already downloaded IDs and failed removed)."
         )
