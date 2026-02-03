@@ -4,7 +4,9 @@ import os
 import pickle
 import shutil
 import subprocess
+import tempfile
 from datetime import datetime
+from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -15,64 +17,76 @@ from mgw.settings import LOGGER
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         try:
-            kmers = [21, 31, 51]
-            database = "SRA"
-            metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
-            sig_list = metagenomes_dir / "sig-list.txt"
-            manifest = metagenomes_dir / "manifest.pickle"
-            dir_paths = self.handle_dirs(
-                database,
-                ["updates", "index", "signatures", "indexing-failed", "manifests"],
-            )
-            mani_list = self.get_manifest(manifest)
-            last_sig_files, last_num = self.get_last_index(dir_paths)
-            LOGGER.debug(f"Already in most recent index: {len(last_sig_files)}")
-            new_sig_files = self.check_updates(dir_paths)
-            LOGGER.debug(
-                f"Will be added to the above and index rebuilt: {len(new_sig_files)}"
-            )
-            if new_sig_files:
-                sig_files = last_sig_files + new_sig_files
-                indexing_ever_failed = False
-                for i in range(0, len(sig_files), settings.INDEX_MAX_SIGNATURES):
-                    new_files = sig_files[i : i + settings.INDEX_MAX_SIGNATURES]
-                    self.create_list(new_files, sig_list)
-                    LOGGER.info(f"Sigs: {len(new_files)} | Index number: {last_num+i}")
-                    retvals = [
-                        self.update_index(dir_paths, sig_list, k, last_num + i)
-                        for k in kmers
-                    ]
-                    indexing_succeeded = all([val == 0 for val in retvals])
-                    target_dir = (
-                        "signatures" if indexing_succeeded else "indexing-failed"
-                    )
-                    self.move_files(new_files, dir_paths, target_dir)
-                    if indexing_succeeded:
-                        self.update_manifests(
-                            new_files, mani_list, manifest, dir_paths, last_num + i
-                        )
+            # Do all work in a temporary directory, so we don't impact the current indexes while the new one(s) are being built
+            tmp_dir = settings.DATA_DIR / "tmp"
+            os.makedirs(tmp_dir, exist_ok=True)
+            with tempfile.TemporaryDirectory(
+                prefix="mgwatch-index-", dir=tmp_dir
+            ) as work_dir:
+                kmers = [21, 31, 51]
+                database = "SRA"
+                metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
+                sig_list = Path(work_dir) / "sig-list.txt"
+                manifest = metagenomes_dir / "manifest.pickle"
+                dir_paths = self.handle_dirs(
+                    database,
+                    ["updates", "index", "signatures", "indexing-failed", "manifests"],
+                )
+                mani_list = self.get_manifest(manifest)
+                last_sig_files, last_num = self.get_last_index(dir_paths)
+                LOGGER.debug(f"Already in most recent index: {len(last_sig_files)}")
+                new_sig_files = self.check_updates(dir_paths)
+                LOGGER.debug(
+                    f"Will be added to the above and index rebuilt: {len(new_sig_files)}"
+                )
+                if new_sig_files:
+                    sig_files = last_sig_files + new_sig_files
+                    indexing_ever_failed = False
+                    for i in range(0, len(sig_files), settings.INDEX_MAX_SIGNATURES):
+                        new_files = sig_files[i : i + settings.INDEX_MAX_SIGNATURES]
+                        self.create_list(new_files, sig_list)
                         LOGGER.info(
-                            f"Updated index #{last_num+i} with {len(last_sig_files)} recalculated signatures and {len(new_sig_files)} new added signatures."
+                            f"Sigs: {len(new_files)} | Index number: {last_num+i}"
                         )
-                    indexing_ever_failed = (
-                        indexing_ever_failed or not indexing_succeeded
+                        retvals = [
+                            self.update_index(
+                                work_dir, dir_paths["index"], sig_list, k, last_num + i
+                            )
+                            for k in kmers
+                        ]
+                        indexing_succeeded = all([val == 0 for val in retvals])
+                        target_dir = (
+                            "signatures" if indexing_succeeded else "indexing-failed"
+                        )
+                        self.move_files(new_files, dir_paths, target_dir)
+                        if indexing_succeeded:
+                            self.update_manifests(
+                                new_files, mani_list, manifest, dir_paths, last_num + i
+                            )
+                            LOGGER.info(
+                                f"Updated index #{last_num+i} with {len(last_sig_files)} recalculated signatures and {len(new_sig_files)} new added signatures."
+                            )
+                        indexing_ever_failed = (
+                            indexing_ever_failed or not indexing_succeeded
+                        )
+                    if not indexing_ever_failed:
+                        # Empty the list of signatures that were downloaded but not
+                        # yet indexed, since all signatures have now been added to
+                        # the index
+                        self.save_pickle(
+                            set(),
+                            os.path.join(
+                                settings.DATA_DIR,
+                                database,
+                                "metagenomes",
+                                "download_successful.pickle",
+                            ),
+                        )
+                    LOGGER.info(
+                        f"Updating index finished, current index is #{last_num+i}."
                     )
-                if not indexing_ever_failed:
-                    # Empty the list of signatures that were downloaded but not
-                    # yet indexed, since all signatures have now been added to
-                    # the index
-                    self.save_pickle(
-                        set(),
-                        os.path.join(
-                            settings.DATA_DIR,
-                            database,
-                            "metagenomes",
-                            "download_successful.pickle",
-                        ),
-                    )
-                LOGGER.info(f"Updating index finished, current index is #{last_num+i}.")
-            else:
-                LOGGER.info(f"No new files to process in {dir_paths['updates']}.")
+                else:
+                    LOGGER.info(f"No new files to process in {dir_paths['updates']}.")
         except Exception as e:
             LOGGER.error(f"Error processing directory '{settings.DATA_DIR}': {e}")
 
@@ -123,12 +137,11 @@ class Command(BaseCommand):
         with open(sig_list, "w") as sl:
             sl.writelines(f"{fp}\n" for fp in new_files)
 
-    def update_index(self, dir_paths, sig_list, k, last_num):
-        idx = os.path.join(dir_paths["index"], f"{k}mers-db{last_num}.rocksdb")
-        LOGGER.info(f"Creating branchwater index {idx}.")
+    def update_index(self, work_dir, index_dir, sig_list, k, last_num):
+        old_idx = os.path.join(index_dir, f"{k}mers-db{last_num}.rocksdb")
+        new_idx = os.path.join(work_dir, f"{k}mers-db{last_num}.rocksdb")
+        LOGGER.info(f"Creating branchwater index {new_idx} to replace {old_idx}.")
         LOGGER.info(f"Signature list {sig_list}.")
-        if os.path.isdir(idx) and idx[-8:] == ".rocksdb":
-            shutil.rmtree(idx)
         cpus = min(8, int(mp.cpu_count() * 0.8))
         cmd = [
             "sourmash",
@@ -144,7 +157,7 @@ class Command(BaseCommand):
             f"{cpus}",
             "--no-store-sketches",
             "--output",
-            f"{idx}",
+            f"{new_idx}",
             f"{sig_list}",
         ]
         LOGGER.debug(f"Running sourmash: {' '.join(cmd)}")
@@ -152,6 +165,12 @@ class Command(BaseCommand):
         LOGGER.debug(
             f"sourmash branchwater index building output:\nstdout: {result.stdout}\nstderr: {result.stderr}"
         )
+        if result.returncode == 0:
+            # Indexing was successful, remove old index so we can put the new one in its place
+            if os.path.isdir(old_idx) and old_idx[-8:] == ".rocksdb":
+                shutil.rmtree(old_idx)
+            # Move the newly created index into the place where the old one was
+            shutil.move(new_idx, old_idx)
         return result.returncode  # returncode: 0 = success, anything else = fail
 
     def move_files(self, file_list, dir_paths, target_dir):
