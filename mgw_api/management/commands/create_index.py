@@ -18,7 +18,11 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         try:
             # Do all work in a temporary directory, so we don't impact the current indexes while the new one(s) are being built
-            with tempfile.TemporaryDirectory(prefix="mgwatch-index-") as work_dir:
+            tmp_dir = settings.DATA_DIR / "tmp"
+            os.makedirs(tmp_dir, exist_ok=True)
+            with tempfile.TemporaryDirectory(
+                prefix="mgwatch-index-", dir=tmp_dir
+            ) as work_dir:
                 kmers = [21, 31, 51]
                 database = "SRA"
                 metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
