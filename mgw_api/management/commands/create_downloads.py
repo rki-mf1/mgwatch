@@ -323,12 +323,12 @@ class Command(BaseCommand):
                         IDs_succ.add(id)
                         await asyncio.to_thread(self.save_pickle, IDs_succ, man_succ)
                     return {"id": id, "url": url, "status": status, "path": dest}
-        except Exception as exc:
-            LOGGER.error(f"Download exception for {url}: {exc}")
+        except Exception:
+            LOGGER.exception("Download exception for %s", url)
             async with lock:
                 IDs_fail.add(id)
                 await asyncio.to_thread(self.save_pickle, IDs_fail, man_fail)
-            return {"id": id, "url": url, "status": None, "error": str(exc)}
+            return {"id": id, "url": url, "status": None}
 
     async def fetch_all(
         self, urls, target_dir, IDs_succ, IDs_fail, man_succ, man_fail, max_simultaneous
