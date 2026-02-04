@@ -33,6 +33,13 @@ class Command(BaseCommand):
             help="Download at most this number of signatures",
         )
         parser.add_argument(
+            "-p",
+            "--max-simultaneous",
+            default=100,
+            type=int,
+            help="Maximum number of simultaneous signature downloads (connection pool size, 0 = no limit)",
+        )
+        parser.add_argument(
             "--ids",
             nargs="+",
             help="Only download signatures for these specific SRA IDs",
@@ -119,6 +126,7 @@ class Command(BaseCommand):
                 timeout_seconds,
                 retry_failed,
                 kwargs["max_downloads"],
+                kwargs["max_simultaneous"],
             )
             LOGGER.info("Creating downloads finished.")
         except Exception as e:
@@ -213,6 +221,7 @@ class Command(BaseCommand):
         timeout_seconds,
         retry_failed=False,
         max_downloads=None,
+        max_simultaneous=100,
     ):
         LOGGER.info(f"Requesting download of {len(SRA_IDs)} signatures.")
         IDs_succ = set(self.load_pickle(man_succ)) if man_succ.exists() else set()
@@ -243,7 +252,15 @@ class Command(BaseCommand):
         LOGGER.info(f"Async download of {len(urls)} starting. First url {urls[0]}")
         start_time = time.time()
         asyncio.run(
-            self.fetch_all(urls, target_dir, IDs_succ, IDs_fail, man_succ, man_fail)
+            self.fetch_all(
+                urls,
+                target_dir,
+                IDs_succ,
+                IDs_fail,
+                man_succ,
+                man_fail,
+                max_simultaneous,
+            )
         )
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -313,9 +330,13 @@ class Command(BaseCommand):
                 await asyncio.to_thread(self.save_pickle, IDs_fail, man_fail)
             return {"id": id, "url": url, "status": None, "error": str(exc)}
 
-    async def fetch_all(self, urls, target_dir, IDs_succ, IDs_fail, man_succ, man_fail):
+    async def fetch_all(
+        self, urls, target_dir, IDs_succ, IDs_fail, man_succ, man_fail, max_simultaneous
+    ):
         lock = asyncio.Lock()
-        async with aiohttp.ClientSession(trust_env=True) as session:
+        # Limit the number of open connections
+        conn = aiohttp.TCPConnector(limit=max_simultaneous)
+        async with aiohttp.ClientSession(connector=conn, trust_env=True) as session:
             tasks = [
                 self.fetch(
                     session,
