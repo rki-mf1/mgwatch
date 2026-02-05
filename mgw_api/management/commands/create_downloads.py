@@ -40,6 +40,13 @@ class Command(BaseCommand):
             help="Maximum number of simultaneous signature downloads (connection pool size, 0 = no limit)",
         )
         parser.add_argument(
+            "-t",
+            "--timeout",
+            default=60,
+            type=int,
+            help="Timeout when trying to establish a connection, and also when downloading a signature",
+        )
+        parser.add_argument(
             "--ids",
             nargs="+",
             help="Only download signatures for these specific SRA IDs",
@@ -62,7 +69,7 @@ class Command(BaseCommand):
             # the same time we have several IDs where wort seems to just hang
             # for a long time and never send anything. Therefore we set a
             # timeout on each download.
-            timeout_seconds = 30
+            timeout_seconds = kwargs["timeout"]
             database = "SRA"
             today = datetime.today() - timedelta(days=2)
             start_date = (
@@ -260,6 +267,7 @@ class Command(BaseCommand):
                 man_succ,
                 man_fail,
                 max_simultaneous,
+                timeout_seconds,
             )
         )
         end_time = time.time()
@@ -331,12 +339,29 @@ class Command(BaseCommand):
             return {"id": id, "url": url, "status": None}
 
     async def fetch_all(
-        self, urls, target_dir, IDs_succ, IDs_fail, man_succ, man_fail, max_simultaneous
+        self,
+        urls,
+        target_dir,
+        IDs_succ,
+        IDs_fail,
+        man_succ,
+        man_fail,
+        max_simultaneous,
+        timeout_seconds,
     ):
         lock = asyncio.Lock()
         # Limit the number of open connections
         conn = aiohttp.TCPConnector(limit=max_simultaneous)
-        async with aiohttp.ClientSession(connector=conn, trust_env=True) as session:
+        # We apply the timeout to both the time it takes to establish a
+        # connection, and also to download the signature. This means the actual
+        # timeout is a maximum of 2 * timeout_seconds. This is a timeout *per
+        # signature*, not overall.
+        timeout = aiohttp.ClientTimeout(
+            sock_connect=timeout_seconds, sock_read=timeout_seconds
+        )
+        async with aiohttp.ClientSession(
+            connector=conn, trust_env=True, timeout=timeout
+        ) as session:
             tasks = [
                 self.fetch(
                     session,
