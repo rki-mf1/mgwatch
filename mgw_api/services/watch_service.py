@@ -13,54 +13,48 @@ from mgw.settings import MGW_URL
 from mgw_api.models import Result
 
 
-class WatchService:
-    """Service layer for running and evaluating watch updates."""
+def search_watch(name, user_id, watch_pk):
+    output = io.StringIO()
+    call_command("create_search", user_id, name, watch_pk, stdout=output)
+    match = re.search(r"RESULT_PK:\s*(\d+)", output.getvalue())
+    result_pk = int(match.group(1)) if match else None
+    return Result.objects.get(pk=result_pk, user_id=user_id)
 
-    @staticmethod
-    def search_watch(name, user_id, watch_pk):
-        output = io.StringIO()
-        call_command("create_search", user_id, name, watch_pk, stdout=output)
-        match = re.search(r"RESULT_PK:\s*(\d+)", output.getvalue())
-        result_pk = int(match.group(1)) if match else None
-        return Result.objects.get(pk=result_pk, user_id=user_id)
 
-    @staticmethod
-    def compare_results(result, new_result):
-        df1 = pd.read_csv(result.file.path)
-        df2 = pd.read_csv(new_result.file.path)
-        return df1.equals(df2)
+def compare_results(result, new_result):
+    df1 = pd.read_csv(result.file.path)
+    df2 = pd.read_csv(new_result.file.path)
+    return df1.equals(df2)
 
-    @staticmethod
-    def send_watch_notification(user, result, new_result):
-        absolute_url = reverse("mgw_api:result_table", kwargs={"pk": new_result.pk})
-        result_page = f"{MGW_URL}{absolute_url}"
-        LOGGER.info(
-            f"Preparing to send email to {user} with new results at {result_page}"
-        )
-        subject = f"MetagenomeWatch: Found new results for watch {new_result.name}"
-        message = inspect.cleandoc(f"""
-        Dear MetagenomeWatch user {user.username},
 
-        New results have been found for your watch named "{result.name}".
+def send_watch_notification(user, result, new_result):
+    absolute_url = reverse("mgw_api:result_table", kwargs={"pk": new_result.pk})
+    result_page = f"{MGW_URL}{absolute_url}"
+    LOGGER.info(f"Preparing to send email to {user} with new results at {result_page}")
+    subject = f"MetagenomeWatch: Found new results for watch {new_result.name}"
+    message = inspect.cleandoc(f"""
+    Dear MetagenomeWatch user {user.username},
 
-        You can view the results here: {result_page}
+    New results have been found for your watch named "{result.name}".
 
-        Watch details:
-            Name: {new_result.name}
-            K-mer: {new_result.kmer}
-            Database: {new_result.database}
-            Containment threshold: {new_result.containment}
+    You can view the results here: {result_page}
 
-        Best wishes,
-        The MetagenomeWatch Team
-        """)
-        from_email = settings.DEFAULT_FROM_EMAIL
-        recipient_list = [user.email]
-        send_mail(
-            subject,
-            message,
-            from_email,
-            recipient_list,
-            fail_silently=False,
-        )
-        LOGGER.info("Email sent successfully")
+    Watch details:
+        Name: {new_result.name}
+        K-mer: {new_result.kmer}
+        Database: {new_result.database}
+        Containment threshold: {new_result.containment}
+
+    Best wishes,
+    The MetagenomeWatch Team
+    """)
+    from_email = settings.DEFAULT_FROM_EMAIL
+    recipient_list = [user.email]
+    send_mail(
+        subject,
+        message,
+        from_email,
+        recipient_list,
+        fail_silently=False,
+    )
+    LOGGER.info("Email sent successfully")

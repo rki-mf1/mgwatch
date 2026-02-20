@@ -5,7 +5,9 @@ from django.core.management.base import BaseCommand
 from mgw.settings import LOGGER
 from mgw_api.models import Result
 from mgw_api.models import Signature
-from mgw_api.services.watch_service import WatchService
+from mgw_api.services.watch_service import compare_results
+from mgw_api.services.watch_service import search_watch
+from mgw_api.services.watch_service import send_watch_notification
 
 
 class Command(BaseCommand):
@@ -19,10 +21,8 @@ class Command(BaseCommand):
                 )
                 signature.submitted = True
                 signature.save()
-                new_result = WatchService.search_watch(
-                    signature.name, signature.user.id, result.pk
-                )
-                is_equal = WatchService.compare_results(result, new_result)
+                new_result = search_watch(signature.name, signature.user.id, result.pk)
+                is_equal = compare_results(result, new_result)
                 if is_equal:
                     new_result.delete()
                     new_message = "without finding new Metagenomes"
@@ -35,7 +35,7 @@ class Command(BaseCommand):
                     result.save()
                     new_result.save()
 
-                    WatchService.send_watch_notification(result.user, result, new_result)
+                    send_watch_notification(result.user, result, new_result)
                     new_message = "with new Metagenomes"
                 LOGGER.info(
                     f"Successfully processed file '{result.name}' {new_message}"

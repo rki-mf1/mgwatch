@@ -3,7 +3,8 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from mgw_api.services.watch_service import WatchService
+from mgw_api.services.watch_service import compare_results
+from mgw_api.services.watch_service import search_watch
 
 
 class WatchServiceTests(SimpleTestCase):
@@ -21,7 +22,7 @@ class WatchServiceTests(SimpleTestCase):
 
         mock_call_command.side_effect = _write_output
 
-        result = WatchService.search_watch("example", 3, 7)
+        result = search_watch("example", 3, 7)
 
         self.assertIs(result, expected_result)
         mock_result_get.assert_called_once_with(pk=42, user_id=3)
@@ -35,4 +36,4 @@ class WatchServiceTests(SimpleTestCase):
         left = SimpleNamespace(file=SimpleNamespace(path="left.csv"))
         right = SimpleNamespace(file=SimpleNamespace(path="right.csv"))
 
-        self.assertTrue(WatchService.compare_results(left, right))
+        self.assertTrue(compare_results(left, right))
