@@ -26,3 +26,17 @@ git config blame.ignoreRevsFile .git-blame-ignore-revs
 
 This only has to be run once, and afterwards any new commit hashes added to the
 `.git-blame-ignore-revs` file will automatically be taken into account.
+
+
+## Code map
+
+For module boundaries and where to place new logic, see `docs/code-map.md`.
+
+## Common developer commands
+
+A small set of canonical commands is provided in the project `Makefile`:
+
+- `make test`
+- `make lint`
+- `make format`
+- `make check`
