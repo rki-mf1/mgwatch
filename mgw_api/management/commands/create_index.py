@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 from datetime import datetime
+from itertools import batched
 from pathlib import Path
 
 from django.conf import settings
@@ -42,15 +43,17 @@ class Command(BaseCommand):
                 if new_sig_files:
                     sig_files = last_sig_files + new_sig_files
                     indexing_ever_failed = False
-                    for i in range(0, len(sig_files), settings.INDEX_MAX_SIGNATURES):
-                        new_files = sig_files[i : i + settings.INDEX_MAX_SIGNATURES]
-                        self.create_list(new_files, sig_list)
+                    for idx_offset, new_files in enumerate(
+                        batched(sig_files, n=settings.INDEX_MAX_SIGNATURES), 0
+                    ):
+                        self.write_signature_list(new_files, sig_list)
+                        index_number = last_num + idx_offset
                         LOGGER.info(
-                            f"Sigs: {len(new_files)} | Index number: {last_num+i}"
+                            f"Building index {index_number}. New index will contain {len(new_files)} signatures."
                         )
                         retvals = [
                             self.update_index(
-                                work_dir, dir_paths["index"], sig_list, k, last_num + i
+                                work_dir, dir_paths["index"], sig_list, k, index_number
                             )
                             for k in kmers
                         ]
@@ -61,10 +64,10 @@ class Command(BaseCommand):
                         self.move_files(new_files, dir_paths, target_dir)
                         if indexing_succeeded:
                             self.update_manifests(
-                                new_files, mani_list, manifest, dir_paths, last_num + i
+                                new_files, mani_list, manifest, dir_paths, index_number
                             )
                             LOGGER.info(
-                                f"Updated index #{last_num+i} with {len(last_sig_files)} recalculated signatures and {len(new_sig_files)} new added signatures."
+                                f"Updated index #{index_number} with {len(last_sig_files)} recalculated signatures and {len(new_sig_files)} new added signatures."
                             )
                         indexing_ever_failed = (
                             indexing_ever_failed or not indexing_succeeded
@@ -82,9 +85,7 @@ class Command(BaseCommand):
                                 "download_successful.pickle",
                             ),
                         )
-                    LOGGER.info(
-                        f"Updating index finished, current index is #{last_num+i}."
-                    )
+                    LOGGER.info("Finished updating indexes")
                 else:
                     LOGGER.info(f"No new files to process in {dir_paths['updates']}.")
         except Exception as e:
@@ -133,9 +134,9 @@ class Command(BaseCommand):
     def check_updates(self, dir_paths):
         return glob.glob(os.path.join(dir_paths["updates"], "*.sig"))
 
-    def create_list(self, new_files, sig_list):
-        with open(sig_list, "w") as sl:
-            sl.writelines(f"{fp}\n" for fp in new_files)
+    def write_signature_list(self, sig_file_names, output_file):
+        with open(output_file, "w") as f:
+            f.writelines(f"{fp}\n" for fp in sig_file_names)
 
     def update_index(self, work_dir, index_dir, sig_list, k, last_num):
         old_idx = os.path.join(index_dir, f"{k}mers-db{last_num}.rocksdb")
