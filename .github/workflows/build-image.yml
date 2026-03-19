@@ -11,7 +11,7 @@ permissions:
   contents: read
   packages: write
 env:
-  IMAGE_NAME: mgwatch-backend
+  IMAGE_NAME: mgwatch
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
