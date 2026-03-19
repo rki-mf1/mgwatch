@@ -3,7 +3,7 @@ services:
     image: mgwatch:local
     container_name: mgwatch-backend
     volumes:
-      - vars.env:/code/vars.env:ro
+      - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
       - ${NGINX_DATA_DIR}/static:/static
@@ -27,7 +27,7 @@ services:
     image: mgwatch:local
     container_name: mgwatch-cron
     volumes:
-      - vars.env:/code/vars.env:ro
+      - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
       - ${NGINX_DATA_DIR}/static:/static
