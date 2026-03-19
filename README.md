@@ -62,7 +62,7 @@ $ dockerd-rootless-setuptool.sh install
 
 There are currently two places where you MetagenomeWatch configuration is stored:
 
-`vars.env`: this file doesn't exist by default. An example is provided in the project root directory, called `vars.env.example`. You should copy this file to `.env` and customize its contents as needed.
+`vars.env`: this file doesn't exist by default. An example is provided in the project root directory, called `vars.env.example`. You should copy this file to `vars.env` and customize its contents as needed.
 
 ```
 $ cp vars.env.example vars.env
@@ -129,3 +129,17 @@ Staring MetagenomeWatch in developer mode will do a few things automatically, wh
 
 ### mgw_api/management/commands/create_metadata.py
 - modify line 107 to allow for more cores
+
+
+## Production deployment without cloning the repository
+
+To deploy from prebuilt images, use a production compose file that references `DOCKER_MGWATCH_IMAGE` from GHCR and keep deployment files in a separate ops directory/repository.
+
+Recommended operator workflow:
+
+1. Download or sync a deployment bundle (`compose.prod.yml`, `.env`, `vars.env`).
+2. Set `DOCKER_MGWATCH_IMAGE` to a pinned digest such as `ghcr.io/<org>/mgwatch-backend@sha256:<digest>`.
+3. Start services with `docker compose -f compose.prod.yml up -d`.
+4. Run maintenance commands with `docker compose -f compose.prod.yml run --rm mgwatch-backend "conda run --no-capture-output -n mgw ./manage.py <command>"`.
+
+This model keeps runtime hosts independent from a local source checkout while preserving the existing Docker-based architecture.
