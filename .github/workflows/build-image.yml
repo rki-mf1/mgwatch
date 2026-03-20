@@ -1,0 +1,130 @@
+name: build-image
+on:
+  push:
+    branches:
+      - "**"
+  release:
+    types:
+      - published
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+env:
+  IMAGE_NAME: mgwatch
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ github.event_name == 'release' && format('refs/tags/{0}', github.event.release.tag_name) || github.ref }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs:
+      - pre-commit
+    outputs:
+      image_repository: ${{ steps.prep.outputs.image_repository }}
+      image_digest: ${{ steps.build.outputs.digest }}
+      image_ref: ${{ steps.deployment.outputs.image_ref }}
+      sha_tag: ${{ steps.prep.outputs.sha_tag }}
+      release_tag: ${{ steps.prep.outputs.release_tag }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ github.event_name == 'release' && format('refs/tags/{0}', github.event.release.tag_name) || github.ref }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.0.0
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute image tags
+        id: prep
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          owner="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          image_repository="ghcr.io/${owner}/${IMAGE_NAME}"
+          sha_tag="sha-${GITHUB_SHA}"
+          release_tag=""
+          tags="${image_repository}:${sha_tag}"
+
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            release_tag="${{ github.event.release.tag_name }}"
+            tags="${tags}"$'\n'"${image_repository}:${release_tag}"
+          fi
+
+          {
+            echo "image_repository=${image_repository}"
+            echo "sha_tag=${sha_tag}"
+            echo "release_tag=${release_tag}"
+            echo "tags<<EOF"
+            echo "${tags}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.prep.outputs.tags }}
+      - name: Write deployment outputs
+        id: deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image_ref="${{ steps.prep.outputs.image_repository }}@${{ steps.build.outputs.digest }}"
+
+          echo "image_ref=${image_ref}" >> "${GITHUB_OUTPUT}"
+
+          cat > deployment-image.txt <<EOF
+          IMAGE_REPOSITORY=${{ steps.prep.outputs.image_repository }}
+          IMAGE_DIGEST=${{ steps.build.outputs.digest }}
+          IMAGE_REF=${image_ref}
+          SHA_TAG=${{ steps.prep.outputs.sha_tag }}
+          RELEASE_TAG=${{ steps.prep.outputs.release_tag }}
+          EOF
+
+          cat > deployment-image.json <<EOF
+          {
+            "image_repository": "${{ steps.prep.outputs.image_repository }}",
+            "image_digest": "${{ steps.build.outputs.digest }}",
+            "image_ref": "${image_ref}",
+            "sha_tag": "${{ steps.prep.outputs.sha_tag }}",
+            "release_tag": "${{ steps.prep.outputs.release_tag }}"
+          }
+          EOF
+      - name: Upload deployment outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-image
+          path: |
+            deployment-image.txt
+            deployment-image.json
+      - name: Write job summary
+        shell: bash
+        run: |
+          {
+            echo "## Published image"
+            echo
+            echo "- Repository: \`${{ steps.prep.outputs.image_repository }}\`"
+            echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- Deployment ref: \`${{ steps.deployment.outputs.image_ref }}\`"
+            echo "- SHA tag: \`${{ steps.prep.outputs.sha_tag }}\`"
+            if [[ -n "${{ steps.prep.outputs.release_tag }}" ]]; then
+              echo "- Release tag: \`${{ steps.prep.outputs.release_tag }}\`"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
