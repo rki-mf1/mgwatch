@@ -5,7 +5,11 @@ updates:
     schedule:
       interval: "weekly"
     groups:
-      github-actions:
-        applies-to: all
+      all-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      all-versions:
+        applies-to: version-updates
         patterns:
           - "*"
