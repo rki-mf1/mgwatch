@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'release' && format('refs/tags/{0}', github.event.release.tag_name) || github.ref }}
       - name: Set up Python
@@ -36,7 +36,7 @@ jobs:
       release_tag: ${{ steps.prep.outputs.release_tag }}
     steps:
       - name: Check out source
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'release' && format('refs/tags/{0}', github.event.release.tag_name) || github.ref }}
       - name: Set up Docker Buildx
