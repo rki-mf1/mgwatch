@@ -4,3 +4,12 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      all-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      all-versions:
+        applies-to: version-updates
+        patterns:
+          - "*"
