@@ -48,7 +48,7 @@ def validate_fasta_content(fieldfile):
 
 def user_directory_path(instance, filename):
     date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    return f"user_{instance.user.id}/{filename}-{date}"
+    return f"user_{instance.user.id}/{date}/{filename}"
 
 
 class Fasta(models.Model):
