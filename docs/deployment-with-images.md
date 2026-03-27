@@ -13,8 +13,7 @@ A release bundle should include:
 
 The backend image must be available in GHCR under a tag or digest, for example:
 
-- `ghcr.io/<org>/mgwatch-backend:latest`
-- `ghcr.io/<org>/mgwatch-backend@sha256:<digest>`
+- `ghcr.io/rki-mf1/mgwatch:sha-<git digest>`
 
 Prefer digest pinning for reproducibility.
 
@@ -31,7 +30,7 @@ Prefer digest pinning for reproducibility.
 4. Run migrations if needed:
 
    ```bash
-   docker compose -f compose.prod.yml run --rm mgwatch-backend "conda run --no-capture-output -n mgw ./manage.py migrate"
+   docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py migrate"
    ```
 
 5. Verify service logs:

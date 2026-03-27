@@ -1,23 +1,26 @@
 services:
-  mgwatch-backend:
+  # This container handles both Django as well as serving static files using Whitenoise
+  mgwatch:
     image: mgwatch:local
-    container_name: mgwatch-backend
+    container_name: mgwatch
     volumes:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      - ${NGINX_DATA_DIR}/static:/static
       # Persist mgwatch cron jobs
       - ${EXTERNAL_DATA_DIR}/backend-crontabs:/var/spool/cron/crontabs
       - ${SQLITE_DIR}:/data-db
       - ${LOG_DIR}:/logs
+      - ${NGINX_DATA_DIR}/media:/media
     environment:
       - TZ=$TZ
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
       - MAX_DOWNLOADS=$MAX_DOWNLOADS
     entrypoint: /bin/sh -c
-    command: ["conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:9080 mgw.wsgi:application"]
+    command: ["conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 127.0.0.1:8100 mgw.wsgi:application"]
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8100:8100"
     depends_on:
       mgwatch-mongodb:
         condition: service_started
@@ -30,7 +33,6 @@ services:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      - ${NGINX_DATA_DIR}/static:/static
       # Persist mgwatch cron jobs
       - ${EXTERNAL_DATA_DIR}/backend-crontabs:/var/spool/cron/crontabs
       - ${SQLITE_DIR}:/data-db
@@ -42,7 +44,7 @@ services:
     command: ["/usr/sbin/cron -f"]
     restart: unless-stopped
     depends_on:
-      mgwatch-backend:
+      mgwatch:
         condition: service_started
   mgwatch-mongodb:
     image: $DOCKER_MONGODB_IMAGE
@@ -56,19 +58,3 @@ services:
       - ${MONGODB_LOG_DIR}:/data/logs
     command: --logpath /data/logs/mongodb.log
     restart: unless-stopped
-  mgwatch-proxy:
-    image: $DOCKER_NGINX_IMAGE
-    container_name: mgwatch-proxy
-    volumes:
-      - ./conf/nginx/templates:/etc/nginx/templates
-      # Not sure how we need to set this up
-      - ${NGINX_DATA_DIR}/static:/static
-      - ${NGINX_DATA_DIR}/media:/media
-    environment:
-      - TZ=$TZ
-      - NGINX_PORT=8000
-    ports:
-      - "127.0.0.1:8000:8000"
-    restart: unless-stopped
-    depends_on:
-      - mgwatch-backend

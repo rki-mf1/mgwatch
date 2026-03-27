@@ -28,7 +28,7 @@ Use this checklist when promoting a MetagenomeWatch change from merge to safe pr
 - [ ] Update staging deployment config to the new digest:
 
   ```env
-  DOCKER_MGWATCH_IMAGE=ghcr.io/<org>/mgwatch-backend@sha256:<digest>
+  DOCKER_MGWATCH_IMAGE=ghcr.io/<org>/mgwatch:sha-<git digest>
   ```
 
 - [ ] Deploy staging:
@@ -41,7 +41,7 @@ Use this checklist when promoting a MetagenomeWatch change from merge to safe pr
 - [ ] Run migrations (if needed):
 
   ```bash
-  docker compose -f compose.prod.yml run --rm mgwatch-backend "conda run --no-capture-output -n mgw ./manage.py migrate"
+  docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py migrate"
   ```
 
 - [ ] Run smoke tests (login, search, watch workflow, admin paths).
@@ -70,7 +70,7 @@ Use this checklist when promoting a MetagenomeWatch change from merge to safe pr
 - [ ] Run migrations (if required):
 
   ```bash
-  docker compose -f compose.prod.yml run --rm mgwatch-backend "conda run --no-capture-output -n mgw ./manage.py migrate"
+  docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py migrate"
   ```
 
 - [ ] Verify service health endpoints / core user flows.

@@ -36,5 +36,5 @@ done
 [[ CREATE_MIGRATIONS -eq 0 ]] && ./scripts/dev-manage.sh makemigrations
 [[ MIGRATE -eq 0 ]] && ./scripts/dev-manage.sh migrate
 [[ LOAD_DATA -eq 0 ]] && ./scripts/dev-load-fixtures.sh
-[[ SHOW_LOGS -eq 0 ]] && ./scripts/dc-dev.sh logs -tf &
-./scripts/dc-dev.sh watch --no-up
+[[ SHOW_LOGS -eq 0 ]] && ./scripts/dc-dev.sh logs -tf
+#./scripts/dc-dev.sh watch --no-up

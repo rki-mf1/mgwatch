@@ -11,3 +11,4 @@ COPY manage.py README.md .
 COPY templates/ /code/templates
 COPY mgw/ /code/mgw
 COPY mgw_api/ /code/mgw_api
+RUN conda run --no-capture-output -n mgw SECRET_KEY=dummy ./manage.py collectstatic --no-input
