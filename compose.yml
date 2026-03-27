@@ -17,7 +17,7 @@ services:
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
       - MAX_DOWNLOADS=$MAX_DOWNLOADS
     entrypoint: /bin/sh -c
-    command: ["conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 127.0.0.1:8100 mgw.wsgi:application"]
+    command: ["conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:8100 mgw.wsgi:application"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:8100:8100"
