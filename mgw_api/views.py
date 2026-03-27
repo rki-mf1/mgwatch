@@ -478,7 +478,12 @@ def delete_result(request, pk):
 def _download_user_file(field_file, filename):
     if not field_file:
         raise Http404("File not found.")
-    return FileResponse(field_file.open("rb"), as_attachment=True, filename=filename)
+    try:
+        return FileResponse(
+            field_file.open("rb"), as_attachment=True, filename=filename
+        )
+    except (FileNotFoundError, OSError) as exc:
+        raise Http404("File not found.") from exc
 
 
 @login_required
