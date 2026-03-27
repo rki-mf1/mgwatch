@@ -28,5 +28,6 @@ dependencies:
   - conda-forge::aiofiles=25.1.0
   - conda-forge::aiohttp
   - conda-forge::rich=14.2.0
+  - conda-forge::whitenoise=6.12.0
   - pip:
       - django-auth-ldap==5.0.0

@@ -4,36 +4,31 @@
 # container so that you can make live changes to the code without needing to
 # rebuild the container.
 services:
-  mgwatch-backend:
-    ports:
-      # To access the backend directly, normally can use localhost:8000 via the
-      # nginx proxy
-      - "9081:9080"
-    command: ["conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw ./manage.py runserver 0.0.0.0:9080"]
-    build: .
-    develop:
-      watch:
-        - action: sync
-          path: ./mgw
-          target: /code/mgw
-          initial_sync: true
-        - action: sync
-          path: ./mgw_api
-          target: /code/mgw_api
-          initial_sync: true
-        - action: sync
-          path: ./templates
-          target: /code/templates
-          initial_sync: true
-        - action: sync
-          path: ./mgw
-          target: /code/mgw
-          initial_sync: true
-        - action: rebuild
-          path: environment.yml
-  mgwatch-mongodb:
-    ports:
-      - "27018:27017"
-  mgwatch-proxy:
+  mgwatch:
     ports: !override
-      - 8889:8000
+      - "8100:8100"
+    command: ["conda run --no-capture-output -n mgw ./manage.py runserver 0.0.0.0:8100"]
+    #    build: .
+    #    develop:
+    #      watch:
+    #        - action: sync
+    #          path: ./mgw
+    #          target: /code/mgw
+    #          initial_sync: true
+    #        - action: sync
+    #          path: ./mgw_api
+    #          target: /code/mgw_api
+    #          initial_sync: true
+    #        - action: sync
+    #          path: ./templates
+    #          target: /code/templates
+    #          initial_sync: true
+    #        - action: sync
+    #          path: ./mgw
+    #          target: /code/mgw
+    #          initial_sync: true
+    #        - action: rebuild
+    #          path: environment.yml
+  mgwatch-mongodb:
+    ports: !override
+      - "27018:27017"

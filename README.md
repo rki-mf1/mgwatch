@@ -107,7 +107,7 @@ Staring MetagenomeWatch in developer mode will do a few things automatically, wh
 
 ## Directories
 
-- code: `mgw-api/`
+- code: `mgw_api/`
 - index: `mgw-data/SRA/metagenomes/`
 - metadata: `mgw-data/SRA/metadata/`
 
@@ -138,8 +138,6 @@ To deploy from prebuilt images, use a production compose file that references `D
 Recommended operator workflow:
 
 1. Download or sync a deployment bundle (`compose.prod.yml`, `.env`, `vars.env`).
-2. Set `DOCKER_MGWATCH_IMAGE` to a pinned digest such as `ghcr.io/<org>/mgwatch-backend@sha256:<digest>`.
+2. Set `DOCKER_MGWATCH_IMAGE` to a pinned digest such as `ghcr.io/rki-mf1/mgwatch:sha-<git digest>`.
 3. Start services with `docker compose -f compose.prod.yml up -d`.
-4. Run maintenance commands with `docker compose -f compose.prod.yml run --rm mgwatch-backend "conda run --no-capture-output -n mgw ./manage.py <command>"`.
-
-This model keeps runtime hosts independent from a local source checkout while preserving the existing Docker-based architecture.
+4. Run maintenance commands with `docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py <command>"`.

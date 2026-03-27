@@ -14,6 +14,8 @@ from django.contrib.auth import authenticate
 from django.contrib.auth import login
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
+from django.http import FileResponse
+from django.http import Http404
 from django.http import HttpResponse
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -471,6 +473,29 @@ def delete_result(request, pk):
         "mgw_api/confirm_delete_result.html",
         {"result": result, "next_url": next_url},
     )
+
+
+def _download_user_file(field_file, filename):
+    if not field_file:
+        raise Http404("File not found.")
+    try:
+        return FileResponse(
+            field_file.open("rb"), as_attachment=True, filename=filename
+        )
+    except (FileNotFoundError, OSError) as exc:
+        raise Http404("File not found.") from exc
+
+
+@login_required
+def download_signature_file(request, pk):
+    signature = get_object_or_404(Signature, pk=pk, user=request.user)
+    return _download_user_file(signature.file, os.path.basename(signature.file.name))
+
+
+@login_required
+def download_result_file(request, pk):
+    result = get_object_or_404(Result, pk=pk, user=request.user)
+    return _download_user_file(result.file, os.path.basename(result.file.name))
 
 
 @login_required

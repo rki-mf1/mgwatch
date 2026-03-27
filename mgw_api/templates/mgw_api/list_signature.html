@@ -17,7 +17,9 @@
                 {% for signature in signature_files %}
                     <tr>
                         <td>{{ signature.name }}</td>
-                        <td>{{ signature.file.name }}</td>
+                        <td>
+                            <a href="{% url 'mgw_api:download_signature_file' signature.pk %}">{{ signature.file.name }}</a>
+                        </td>
                         <td>{{ signature.file.size|filesizeformat }}</td>
                         <td>
                             <a href="{% url 'mgw_api:delete_signature' signature.pk %}">delete</a>

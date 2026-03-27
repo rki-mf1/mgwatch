@@ -26,9 +26,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DEBUG=(bool, False),
     SECRET_KEY=str,
-    ALLOWED_HOSTS=(str, None),
+    ALLOWED_HOSTS=(str, ""),
     MGW_URL=(str, None),
-    CSRF_TRUSTED_ORIGINS=(str, None),
+    CSRF_TRUSTED_ORIGINS=(str, ""),
     TIME_ZONE=(str, "Europe/Berlin"),
     DATA_DIR=(Path, BASE_DIR / ".." / "mgw-data"),
     DB_DIR=(Path, "/data-db"),
@@ -95,10 +95,12 @@ MAX_DOWNLOADS = env("MAX_DOWNLOADS")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG")
 
-ALLOWED_HOSTS = env("ALLOWED_HOSTS", "").split(",")
-CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS", "").split(",")
+ALLOWED_HOSTS = [] if env("ALLOWED_HOSTS") == "" else env("ALLOWED_HOSTS").split(",")
+CSRF_TRUSTED_ORIGINS = (
+    [] if env("CSRF_TRUSTED_ORIGINS") == "" else env("CSRF_TRUSTED_ORIGINS").split(",")
+)
 
-STATIC_ROOT = "/static"
+STATIC_ROOT = BASE_DIR / "static"
 
 # Logging
 LOGGER = logging.getLogger(__name__)
@@ -145,11 +147,13 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    "whitenoise.runserver_nostatic",
     "django.contrib.staticfiles",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
