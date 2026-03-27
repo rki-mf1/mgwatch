@@ -31,6 +31,16 @@ urlpatterns = [
         name="check_status",
     ),
     path(
+        "download/result-file/<int:pk>/",
+        views.download_result_file,
+        name="download_result_file",
+    ),
+    path(
+        "download/signature-file/<int:pk>/",
+        views.download_signature_file,
+        name="download_signature_file",
+    ),
+    path(
         "download/full/<int:pk>/", views.download_full_table, name="download_full_table"
     ),
     # path(

@@ -11,7 +11,6 @@ services:
       - ${EXTERNAL_DATA_DIR}/backend-crontabs:/var/spool/cron/crontabs
       - ${SQLITE_DIR}:/data-db
       - ${LOG_DIR}:/logs
-      - ${NGINX_DATA_DIR}/media:/media
     environment:
       - TZ=$TZ
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
