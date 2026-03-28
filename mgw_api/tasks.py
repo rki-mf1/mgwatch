@@ -242,8 +242,7 @@ def run_watch_task(self, **kwargs):
 
 @shared_task(bind=True)
 def run_daily_pipeline_task(self):
-    with acquire_lock("maintenance-pipeline-lock"):
-        run_metadata_task.apply(kwargs={}).get()
-        run_downloads_task.apply(kwargs={}).get()
-        run_index_task.apply(kwargs={}).get()
-        return run_watch_task.apply(kwargs={}).get()
+    run_metadata_task.apply(kwargs={}).get()
+    run_downloads_task.apply(kwargs={}).get()
+    run_index_task.apply(kwargs={}).get()
+    return run_watch_task.apply(kwargs={}).get()
