@@ -459,21 +459,31 @@ def update_manifests(new_files, mani_list, manifest, dir_paths, last_num):
 def run_watch():
     results = Result.objects.filter(is_watched=True)
     processed = 0
+    failed = 0
     for result in results:
-        signature = Signature.objects.get(user_id=result.user.id, name=result.name)
-        signature.submitted = True
-        signature.save(update_fields=["submitted"])
-        new_result = search_watch(signature.name, signature.user.id, result.pk)
-        if compare_results(result, new_result):
-            new_result.delete()
-        else:
-            result.is_watched = False
-            new_result.is_watched = True
-            result.save(update_fields=["is_watched"])
-            new_result.save(update_fields=["is_watched"])
-            send_watch_notification(result.user, result, new_result)
-        processed += 1
-    return {"processed_watches": processed}
+        try:
+            signature = Signature.objects.get(user_id=result.user.id, name=result.name)
+            signature.submitted = True
+            signature.save(update_fields=["submitted"])
+            new_result = search_watch(signature.name, signature.user.id, result.pk)
+            if compare_results(result, new_result):
+                new_result.delete()
+            else:
+                result.is_watched = False
+                new_result.is_watched = True
+                result.save(update_fields=["is_watched"])
+                new_result.save(update_fields=["is_watched"])
+                send_watch_notification(result.user, result, new_result)
+            processed += 1
+        except Exception:
+            failed += 1
+            LOGGER.exception(
+                "Watch run failed for result_pk=%s user_id=%s name=%s",
+                result.pk,
+                result.user_id,
+                result.name,
+            )
+    return {"processed_watches": processed, "failed_watches": failed}
 
 
 def search_watch(name, user_id, watch_pk):
