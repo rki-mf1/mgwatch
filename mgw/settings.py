@@ -17,6 +17,7 @@ from pathlib import Path
 
 import environ
 import ldap
+from celery.schedules import crontab
 from django_auth_ldap.config import LDAPSearch
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -58,6 +59,12 @@ env = environ.Env(
     LDAP_ATTR_USERNAME=(str, None),
     LDAP_ATTR_EMAIL=(str, None),
     MAX_SEARCH_RESULTS=(int, 100),
+    REDIS_URL=(str, "redis://mgwatch-redis:6379/0"),
+    CELERY_TASK_ALWAYS_EAGER=(bool, False),
+    CELERY_TASK_EAGER_PROPAGATES=(bool, True),
+    CELERY_TASK_RESULT_TIMEOUT=(int, 60 * 60 * 6),
+    CELERY_LOCK_TIMEOUT=(int, 60 * 60 * 6),
+    CELERY_LOCK_BLOCKING_TIMEOUT=(int, 60),
 )
 
 environ.Env.read_env(BASE_DIR / "vars.env")
@@ -242,6 +249,59 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 MEDIA_ROOT = DATA_DIR / "media"
 MEDIA_URL = "/media/"
+
+REDIS_URL = env("REDIS_URL")
+
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_TASK_ALWAYS_EAGER = env("CELERY_TASK_ALWAYS_EAGER")
+CELERY_TASK_EAGER_PROPAGATES = env("CELERY_TASK_EAGER_PROPAGATES")
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = env("CELERY_TASK_RESULT_TIMEOUT")
+CELERY_TASK_SOFT_TIME_LIMIT = max(1, CELERY_TASK_TIME_LIMIT - 60)
+CELERY_TASK_RESULT_EXPIRES = 60 * 60 * 24
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_DEFAULT_QUEUE = "maintenance"
+CELERY_TASK_DEFAULT_PRIORITY = 5
+CELERY_TASK_ROUTES = {
+    "mgw_api.tasks.run_signature_pipeline": {"queue": "interactive"},
+    "mgw_api.tasks.run_search_task": {"queue": "interactive"},
+    "mgw_api.tasks.run_create_signature_task": {"queue": "interactive"},
+    "mgw_api.tasks.run_metadata_task": {"queue": "maintenance"},
+    "mgw_api.tasks.run_downloads_task": {"queue": "maintenance"},
+    "mgw_api.tasks.run_index_task": {"queue": "indexing"},
+    "mgw_api.tasks.run_watch_task": {"queue": "watches"},
+    "mgw_api.tasks.run_daily_pipeline_task": {"queue": "maintenance"},
+}
+CELERY_BEAT_SCHEDULE = {
+    "daily-maintenance-pipeline": {
+        "task": "mgw_api.tasks.run_daily_pipeline_task",
+        "schedule": crontab(minute=0, hour=1),
+        "options": {"queue": "maintenance"},
+    }
+}
+CELERY_TASK_RESULT_TIMEOUT = env("CELERY_TASK_RESULT_TIMEOUT")
+CELERY_LOCK_TIMEOUT = env("CELERY_LOCK_TIMEOUT")
+CELERY_LOCK_BLOCKING_TIMEOUT = env("CELERY_LOCK_BLOCKING_TIMEOUT")
+
+if CELERY_TASK_ALWAYS_EAGER:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "mgwatch-local-cache",
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            },
+        }
+    }
 
 if DEBUG:
     MIDDLEWARE += ("debug_toolbar.middleware.DebugToolbarMiddleware",)

@@ -32,3 +32,6 @@ services:
   mgwatch-mongodb:
     ports: !override
       - "27018:27017"
+  mgwatch-redis:
+    ports: !override
+      - "6379:6379"
