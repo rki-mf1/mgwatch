@@ -35,19 +35,31 @@ class Command(BaseCommand):
                 )
                 mani_list = self.get_manifest(manifest)
                 last_sig_files, last_num = self.get_last_index(dir_paths)
+                delete_indexed_sigs = getattr(settings, "DELETE_INDEXED_SIGS", False)
                 LOGGER.debug(f"Already in most recent index: {len(last_sig_files)}")
                 new_sig_files = self.check_updates(dir_paths)
                 LOGGER.debug(
                     f"Will be added to the above and index rebuilt: {len(new_sig_files)}"
                 )
                 if new_sig_files:
-                    sig_files = last_sig_files + new_sig_files
+                    reuse_last_index = not (
+                        delete_indexed_sigs
+                        and len(last_sig_files) == settings.INDEX_MAX_SIGNATURES
+                    )
+                    if reuse_last_index:
+                        sig_files = last_sig_files + new_sig_files
+                        start_index_number = last_num
+                    else:
+                        # Full indexes can be sealed and their signatures removed, so
+                        # only start a new batch after the latest full index.
+                        sig_files = new_sig_files
+                        start_index_number = last_num + 1
                     indexing_ever_failed = False
                     for idx_offset, new_files in enumerate(
                         batched(sig_files, n=settings.INDEX_MAX_SIGNATURES), 0
                     ):
                         self.write_signature_list(new_files, sig_list)
-                        index_number = last_num + idx_offset
+                        index_number = start_index_number + idx_offset
                         LOGGER.info(
                             f"Building index {index_number}. New index will contain {len(new_files)} signatures."
                         )
@@ -58,10 +70,20 @@ class Command(BaseCommand):
                             for k in kmers
                         ]
                         indexing_succeeded = all([val == 0 for val in retvals])
-                        target_dir = (
-                            "signatures" if indexing_succeeded else "indexing-failed"
+                        delete_after_indexing = (
+                            indexing_succeeded
+                            and delete_indexed_sigs
+                            and len(new_files) == settings.INDEX_MAX_SIGNATURES
                         )
-                        self.move_files(new_files, dir_paths, target_dir)
+                        if delete_after_indexing:
+                            self.delete_files(new_files)
+                        else:
+                            target_dir = (
+                                "signatures"
+                                if indexing_succeeded
+                                else "indexing-failed"
+                            )
+                            self.move_files(new_files, dir_paths, target_dir)
                         if indexing_succeeded:
                             self.update_manifests(
                                 new_files, mani_list, manifest, dir_paths, index_number
@@ -185,6 +207,11 @@ class Command(BaseCommand):
                 pass
             destination = os.path.join(dir_paths[target_dir], base_name)
             shutil.move(file, destination)
+
+    def delete_files(self, file_list):
+        for file in file_list:
+            if os.path.exists(file):
+                os.remove(file)
 
     def update_manifests(self, new_files, mani_list, manifest, dir_paths, last_num):
         new_files = [os.path.basename(file).split(".sig")[0] for file in new_files]

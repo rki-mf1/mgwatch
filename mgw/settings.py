@@ -43,6 +43,7 @@ env = environ.Env(
     LOG_LEVEL=(str, "DEBUG"),
     INDEX_FROM_SCRATCH=(bool, False),
     INDEX_MAX_SIGNATURES=(int, 100000),
+    DELETE_INDEXED_SIGS=(bool, False),
     START_DATE=(str, "2024-03-15"),
     END_DATE=(str, "2024-03-15"),
     LIB_SOURCE=(list, []),
@@ -80,6 +81,7 @@ MONGO_URI = env("MONGO_URI")
 INDEX_FROM_SCRATCH = env("INDEX_FROM_SCRATCH")
 # number of signatures in each index
 INDEX_MAX_SIGNATURES = env("INDEX_MAX_SIGNATURES")
+DELETE_INDEXED_SIGS = env("DELETE_INDEXED_SIGS")
 INDEX_MIN_ITERATOR = env("INDEX_MIN_ITERATOR")
 # format: "yyyy-mm-dd" if START_DATE set to "auto", start and end will be set to today - 2 days; current index is on "2023-09-27"
 START_DATE = env("START_DATE")
