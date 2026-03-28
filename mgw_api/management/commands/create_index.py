@@ -34,7 +34,9 @@ class Command(BaseCommand):
                     ["updates", "index", "signatures", "indexing-failed", "manifests"],
                 )
                 mani_list = self.get_manifest(manifest)
-                last_sig_files, last_num = self.get_last_index(dir_paths)
+                last_sig_files, last_num, has_existing_index = self.get_last_index(
+                    dir_paths
+                )
                 delete_indexed_sigs = getattr(settings, "DELETE_INDEXED_SIGS", False)
                 LOGGER.debug(f"Already in most recent index: {len(last_sig_files)}")
                 new_sig_files = self.check_updates(dir_paths)
@@ -42,16 +44,16 @@ class Command(BaseCommand):
                     f"Will be added to the above and index rebuilt: {len(new_sig_files)}"
                 )
                 if new_sig_files:
-                    reuse_last_index = not (
-                        delete_indexed_sigs
-                        and len(last_sig_files) == settings.INDEX_MAX_SIGNATURES
+                    reuse_last_index = self.can_reuse_last_index(
+                        last_sig_files, has_existing_index
                     )
                     if reuse_last_index:
                         sig_files = last_sig_files + new_sig_files
                         start_index_number = last_num
                     else:
                         # Full indexes can be sealed and their signatures removed, so
-                        # only start a new batch after the latest full index.
+                        # only start a new batch after the latest index when the
+                        # manifest signatures are no longer available on disk.
                         sig_files = new_sig_files
                         start_index_number = last_num + 1
                     indexing_ever_failed = False
@@ -139,7 +141,7 @@ class Command(BaseCommand):
             # There is no manifest. We start it at 0 or the minimum value specified in the settings
             last_num = max(settings.INDEX_MIN_ITERATOR, 0)
             last_sig_files = []
-            return last_sig_files, last_num
+            return last_sig_files, last_num, False
 
         last_num = max(
             [int(f.name.split("db")[1].split(".pickle")[0]) for f in manifests]
@@ -151,7 +153,22 @@ class Command(BaseCommand):
         last_sig_files = [
             os.path.join(dir_paths["signatures"], f"{ID}.sig") for ID in last_sig_IDs
         ]
-        return last_sig_files, last_num
+        available_last_sig_files = [
+            sig_file for sig_file in last_sig_files if os.path.exists(sig_file)
+        ]
+        missing_last_sig_files = len(last_sig_files) - len(available_last_sig_files)
+        if missing_last_sig_files:
+            LOGGER.info(
+                f"Skipping {missing_last_sig_files} missing signature files from manifest db{last_num}.pickle."
+            )
+        return available_last_sig_files, last_num, True
+
+    def can_reuse_last_index(self, last_sig_files, has_existing_index):
+        if not has_existing_index:
+            return True
+        if not last_sig_files:
+            return False
+        return all(os.path.exists(sig_file) for sig_file in last_sig_files)
 
     def check_updates(self, dir_paths):
         return glob.glob(os.path.join(dir_paths["updates"], "*.sig"))
