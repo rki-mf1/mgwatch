@@ -68,7 +68,7 @@ jobs:
 
           docker compose -f compose.yml up -d mgwatch-mongodb
           docker compose -f compose.yml run --rm mgwatch \
-            conda run --no-capture-output -n mgw ./manage.py test
+            "conda run --no-capture-output -n mgw ./manage.py test"
   build-and-push:
     runs-on: ubuntu-latest
     needs:
