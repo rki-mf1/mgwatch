@@ -1,39 +1,93 @@
-from datetime import datetime
+from datetime import timedelta
 
+from celery import current_app
+from celery import states as celery_states
+from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
 
 from mgw.settings import LOGGER
 from mgw_api.models import Job
 
 from .exceptions import JobConflictError
 
+STALE_JOB_GRACE_SECONDS = 60
+
+
+def _active_jobs_for_fasta(fasta):
+    return Job.objects.filter(
+        fasta=fasta,
+        job_type=Job.JobType.SIGNATURE_PIPELINE,
+        state__in=Job.ACTIVE_STATES,
+    ).order_by("-created_at")
+
+
+def _active_jobs_for_signature(signature):
+    return Job.objects.filter(
+        signature=signature,
+        job_type=Job.JobType.SEARCH,
+        state__in=Job.ACTIVE_STATES,
+    ).order_by("-created_at")
+
+
+def _job_has_exceeded_liveness_window(job):
+    started_or_created_at = job.started_at or job.created_at
+    stale_after = timedelta(
+        seconds=settings.CELERY_TASK_TIME_LIMIT + STALE_JOB_GRACE_SECONDS
+    )
+    return started_or_created_at <= timezone.now() - stale_after
+
+
+def _reconcile_active_job(job):
+    if not job or job.state not in Job.ACTIVE_STATES:
+        return job
+    if not job.celery_task_id:
+        if _job_has_exceeded_liveness_window(job):
+            mark_job_failed(
+                job,
+                RuntimeError("Job became stale before a Celery task id was recorded."),
+            )
+        return job
+
+    celery_state = current_app.AsyncResult(job.celery_task_id).state
+    if celery_state in celery_states.READY_STATES:
+        mark_job_failed(
+            job,
+            RuntimeError(
+                "Celery task "
+                f"{job.celery_task_id} reached terminal state {celery_state} "
+                f"while job {job.pk} was still marked active."
+            ),
+        )
+        return job
+    if _job_has_exceeded_liveness_window(job):
+        mark_job_failed(
+            job,
+            RuntimeError(
+                "Celery task "
+                f"{job.celery_task_id} exceeded the liveness window in state "
+                f"{celery_state}."
+            ),
+        )
+    return job
+
+
+def _reconcile_active_jobs(queryset):
+    for job in queryset:
+        _reconcile_active_job(job)
+
 
 def get_active_job_for_fasta(fasta):
-    return (
-        Job.objects.filter(
-            fasta=fasta,
-            job_type=Job.JobType.SIGNATURE_PIPELINE,
-            state__in=Job.ACTIVE_STATES,
-        )
-        .order_by("-created_at")
-        .first()
-    )
+    return _active_jobs_for_fasta(fasta).first()
 
 
 def get_active_job_for_signature(signature):
-    return (
-        Job.objects.filter(
-            signature=signature,
-            job_type=Job.JobType.SEARCH,
-            state__in=Job.ACTIVE_STATES,
-        )
-        .order_by("-created_at")
-        .first()
-    )
+    return _active_jobs_for_signature(signature).first()
 
 
 @transaction.atomic
 def create_signature_pipeline_job(*, fasta, queue):
+    _reconcile_active_jobs(_active_jobs_for_fasta(fasta))
     existing = get_active_job_for_fasta(fasta)
     if existing:
         raise JobConflictError(f"An active job already exists for fasta {fasta.pk}.")
@@ -48,6 +102,7 @@ def create_signature_pipeline_job(*, fasta, queue):
 
 @transaction.atomic
 def create_search_job(*, signature, queue):
+    _reconcile_active_jobs(_active_jobs_for_signature(signature))
     existing = get_active_job_for_signature(signature)
     if existing:
         raise JobConflictError(
@@ -107,10 +162,10 @@ def update_job(
         job.lock_name = lock_name
         fields.append("lock_name")
     if started and job.started_at is None:
-        job.started_at = datetime.now()
+        job.started_at = timezone.now()
         fields.append("started_at")
     if finished:
-        job.finished_at = datetime.now()
+        job.finished_at = timezone.now()
         fields.append("finished_at")
     if fields:
         job.save(update_fields=fields)

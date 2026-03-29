@@ -20,6 +20,12 @@ INTERACTIVE_QUEUE = "interactive"
 MAINTENANCE_QUEUE = "maintenance"
 INDEX_QUEUE = "indexing"
 WATCH_QUEUE = "watches"
+NO_RETRY_TASK_OPTIONS = {
+    "bind": True,
+    "autoretry_for": (),
+    "retry_backoff": False,
+    "max_retries": 0,
+}
 
 
 def _queue_for_job_type(job_type):
@@ -97,7 +103,7 @@ def submit_task_and_wait(task, *, kwargs, queue=None, timeout=None):
     return async_result.get(timeout=timeout)
 
 
-@shared_task(bind=True, autoretry_for=(), retry_backoff=False)
+@shared_task(**NO_RETRY_TASK_OPTIONS)
 def run_signature_pipeline(self, *, job_id, user_id, name):
     job = Job.objects.get(pk=job_id)
     mark_job_running(
@@ -146,7 +152,7 @@ def run_signature_pipeline(self, *, job_id, user_id, name):
         raise
 
 
-@shared_task(bind=True, autoretry_for=(), retry_backoff=False)
+@shared_task(**NO_RETRY_TASK_OPTIONS)
 def run_search_task(self, *, job_id, user_id, name, watch="False", parent_job_id=None):
     job = Job.objects.get(pk=job_id)
     mark_job_running(
@@ -202,12 +208,12 @@ def run_search_task(self, *, job_id, user_id, name, watch="False", parent_job_id
         raise
 
 
-@shared_task(bind=True)
+@shared_task(**NO_RETRY_TASK_OPTIONS)
 def run_create_signature_task(self, *, user_id, name):
     return {"signature_id": create_signature(user_id=user_id, name=name).pk}
 
 
-@shared_task(bind=True)
+@shared_task(**NO_RETRY_TASK_OPTIONS)
 def run_metadata_task(self, **kwargs):
     from mgw_api.services.maintenance import run_metadata
 
@@ -215,7 +221,7 @@ def run_metadata_task(self, **kwargs):
         return run_metadata(**kwargs)
 
 
-@shared_task(bind=True)
+@shared_task(**NO_RETRY_TASK_OPTIONS)
 def run_downloads_task(self, **kwargs):
     from mgw_api.services.maintenance import run_downloads
 
@@ -224,7 +230,7 @@ def run_downloads_task(self, **kwargs):
             return run_downloads(**kwargs)
 
 
-@shared_task(bind=True)
+@shared_task(**NO_RETRY_TASK_OPTIONS)
 def run_index_task(self, **kwargs):
     from mgw_api.services.maintenance import run_index
 
@@ -233,14 +239,14 @@ def run_index_task(self, **kwargs):
             return run_index(**kwargs)
 
 
-@shared_task(bind=True)
+@shared_task(**NO_RETRY_TASK_OPTIONS)
 def run_watch_task(self, **kwargs):
     from mgw_api.services.maintenance import run_watch
 
     return run_watch(**kwargs)
 
 
-@shared_task(bind=True)
+@shared_task(**NO_RETRY_TASK_OPTIONS)
 def run_daily_pipeline_task(self):
     run_metadata_task.apply(kwargs={}).get()
     run_downloads_task.apply(kwargs={}).get()

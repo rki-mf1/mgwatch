@@ -467,7 +467,10 @@ def run_watch():
             signature.save(update_fields=["submitted"])
             new_result = search_watch(signature.name, signature.user.id, result.pk)
             if compare_results(result, new_result):
-                new_result.delete()
+                # Watch searches are expected to create a fresh result row. If an
+                # existing watched result is returned instead, avoid deleting it.
+                if new_result.pk != result.pk and not new_result.is_watched:
+                    new_result.delete()
             else:
                 result.is_watched = False
                 new_result.is_watched = True
