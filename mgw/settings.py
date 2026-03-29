@@ -143,6 +143,16 @@ LOGGING = {
             "level": LOG_LEVEL,
             "handlers": ["console", "app_log_file"],
         },
+        "asyncio": {
+            "level": "INFO",
+            "handlers": ["console", "app_log_file"],
+            "propagate": False,
+        },
+        "celery.utils.functional": {
+            "level": "INFO",
+            "handlers": ["console", "app_log_file"],
+            "propagate": False,
+        },
     },
 }
 
