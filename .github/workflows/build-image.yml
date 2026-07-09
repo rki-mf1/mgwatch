@@ -1,5 +1,6 @@
 name: build-image
 on:
+  pull_request:
   push:
     branches:
       - "**"
@@ -71,6 +72,7 @@ jobs:
             "conda run --no-capture-output -n mgw ./manage.py test"
   build-and-push:
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     needs:
       - pre-commit
       - django-tests
