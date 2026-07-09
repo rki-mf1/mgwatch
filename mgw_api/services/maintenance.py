@@ -1,0 +1,516 @@
+import asyncio
+import glob
+import inspect
+import os
+import pickle
+import shutil
+import ssl
+import tempfile
+from datetime import datetime
+from datetime import timedelta
+from itertools import batched
+from pathlib import Path
+
+import aiofiles
+import aiohttp
+import polars as pl
+import pymongo as pm
+from django.conf import settings
+from django.core.mail import send_mail
+from django.urls import reverse
+
+from mgw.settings import LOGGER
+from mgw.settings import MGW_URL
+from mgw_api.models import Result
+from mgw_api.models import Signature
+
+from .processes import run_command
+from .searches import run_search
+
+
+def run_metadata(
+    *, no_download=False, no_process=False, drop_first=False, indexed_only=False
+):
+    LOGGER.info("Starting metadata update")
+    database = "SRA"
+    metadata_dir = settings.DATA_DIR / database / "metadata" / "parquet"
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+
+    if drop_first:
+        drop_mongo_collection("sradb_list")
+        drop_mongo_collection("sradb_temp")
+
+    if not no_download:
+        run_command(
+            [
+                "aws",
+                "s3",
+                "sync",
+                "s3://sra-pub-metadata-us-east-1/sra/metadata/",
+                str(metadata_dir),
+                "--no-sign-request",
+                "--delete",
+            ]
+        )
+
+    if not no_process:
+        import_parquet(metadata_dir, indexed_only=indexed_only)
+
+    init_flag = settings.DATA_DIR / "SRA" / "metadata" / "initial_setup.txt"
+    init_flag.touch()
+    return {"metadata_dir": str(metadata_dir)}
+
+
+def get_filter_data():
+    column_list = [
+        "acc",
+        "assay_type",
+        "bioproject",
+        "biosample",
+        "collection_date_sam",
+        "geo_loc_name_country_calc",
+        "organism",
+        "releasedate",
+        "librarysource",
+    ]
+    jattr_dtypes = pl.Struct([pl.Field("lat_lon", dtype=pl.String)])
+    allowed_librarysources = ["METAGENOMIC", "GENOMIC", "METATRANSCRIPTOMIC"]
+    return column_list, jattr_dtypes, allowed_librarysources
+
+
+def drop_mongo_collection(collection):
+    mongo = pm.MongoClient(settings.MONGO_URI)
+    db = mongo["sradb"]
+    if collection in db.list_collection_names():
+        db[collection].drop()
+    mongo.close()
+
+
+def import_parquet(parquet_dir, indexed_only=False):
+    drop_mongo_collection("sradb_temp")
+    column_list, jattr_dtypes, allowed_librarysources = get_filter_data()
+    indexed_ids = None
+    if indexed_only:
+        indexed_ids_file = settings.DATA_DIR / "SRA" / "metagenomes" / "manifest.pickle"
+        if indexed_ids_file.exists():
+            with open(indexed_ids_file, "rb") as handle:
+                indexed_ids = pickle.load(handle)
+
+    for parquet_file in parquet_dir.glob("*"):
+        df = pl.scan_parquet(parquet_file)
+        sra_lf = df.filter(
+            pl.col("librarysource").is_in(allowed_librarysources)
+        ).select(column_list + ["jattr"])
+        if indexed_ids:
+            sra_lf = sra_lf.filter(pl.col("acc").is_in(indexed_ids))
+        sra_df = (
+            sra_lf.collect()
+            .with_columns(pl.col(pl.Date).cast(pl.Datetime))
+            .with_columns(
+                pl.col("jattr").str.json_decode(jattr_dtypes).alias("jattr_decoded")
+            )
+            .drop("jattr")
+            .unnest("jattr_decoded")
+            .with_columns(
+                [
+                    pl.col("acc").alias("_id"),
+                    pl.col("acc").alias("sra_accession"),
+                    pl.col("biosample").alias("sra_biosample"),
+                    pl.col("bioproject").alias("sra_bioproject"),
+                ]
+            )
+        )
+        if sra_df.height > 0:
+            mongo = pm.MongoClient(settings.MONGO_URI)
+            db = mongo["sradb"]
+            db["sradb_temp"].insert_many(sra_df.to_dicts())
+            mongo.close()
+
+    drop_mongo_collection("sradb_list")
+    mongo = pm.MongoClient(settings.MONGO_URI)
+    db = mongo["sradb"]
+    db["sradb_temp"].rename("sradb_list")
+    mongo.close()
+
+
+def run_downloads(
+    *,
+    max_downloads=None,
+    max_simultaneous=100,
+    timeout=60,
+    ids=None,
+    retry_failed=False,
+):
+    test_url = "https://wort.sourmash.bio/v1/view/sra/SRR15461028"
+    run_command(["curl", "-sLf", "-r", "0-10", test_url, "-o", "/dev/null"])
+    database = "SRA"
+    today = datetime.today() - timedelta(days=2)
+    start_date = (
+        today
+        if settings.START_DATE == "auto"
+        else datetime.fromisoformat(settings.START_DATE)
+    )
+    end_date = (
+        today
+        if settings.START_DATE == "auto"
+        else datetime.fromisoformat(settings.END_DATE)
+    )
+    metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
+    manifest = metagenomes_dir / "manifest.pickle"
+    man_succ = metagenomes_dir / "download_successful.pickle"
+    man_fail = metagenomes_dir / "download_failed.pickle"
+    dir_paths = handle_dirs(
+        database, ["updates", "index", "signatures", "indexing-failed", "manifests"]
+    )
+    mani_list = set(get_manifest(manifest))
+    if ids:
+        missing_ids = set(ids) - mani_list
+    else:
+        mongo_ids = get_mongo_ids(start_date, end_date)
+        missing_ids = set(mongo_ids) - set(mani_list)
+    sra_ids_in_wort = get_wort_accessions()
+    missing_ids = missing_ids & sra_ids_in_wort
+    asyncio.run(
+        download_from_wort(
+            dir_paths,
+            missing_ids,
+            man_succ,
+            man_fail,
+            timeout,
+            retry_failed or not settings.WORT_SKIP_FAILED,
+            max_downloads,
+            max_simultaneous,
+        )
+    )
+    return {"downloaded": len(missing_ids)}
+
+
+def handle_dirs(database, dir_names):
+    dir_paths = {n: settings.DATA_DIR / database / "metagenomes" / n for n in dir_names}
+    for dir_path in dir_paths.values():
+        dir_path.mkdir(parents=True, exist_ok=True)
+        os.chmod(dir_path, 0o700)
+    return dir_paths
+
+
+def get_manifest(manifest):
+    if not os.path.exists(manifest):
+        return []
+    with open(manifest, "rb") as handle:
+        return pickle.load(handle)
+
+
+def get_mongo_ids(start_date, end_date):
+    mongo = pm.MongoClient(settings.MONGO_URI)
+    db = mongo["sradb"]
+    collection = db["sradb_list"]
+    query = {"releasedate": {"$gte": start_date, "$lte": end_date}}
+    if settings.LIB_SOURCE:
+        query = query | {"librarysource": {"$in": settings.LIB_SOURCE}}
+    ids = [doc["_id"] for doc in collection.find(query, {"_id": 1})]
+    mongo.close()
+    return ids
+
+
+def get_wort_accessions():
+    wort_manifest_url = "https://s3.bi.denbi.de/wort-sra/SOURMASH-MANIFEST.parquet"
+    accessions = (
+        pl.scan_parquet(wort_manifest_url)
+        .select(pl.col("name").str.extract(r"([\w.]+)", 1).alias("accession"))
+        .collect()
+        .get_column("accession")
+        .unique()
+        .to_list()
+    )
+    return set(accessions)
+
+
+async def download_from_wort(
+    dir_paths,
+    sra_ids,
+    man_succ,
+    man_fail,
+    timeout_seconds,
+    retry_failed=False,
+    max_downloads=None,
+    max_simultaneous=100,
+):
+    ids_succ = set(load_pickle(man_succ)) if man_succ.exists() else set()
+    ids_fail = set(load_pickle(man_fail)) if man_fail.exists() else set()
+    sra_ids = sra_ids - ids_succ
+    if not retry_failed:
+        sra_ids = list(sra_ids - ids_fail)
+    if max_downloads is None and settings.MAX_DOWNLOADS:
+        max_downloads = settings.MAX_DOWNLOADS
+    if max_downloads and max_downloads < len(sra_ids):
+        sra_ids = sra_ids[:max_downloads]
+    target_dir = dir_paths["updates"]
+    signature_endpoint = "https://wort.sourmash.bio/v1/view/sra"
+    urls = [f"{signature_endpoint}/{id_}" for id_ in sra_ids]
+    if not urls:
+        return []
+    lock = asyncio.Lock()
+    conn = aiohttp.TCPConnector(limit=max_simultaneous)
+    timeout = aiohttp.ClientTimeout(
+        sock_connect=timeout_seconds, sock_read=timeout_seconds
+    )
+    async with aiohttp.ClientSession(
+        connector=conn, trust_env=True, timeout=timeout
+    ) as session:
+        tasks = [
+            fetch_signature(
+                session, url, target_dir, ids_succ, ids_fail, man_succ, man_fail, lock
+            )
+            for url in urls
+        ]
+        return await asyncio.gather(*tasks, return_exceptions=False)
+
+
+async def fetch_signature(
+    session, url, target_dir, ids_succ, ids_fail, man_succ, man_fail, lock
+):
+    accession = url.split("/")[-1]
+    try:
+        async with session.get(url, ssl=ssl.SSLContext()) as response:
+            status = response.status
+            if status < 200 or status >= 300:
+                async with lock:
+                    ids_fail.add(accession)
+                    await asyncio.to_thread(save_pickle, ids_fail, man_fail)
+                return {"id": accession, "status": status, "error": "non-success"}
+            async with aiofiles.tempfile.NamedTemporaryFile(
+                "wb", delete=False
+            ) as handle:
+                async for chunk in response.content.iter_chunked(1024 * 1024):
+                    await handle.write(chunk)
+                await handle.flush()
+                dest = f"{target_dir}/{accession}.sig"
+                await asyncio.to_thread(shutil.move, handle.name, dest)
+            async with lock:
+                ids_succ.add(accession)
+                await asyncio.to_thread(save_pickle, ids_succ, man_succ)
+            return {"id": accession, "status": status, "path": dest}
+    except Exception:
+        LOGGER.exception("Download exception for %s", url)
+        async with lock:
+            ids_fail.add(accession)
+            await asyncio.to_thread(save_pickle, ids_fail, man_fail)
+        return {"id": accession, "status": None}
+
+
+def save_pickle(data, file):
+    with open(file, "wb") as handle:
+        pickle.dump(data, handle, protocol=4)
+
+
+def load_pickle(file):
+    with open(file, "rb") as handle:
+        return pickle.load(handle)
+
+
+def run_index():
+    tmp_dir = settings.DATA_DIR / "tmp"
+    os.makedirs(tmp_dir, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="mgwatch-index-", dir=tmp_dir) as work_dir:
+        kmers = [21, 31, 51]
+        database = "SRA"
+        metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
+        sig_list = Path(work_dir) / "sig-list.txt"
+        manifest = metagenomes_dir / "manifest.pickle"
+        dir_paths = handle_dirs(
+            database, ["updates", "index", "signatures", "indexing-failed", "manifests"]
+        )
+        mani_list = get_manifest(manifest)
+        last_sig_files, last_num, has_existing_index = get_last_index(dir_paths)
+        delete_indexed_sigs = getattr(settings, "DELETE_INDEXED_SIGS", False)
+        new_sig_files = glob.glob(os.path.join(dir_paths["updates"], "*.sig"))
+        if not new_sig_files:
+            return {"indexes_updated": 0}
+        reuse_last_index = can_reuse_last_index(last_sig_files, has_existing_index)
+        if reuse_last_index:
+            sig_files = last_sig_files + new_sig_files
+            start_index_number = last_num
+        else:
+            sig_files = new_sig_files
+            start_index_number = last_num + 1
+        indexing_ever_failed = False
+        for idx_offset, new_files in enumerate(
+            batched(sig_files, n=settings.INDEX_MAX_SIGNATURES), 0
+        ):
+            write_signature_list(new_files, sig_list)
+            index_number = start_index_number + idx_offset
+            retvals = [
+                update_index(work_dir, dir_paths["index"], sig_list, k, index_number)
+                for k in kmers
+            ]
+            indexing_succeeded = all(val == 0 for val in retvals)
+            delete_after_indexing = (
+                indexing_succeeded
+                and delete_indexed_sigs
+                and len(new_files) == settings.INDEX_MAX_SIGNATURES
+            )
+            if delete_after_indexing:
+                delete_files(new_files)
+            else:
+                target_dir = "signatures" if indexing_succeeded else "indexing-failed"
+                move_files(new_files, dir_paths, target_dir)
+            if indexing_succeeded:
+                update_manifests(
+                    new_files, mani_list, manifest, dir_paths, index_number
+                )
+            indexing_ever_failed = indexing_ever_failed or not indexing_succeeded
+        if not indexing_ever_failed:
+            save_pickle(
+                set(),
+                os.path.join(
+                    settings.DATA_DIR,
+                    database,
+                    "metagenomes",
+                    "download_successful.pickle",
+                ),
+            )
+    return {"indexes_updated": 1}
+
+
+def get_last_index(dir_paths):
+    manifests = list(dir_paths["manifests"].glob("db*.pickle"))
+    if not manifests:
+        return [], max(settings.INDEX_MIN_ITERATOR, 0), False
+    manifest_num = max(
+        [int(f.name.split("db")[1].split(".pickle")[0]) for f in manifests]
+    )
+    last_num = max(settings.INDEX_MIN_ITERATOR, manifest_num)
+    last_sigs = os.path.join(dir_paths["manifests"], f"db{manifest_num}.pickle")
+    with open(last_sigs, "rb") as handle:
+        last_sig_ids = pickle.load(handle)
+    last_sig_files = [
+        os.path.join(dir_paths["signatures"], f"{identifier}.sig")
+        for identifier in last_sig_ids
+    ]
+    available = [sig_file for sig_file in last_sig_files if os.path.exists(sig_file)]
+    return available, last_num, True
+
+
+def can_reuse_last_index(last_sig_files, has_existing_index):
+    if not has_existing_index:
+        return True
+    if not last_sig_files:
+        return False
+    return all(os.path.exists(sig_file) for sig_file in last_sig_files)
+
+
+def write_signature_list(sig_file_names, output_file):
+    with open(output_file, "w") as handle:
+        handle.writelines(f"{fp}\n" for fp in sig_file_names)
+
+
+def update_index(work_dir, index_dir, sig_list, k, last_num):
+    old_idx = os.path.join(index_dir, f"{k}mers-db{last_num}.rocksdb")
+    new_idx = os.path.join(work_dir, f"{k}mers-db{last_num}.rocksdb")
+    cpus = min(8, int(os.cpu_count() * 0.8))
+    run_command(
+        [
+            "sourmash",
+            "scripts",
+            "index",
+            "--ksize",
+            f"{k}",
+            "--moltype",
+            "DNA",
+            "--scaled",
+            "1000",
+            "--cores",
+            f"{cpus}",
+            "--no-store-sketches",
+            "--output",
+            f"{new_idx}",
+            f"{sig_list}",
+        ]
+    )
+    if os.path.isdir(old_idx) and old_idx.endswith(".rocksdb"):
+        shutil.rmtree(old_idx)
+    shutil.move(new_idx, old_idx)
+    return 0
+
+
+def move_files(file_list, dir_paths, target_dir):
+    for file in file_list:
+        base_name = os.path.basename(file)
+        destination = os.path.join(dir_paths[target_dir], base_name)
+        shutil.move(file, destination)
+
+
+def delete_files(file_list):
+    for file in file_list:
+        if os.path.exists(file):
+            os.remove(file)
+
+
+def update_manifests(new_files, mani_list, manifest, dir_paths, last_num):
+    new_files = [os.path.basename(file).split(".sig")[0] for file in new_files]
+    last_sigs = os.path.join(dir_paths["manifests"], f"db{last_num}.pickle")
+    with open(last_sigs, "wb") as handle:
+        pickle.dump(new_files, handle, protocol=4)
+    sig_files = list(set(mani_list) | set(new_files))
+    with open(manifest, "wb") as handle:
+        pickle.dump(sig_files, handle, protocol=4)
+
+
+def run_watch():
+    results = Result.objects.filter(is_watched=True)
+    processed = 0
+    for result in results:
+        signature = Signature.objects.get(user_id=result.user.id, name=result.name)
+        signature.submitted = True
+        signature.save(update_fields=["submitted"])
+        new_result = search_watch(signature.name, signature.user.id, result.pk)
+        if compare_results(result, new_result):
+            new_result.delete()
+        else:
+            result.is_watched = False
+            new_result.is_watched = True
+            result.save(update_fields=["is_watched"])
+            new_result.save(update_fields=["is_watched"])
+            send_watch_notification(result.user, result, new_result)
+        processed += 1
+    return {"processed_watches": processed}
+
+
+def search_watch(name, user_id, watch_pk):
+    search_result = run_search(user_id=user_id, name=name, watch=str(watch_pk))
+    return Result.objects.get(pk=search_result["result_pk"], user_id=user_id)
+
+
+def compare_results(result, new_result):
+    df1 = pl.read_csv(result.file.path)
+    df2 = pl.read_csv(new_result.file.path)
+    return df1.equals(df2)
+
+
+def send_watch_notification(user, result, new_result):
+    absolute_url = reverse("mgw_api:result_table", kwargs={"pk": new_result.pk})
+    result_page = f"{MGW_URL}{absolute_url}"
+    subject = f"MetagenomeWatch: Found new results for watch {new_result.name}"
+    message = inspect.cleandoc(f"""
+    Dear MetagenomeWatch user {user.username},
+
+    New results have been found for your watch named "{result.name}".
+
+    You can view the results here: {result_page}
+
+    Watch details:
+        Name: {new_result.name}
+        K-mer: {new_result.kmer}
+        Database: {new_result.database}
+        Containment threshold: {new_result.containment}
+
+    Best wishes,
+    The MetagenomeWatch Team
+    """)
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        fail_silently=False,
+    )
