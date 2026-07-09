@@ -45,3 +45,4 @@ repos:
     rev: 2.1.1
     hooks:
       - id: bashate
+        exclude: ^scripts/test-changeset-against-main\.sh$
