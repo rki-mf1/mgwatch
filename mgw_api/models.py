@@ -32,14 +32,12 @@ def validate_fasta_content(fieldfile):
         # Do actual validation. This is not exhaustive, it's only checking the
         # first couple of lines as a sanity check.
         if not re.match(r"^>", header):
-            LOGGER.error(f"header: {header}")
-            LOGGER.error(f"seq: {seq}")
+            LOGGER.warning("Invalid FASTA upload rejected: missing header marker.")
             raise ValidationError(
                 "File does not start with '>' character, invalid FASTA format."
             )
         elif not re.match(r"^[ACGTRYSWKMBDHVN.-]+$", seq, flags=re.IGNORECASE):
-            LOGGER.error(f"header: {header}")
-            LOGGER.error(f"seq: {seq}")
+            LOGGER.warning("Invalid FASTA upload rejected: non-IUPAC sequence data.")
             raise ValidationError(
                 "Sequence contains non-IUPAC characters, invalid FASTA format."
             )

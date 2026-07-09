@@ -215,12 +215,16 @@ def mark_job_progress(job, *, message, current, total):
 
 
 def mark_job_failed(job, exc):
+    error_message = str(exc)
     update_job(
         job,
         state=Job.State.FAILED,
         status_message="Failed",
-        error_message=str(exc),
-        failure_details={"error": str(exc)},
+        error_message=error_message,
+        failure_details={
+            "error": error_message[:1000],
+            "error_type": exc.__class__.__name__,
+        },
         finished=True,
     )
     sync_fasta_from_job(job)
