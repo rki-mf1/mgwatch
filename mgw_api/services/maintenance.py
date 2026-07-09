@@ -157,7 +157,6 @@ def run_downloads(
     )
     metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
     manifest = metagenomes_dir / "manifest.pickle"
-    man_succ = metagenomes_dir / "download_successful.pickle"
     man_fail = metagenomes_dir / "download_failed.pickle"
     dir_paths = handle_dirs(
         database, ["updates", "index", "signatures", "indexing-failed", "manifests"]
@@ -174,7 +173,6 @@ def run_downloads(
         download_from_wort(
             dir_paths,
             missing_ids,
-            man_succ,
             man_fail,
             timeout,
             retry_failed or not settings.WORT_SKIP_FAILED,
@@ -228,16 +226,15 @@ def get_wort_accessions():
 async def download_from_wort(
     dir_paths,
     sra_ids,
-    man_succ,
     man_fail,
     timeout_seconds,
     retry_failed=False,
     max_downloads=None,
     max_simultaneous=100,
 ):
-    ids_succ = set(load_pickle(man_succ)) if man_succ.exists() else set()
+    ids_in_updates = get_update_accessions(dir_paths["updates"])
     ids_fail = set(load_pickle(man_fail)) if man_fail.exists() else set()
-    sra_ids = sra_ids - ids_succ
+    sra_ids = sra_ids - ids_in_updates
     if not retry_failed:
         sra_ids = list(sra_ids - ids_fail)
     if max_downloads is None and settings.MAX_DOWNLOADS:
@@ -258,17 +255,13 @@ async def download_from_wort(
         connector=conn, trust_env=True, timeout=timeout
     ) as session:
         tasks = [
-            fetch_signature(
-                session, url, target_dir, ids_succ, ids_fail, man_succ, man_fail, lock
-            )
+            fetch_signature(session, url, target_dir, ids_fail, man_fail, lock)
             for url in urls
         ]
         return await asyncio.gather(*tasks, return_exceptions=False)
 
 
-async def fetch_signature(
-    session, url, target_dir, ids_succ, ids_fail, man_succ, man_fail, lock
-):
+async def fetch_signature(session, url, target_dir, ids_fail, man_fail, lock):
     accession = url.split("/")[-1]
     try:
         async with session.get(url, ssl=ssl.SSLContext()) as response:
@@ -286,9 +279,6 @@ async def fetch_signature(
                 await handle.flush()
                 dest = f"{target_dir}/{accession}.sig"
                 await asyncio.to_thread(shutil.move, handle.name, dest)
-            async with lock:
-                ids_succ.add(accession)
-                await asyncio.to_thread(save_pickle, ids_succ, man_succ)
             return {"id": accession, "status": status, "path": dest}
     except Exception:
         LOGGER.exception("Download exception for %s", url)
@@ -306,6 +296,10 @@ def save_pickle(data, file):
 def load_pickle(file):
     with open(file, "rb") as handle:
         return pickle.load(handle)
+
+
+def get_update_accessions(updates_dir):
+    return {sig_path.stem for sig_path in Path(updates_dir).glob("*.sig")}
 
 
 def run_index():
@@ -359,16 +353,6 @@ def run_index():
                     new_files, mani_list, manifest, dir_paths, index_number
                 )
             indexing_ever_failed = indexing_ever_failed or not indexing_succeeded
-        if not indexing_ever_failed:
-            save_pickle(
-                set(),
-                os.path.join(
-                    settings.DATA_DIR,
-                    database,
-                    "metagenomes",
-                    "download_successful.pickle",
-                ),
-            )
     return {"indexes_updated": 1}
 
 
