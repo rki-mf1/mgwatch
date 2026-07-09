@@ -143,7 +143,50 @@ def run_downloads(
 ):
     test_url = "https://wort.sourmash.bio/v1/view/sra/SRR15461028"
     run_command(["curl", "-sLf", "-r", "0-10", test_url, "-o", "/dev/null"])
+    dir_paths, man_fail, sra_ids = prepare_download_targets(ids=ids)
+    selected_ids = select_download_ids(
+        sra_ids,
+        dir_paths,
+        man_fail,
+        retry_failed=retry_failed or not settings.WORT_SKIP_FAILED,
+        max_downloads=max_downloads,
+    )
+    results = asyncio.run(
+        download_from_wort(
+            dir_paths,
+            selected_ids,
+            man_fail,
+            timeout,
+            retry_failed=True,
+            max_downloads=None,
+            max_simultaneous=max_simultaneous,
+        )
+    )
+    downloaded = sum(
+        1 for result in results if isinstance(result, dict) and result.get("path")
+    )
+    return {"downloaded": downloaded}
+
+
+def prepare_download_targets(ids=None):
     database = "SRA"
+    dir_paths = handle_dirs(
+        database, ["updates", "index", "signatures", "indexing-failed", "manifests"]
+    )
+    man_fail = settings.DATA_DIR / database / "metagenomes" / "download_failed.pickle"
+    manifest = settings.DATA_DIR / database / "metagenomes" / "manifest.pickle"
+    mani_list = set(get_manifest(manifest))
+    if ids:
+        wanted_ids = set(ids) - mani_list
+    else:
+        start_date, end_date = get_download_date_range()
+        mongo_ids = get_mongo_ids(start_date, end_date)
+        wanted_ids = set(mongo_ids) - mani_list
+    sra_ids_in_wort = get_wort_accessions()
+    return dir_paths, man_fail, sorted(wanted_ids & sra_ids_in_wort)
+
+
+def get_download_date_range():
     today = datetime.today() - timedelta(days=2)
     start_date = (
         today
@@ -155,32 +198,22 @@ def run_downloads(
         if settings.START_DATE == "auto"
         else datetime.fromisoformat(settings.END_DATE)
     )
-    metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
-    manifest = metagenomes_dir / "manifest.pickle"
-    man_fail = metagenomes_dir / "download_failed.pickle"
-    dir_paths = handle_dirs(
-        database, ["updates", "index", "signatures", "indexing-failed", "manifests"]
-    )
-    mani_list = set(get_manifest(manifest))
-    if ids:
-        missing_ids = set(ids) - mani_list
-    else:
-        mongo_ids = get_mongo_ids(start_date, end_date)
-        missing_ids = set(mongo_ids) - set(mani_list)
-    sra_ids_in_wort = get_wort_accessions()
-    missing_ids = missing_ids & sra_ids_in_wort
-    asyncio.run(
-        download_from_wort(
-            dir_paths,
-            missing_ids,
-            man_fail,
-            timeout,
-            retry_failed or not settings.WORT_SKIP_FAILED,
-            max_downloads,
-            max_simultaneous,
-        )
-    )
-    return {"downloaded": len(missing_ids)}
+    return start_date, end_date
+
+
+def select_download_ids(
+    sra_ids, dir_paths, man_fail, *, retry_failed=False, max_downloads=None
+):
+    selected_ids = set(sra_ids) - get_update_accessions(dir_paths["updates"])
+    ids_fail = set(load_pickle(man_fail)) if man_fail.exists() else set()
+    if not retry_failed:
+        selected_ids -= ids_fail
+    selected_ids = sorted(selected_ids)
+    if max_downloads is None and settings.MAX_DOWNLOADS:
+        max_downloads = settings.MAX_DOWNLOADS
+    if max_downloads and max_downloads < len(selected_ids):
+        selected_ids = selected_ids[:max_downloads]
+    return selected_ids
 
 
 def handle_dirs(database, dir_names):
@@ -232,15 +265,14 @@ async def download_from_wort(
     max_downloads=None,
     max_simultaneous=100,
 ):
-    ids_in_updates = get_update_accessions(dir_paths["updates"])
     ids_fail = set(load_pickle(man_fail)) if man_fail.exists() else set()
-    sra_ids = sra_ids - ids_in_updates
-    if not retry_failed:
-        sra_ids = list(sra_ids - ids_fail)
-    if max_downloads is None and settings.MAX_DOWNLOADS:
-        max_downloads = settings.MAX_DOWNLOADS
-    if max_downloads and max_downloads < len(sra_ids):
-        sra_ids = sra_ids[:max_downloads]
+    sra_ids = select_download_ids(
+        sra_ids,
+        dir_paths,
+        man_fail,
+        retry_failed=retry_failed,
+        max_downloads=max_downloads,
+    )
     target_dir = dir_paths["updates"]
     signature_endpoint = "https://wort.sourmash.bio/v1/view/sra"
     urls = [f"{signature_endpoint}/{id_}" for id_ in sra_ids]
@@ -306,53 +338,201 @@ def run_index(*, index_max_signatures=None):
     tmp_dir = settings.DATA_DIR / "tmp"
     os.makedirs(tmp_dir, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="mgwatch-index-", dir=tmp_dir) as work_dir:
-        kmers = [21, 31, 51]
-        database = "SRA"
-        metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
-        sig_list = Path(work_dir) / "sig-list.txt"
-        manifest = metagenomes_dir / "manifest.pickle"
-        dir_paths = handle_dirs(
-            database, ["updates", "index", "signatures", "indexing-failed", "manifests"]
+        result = run_index_batches(
+            work_dir,
+            index_max_signatures=index_max_signatures,
+            max_batches=None,
+            delete_indexed_sigs=getattr(settings, "DELETE_INDEXED_SIGS", False),
         )
-        mani_list = get_manifest(manifest)
-        last_sig_files, last_num, has_existing_index = get_last_index(dir_paths)
-        delete_indexed_sigs = getattr(settings, "DELETE_INDEXED_SIGS", False)
-        max_signatures = index_max_signatures or settings.INDEX_MAX_SIGNATURES
-        new_sig_files = sorted(glob.glob(os.path.join(dir_paths["updates"], "*.sig")))
-        if not new_sig_files:
-            return {"indexes_updated": 0}
-        reuse_last_index = can_reuse_last_index(last_sig_files, has_existing_index)
-        if reuse_last_index:
-            sig_files = last_sig_files + new_sig_files
-            start_index_number = last_num
-        else:
-            sig_files = new_sig_files
-            start_index_number = last_num + 1
-        indexing_ever_failed = False
-        for idx_offset, new_files in enumerate(batched(sig_files, n=max_signatures), 0):
-            write_signature_list(new_files, sig_list)
-            index_number = start_index_number + idx_offset
-            retvals = [
-                update_index(work_dir, dir_paths["index"], sig_list, k, index_number)
-                for k in kmers
-            ]
-            indexing_succeeded = all(val == 0 for val in retvals)
-            delete_after_indexing = (
-                indexing_succeeded
-                and delete_indexed_sigs
-                and len(new_files) == max_signatures
+    return {"indexes_updated": result["indexes_updated"]}
+
+
+def run_index_batches(
+    work_dir,
+    *,
+    index_max_signatures=None,
+    max_batches=None,
+    delete_indexed_sigs=False,
+):
+    kmers = [21, 31, 51]
+    database = "SRA"
+    metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
+    sig_list = Path(work_dir) / "sig-list.txt"
+    manifest = metagenomes_dir / "manifest.pickle"
+    dir_paths = handle_dirs(
+        database, ["updates", "index", "signatures", "indexing-failed", "manifests"]
+    )
+    mani_list = get_manifest(manifest)
+    last_sig_files, last_num, has_existing_index = get_last_index(dir_paths)
+    max_signatures = index_max_signatures or settings.INDEX_MAX_SIGNATURES
+    batch_specs = get_index_batch_specs(
+        dir_paths,
+        last_sig_files,
+        last_num,
+        has_existing_index,
+        max_signatures,
+    )
+    if max_batches is not None:
+        batch_specs = batch_specs[:max_batches]
+    if not batch_specs:
+        return {"indexes_updated": 0, "batches_processed": 0}
+    indexing_ever_failed = False
+    for index_number, new_files in batch_specs:
+        indexing_succeeded, mani_list = process_index_batch(
+            work_dir,
+            dir_paths,
+            sig_list,
+            kmers,
+            index_number,
+            new_files,
+            mani_list,
+            manifest,
+            max_signatures,
+            delete_indexed_sigs,
+        )
+        indexing_ever_failed = indexing_ever_failed or not indexing_succeeded
+    return {
+        "indexes_updated": 1,
+        "batches_processed": len(batch_specs),
+        "indexing_failed": indexing_ever_failed,
+    }
+
+
+def get_index_batch_specs(
+    dir_paths, last_sig_files, last_num, has_existing_index, max_signatures
+):
+    new_sig_files = sorted(glob.glob(os.path.join(dir_paths["updates"], "*.sig")))
+    if not new_sig_files:
+        return []
+    reuse_last_index = can_reuse_last_index(last_sig_files, has_existing_index)
+    if reuse_last_index:
+        sig_files = last_sig_files + new_sig_files
+        start_index_number = last_num
+    else:
+        sig_files = new_sig_files
+        start_index_number = last_num + 1
+    return [
+        (start_index_number + idx_offset, list(batch_files))
+        for idx_offset, batch_files in enumerate(
+            batched(sig_files, n=max_signatures), 0
+        )
+    ]
+
+
+def process_index_batch(
+    work_dir,
+    dir_paths,
+    sig_list,
+    kmers,
+    index_number,
+    new_files,
+    mani_list,
+    manifest,
+    max_signatures,
+    delete_indexed_sigs,
+):
+    write_signature_list(new_files, sig_list)
+    retvals = [
+        update_index(work_dir, dir_paths["index"], sig_list, k, index_number)
+        for k in kmers
+    ]
+    indexing_succeeded = all(val == 0 for val in retvals)
+    delete_after_indexing = (
+        indexing_succeeded and delete_indexed_sigs and len(new_files) == max_signatures
+    )
+    if delete_after_indexing:
+        delete_files(new_files)
+    else:
+        target_dir = "signatures" if indexing_succeeded else "indexing-failed"
+        move_files(new_files, dir_paths, target_dir)
+    if indexing_succeeded:
+        mani_list = update_manifests(
+            new_files, mani_list, manifest, dir_paths, index_number
+        )
+    return indexing_succeeded, mani_list
+
+
+def run_download_index(
+    *,
+    max_downloads=None,
+    max_simultaneous=100,
+    timeout=60,
+    ids=None,
+    retry_failed=False,
+    index_max_signatures=None,
+):
+    test_url = "https://wort.sourmash.bio/v1/view/sra/SRR15461028"
+    run_command(["curl", "-sLf", "-r", "0-10", test_url, "-o", "/dev/null"])
+    dir_paths, man_fail, remaining_ids = prepare_download_targets(ids=ids)
+    max_signatures = index_max_signatures or settings.INDEX_MAX_SIGNATURES
+    retry_failed = retry_failed or not settings.WORT_SKIP_FAILED
+    total_downloaded = 0
+    total_batches = 0
+    remaining_download_budget = max_downloads
+
+    while True:
+        updates_count = len(get_update_accessions(dir_paths["updates"]))
+        batch_capacity = max(0, max_signatures - updates_count)
+        selected_ids = []
+        if (
+            batch_capacity > 0
+            and remaining_ids
+            and (remaining_download_budget is None or remaining_download_budget > 0)
+        ):
+            selected_ids = select_download_ids(
+                remaining_ids,
+                dir_paths,
+                man_fail,
+                retry_failed=retry_failed,
+                max_downloads=min(remaining_download_budget, batch_capacity)
+                if remaining_download_budget is not None
+                else batch_capacity,
             )
-            if delete_after_indexing:
-                delete_files(new_files)
-            else:
-                target_dir = "signatures" if indexing_succeeded else "indexing-failed"
-                move_files(new_files, dir_paths, target_dir)
-            if indexing_succeeded:
-                update_manifests(
-                    new_files, mani_list, manifest, dir_paths, index_number
+            if selected_ids:
+                results = asyncio.run(
+                    download_from_wort(
+                        dir_paths,
+                        selected_ids,
+                        man_fail,
+                        timeout,
+                        retry_failed=True,
+                        max_downloads=None,
+                        max_simultaneous=max_simultaneous,
+                    )
                 )
-            indexing_ever_failed = indexing_ever_failed or not indexing_succeeded
-    return {"indexes_updated": 1}
+                total_downloaded += sum(
+                    1
+                    for result in results
+                    if isinstance(result, dict) and result.get("path")
+                )
+                remaining_id_set = set(remaining_ids)
+                remaining_id_set -= set(selected_ids)
+                remaining_ids = sorted(remaining_id_set)
+                if remaining_download_budget is not None:
+                    remaining_download_budget -= len(selected_ids)
+
+        if not get_update_accessions(dir_paths["updates"]):
+            if not remaining_ids or not selected_ids:
+                break
+            continue
+
+        tmp_dir = settings.DATA_DIR / "tmp"
+        os.makedirs(tmp_dir, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix="mgwatch-index-", dir=tmp_dir
+        ) as work_dir:
+            index_result = run_index_batches(
+                work_dir,
+                index_max_signatures=max_signatures,
+                max_batches=1,
+                delete_indexed_sigs=True,
+            )
+        total_batches += index_result["batches_processed"]
+
+        if index_result["indexes_updated"] == 0:
+            break
+
+    return {"downloaded": total_downloaded, "indexes_updated": total_batches}
 
 
 def get_last_index(dir_paths):
@@ -437,6 +617,7 @@ def update_manifests(new_files, mani_list, manifest, dir_paths, last_num):
     sig_files = list(set(mani_list) | set(new_files))
     with open(manifest, "wb") as handle:
         pickle.dump(sig_files, handle, protocol=4)
+    return sig_files
 
 
 def run_watch():

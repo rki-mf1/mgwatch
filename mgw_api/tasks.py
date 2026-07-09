@@ -231,6 +231,16 @@ def run_downloads_task(self, **kwargs):
 
 
 @shared_task(**NO_RETRY_TASK_OPTIONS)
+def run_download_index_task(self, **kwargs):
+    from mgw_api.services.maintenance import run_download_index
+
+    with acquire_lock("downloads-lock"):
+        with acquire_lock("index-lock"):
+            with acquire_lock("download-index-exclusive-lock"):
+                return run_download_index(**kwargs)
+
+
+@shared_task(**NO_RETRY_TASK_OPTIONS)
 def run_index_task(self, **kwargs):
     from mgw_api.services.maintenance import run_index
 
