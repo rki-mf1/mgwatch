@@ -30,6 +30,7 @@ urlpatterns = [
         views.check_processing_status,
         name="check_status",
     ),
+    path("job_status/<int:fasta_id>/", views.job_status, name="job_status"),
     path(
         "download/result-file/<int:pk>/",
         views.download_result_file,

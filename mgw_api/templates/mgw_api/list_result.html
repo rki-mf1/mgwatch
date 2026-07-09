@@ -11,8 +11,8 @@
                     <h3>Sequence name: {{ signature.name }}</h3>
                 </div>
                 <div class="signature-actions">
-                    {% if not signature.result_set.exists %}
-                        <a href="{% url 'mgw_api:delete_signature' signature.pk %}?next={% url 'mgw_api:list_result' %}"
+                    {% if not signature.sorted_results and signature.signature %}
+                        <a href="{% url 'mgw_api:delete_signature' signature.signature.pk %}?next={% url 'mgw_api:list_result' %}"
                            class="delete-link">delete</a>
                     {% endif %}
                     {% if False %}
@@ -20,13 +20,15 @@
                               method="post"
                               action="{% url 'mgw_api:list_result' %}">
                             {% csrf_token %}
-                            <input type="hidden" name="signature_id" value="{{ signature.pk }}">
+                            <input type="hidden"
+                                   name="signature_id"
+                                   value="{{ signature.signature.pk }}">
                             <button type="submit">Update search</button>
                         </form>
                     {% endif %}
                 </div>
             </div>
-            {% if signature.result_set.exists %}
+            {% if signature.sorted_results %}
                 Previous searches:
                 <table class="result-list">
                     <thead>
@@ -36,12 +38,13 @@
                             <th>Databases</th>
                             <th>Containment</th>
                             <th># results</th>
+                            <th>Current search</th>
                             <th>Is watched?</th>
                             <th>Delete</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for result in signature.sorted_results.all %}
+                        {% for result in signature.sorted_results %}
                             <tr>
                                 <td>
                                     <a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.date }} {{ result.time|date:"H:i:s" }}</a>
@@ -50,6 +53,15 @@
                                 <td>{{ result.database }}</td>
                                 <td>{{ result.containment }}</td>
                                 <td>{{ result.num_results }}</td>
+                                {% if forloop.first %}
+                                    <td {% if signature.sorted_results|length > 1 %}rowspan="{{ signature.sorted_results|length }}"{% endif %}>
+                                        {% if signature.active_job %}
+                                            {% include "mgw_api/_job_status.html" with fasta=signature.fasta job=signature.active_job only %}
+                                        {% else %}
+                                            <span>-</span>
+                                        {% endif %}
+                                    </td>
+                                {% endif %}
                                 <td>
                                     <form id="watch-form-{{ result.pk }}"
                                           method="post"
@@ -66,6 +78,19 @@
                                 </td>
                             </tr>
                         {% endfor %}
+                    </tbody>
+                </table>
+            {% elif signature.active_job %}
+                <table class="result-list">
+                    <thead>
+                        <tr>
+                            <th>Current search</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>{% include "mgw_api/_job_status.html" with fasta=signature.fasta job=signature.active_job only %}</td>
+                        </tr>
                     </tbody>
                 </table>
             {% endif %}

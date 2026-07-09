@@ -1,0 +1,10 @@
+<div class="result-job-status"
+     hx-get="{% url 'mgw_api:job_status' fasta.pk %}"
+     hx-trigger="every 5s"
+     hx-swap="outerHTML">
+    <div class="job-message">
+        {{ job.status_message }}
+        {% if job.progress_total %}({{ job.progress_current }}/{{ job.progress_total }}){% endif %}
+    </div>
+    <progress max="100" value="{{ job.progress_percent }}">{{ job.progress_percent }}%</progress>
+</div>

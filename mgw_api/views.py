@@ -3,6 +3,7 @@
 import json
 import os
 import re
+from types import SimpleNamespace
 
 import numpy as np
 from django.conf import settings
@@ -170,6 +171,25 @@ def check_processing_status(request, fasta_id):
 
 
 @login_required
+def job_status(request, fasta_id):
+    fasta = get_object_or_404(Fasta, id=fasta_id, user=request.user)
+    job = (
+        Job.objects.filter(fasta=fasta, user=request.user)
+        .order_by("-created_at")
+        .first()
+    )
+    if job and job.state in Job.ACTIVE_STATES:
+        return render(
+            request,
+            "mgw_api/_job_status.html",
+            {"fasta": fasta, "job": job},
+        )
+    response = HttpResponse(status=204)
+    response["HX-Refresh"] = "true"
+    return response
+
+
+@login_required
 def list_signature(request):
     signature_files = Signature.objects.filter(user=request.user)
     return render(
@@ -299,12 +319,68 @@ def list_result(request):
         .prefetch_related("result_set")
         .order_by("-date", "-time")
     )
+    active_search_jobs = {}
+    for job in Job.objects.filter(
+        user=request.user,
+        job_type=Job.JobType.SEARCH,
+        state__in=Job.ACTIVE_STATES,
+        signature__in=signatures,
+    ).order_by("signature_id", "-created_at"):
+        active_search_jobs.setdefault(job.signature_id, job)
+    entries_by_name = {}
     for signature in signatures:
-        signature.sorted_results = signature.result_set.all().order_by("-date", "-time")
+        entry = entries_by_name.setdefault(
+            signature.name,
+            SimpleNamespace(
+                name=signature.name,
+                signature=signature,
+                fasta=signature.fasta,
+                sorted_results=[],
+                active_job=None,
+            ),
+        )
+        entry.signature = signature
+        entry.fasta = signature.fasta
+        entry.sorted_results = list(
+            signature.result_set.all().order_by("-date", "-time")
+        )
+        entry.active_job = active_search_jobs.get(signature.pk)
+    for job in (
+        Job.objects.filter(
+            user=request.user,
+            job_type=Job.JobType.SIGNATURE_PIPELINE,
+            state__in=Job.ACTIVE_STATES,
+        )
+        .select_related("fasta")
+        .order_by("-created_at")
+    ):
+        if not job.fasta:
+            continue
+        entry = entries_by_name.setdefault(
+            job.fasta.name,
+            SimpleNamespace(
+                name=job.fasta.name,
+                signature=None,
+                fasta=job.fasta,
+                sorted_results=[],
+                active_job=None,
+            ),
+        )
+        if entry.active_job is None:
+            entry.active_job = job
+        if entry.fasta is None:
+            entry.fasta = job.fasta
+    sequence_entries = list(entries_by_name.values())
+    sequence_entries.sort(
+        key=lambda entry: (
+            entry.signature.date if entry.signature else entry.fasta.upload_date
+        ),
+        reverse=True,
+    )
     return render(
         request,
         "mgw_api/list_result.html",
-        {"signatures": signatures, "settings_form": settings_form},
+        {"signatures": sequence_entries, "settings_form": settings_form},
     )
 
 

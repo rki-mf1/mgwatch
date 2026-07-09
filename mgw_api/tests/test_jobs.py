@@ -11,6 +11,8 @@ from django.utils import timezone
 
 from mgw_api.models import Fasta
 from mgw_api.models import Job
+from mgw_api.models import Result
+from mgw_api.models import Signature
 from mgw_api.services.exceptions import JobConflictError
 from mgw_api.services.jobs import create_signature_pipeline_job
 
@@ -54,6 +56,107 @@ class JobStatusViewTests(TestCase):
         self.assertEqual(payload["current"], 1)
         self.assertEqual(payload["total"], 3)
         self.assertEqual(payload["percent"], 33)
+
+    def test_job_status_fragment_renders_htmx_polling_markup(self):
+        Job.objects.create(
+            job_type=Job.JobType.SIGNATURE_PIPELINE,
+            state=Job.State.RUNNING,
+            status_message="Searching indexes 1/3",
+            progress_current=1,
+            progress_total=3,
+            user=self.user,
+            fasta=self.fasta,
+            queue="interactive",
+        )
+
+        response = self.client.get(
+            reverse("mgw_api:job_status", kwargs={"fasta_id": self.fasta.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'hx-trigger="every 5s"')
+        self.assertContains(
+            response,
+            reverse("mgw_api:job_status", kwargs={"fasta_id": self.fasta.pk}),
+        )
+        self.assertContains(response, "Searching indexes 1/3")
+        self.assertContains(response, 'value="33"', html=False)
+
+    def test_job_status_fragment_refreshes_when_job_is_terminal(self):
+        Job.objects.create(
+            job_type=Job.JobType.SIGNATURE_PIPELINE,
+            state=Job.State.COMPLETED,
+            status_message="Complete",
+            progress_current=3,
+            progress_total=3,
+            user=self.user,
+            fasta=self.fasta,
+            queue="interactive",
+        )
+
+        response = self.client.get(
+            reverse("mgw_api:job_status", kwargs={"fasta_id": self.fasta.pk})
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.headers["HX-Refresh"], "true")
+
+    def test_results_page_shows_active_search_job_progress(self):
+        signature = Signature.objects.create(
+            user=self.user,
+            name="example",
+            fasta=self.fasta,
+            file="user_1/example.sig",
+        )
+        Result.objects.create(
+            user=self.user,
+            name="example",
+            signature=signature,
+            file="user_1/example.csv",
+            num_results=7,
+            kmer=[21],
+            database=["SRA"],
+            containment=0.1,
+        )
+        Job.objects.create(
+            job_type=Job.JobType.SEARCH,
+            state=Job.State.RUNNING,
+            status_message="Searching indexes 1/3",
+            progress_current=1,
+            progress_total=3,
+            user=self.user,
+            signature=signature,
+            fasta=self.fasta,
+            queue="interactive",
+        )
+
+        response = self.client.get(reverse("mgw_api:list_result"))
+
+        self.assertContains(response, "Current search")
+        self.assertContains(response, "Searching indexes 1/3")
+        self.assertContains(response, "(1/3)")
+        self.assertContains(response, 'hx-trigger="every 5s"')
+        self.assertContains(response, 'value="33"', html=False)
+
+    def test_results_page_shows_active_signature_pipeline_without_completed_results(
+        self,
+    ):
+        Job.objects.create(
+            job_type=Job.JobType.SIGNATURE_PIPELINE,
+            state=Job.State.RUNNING,
+            status_message="Creating signature",
+            progress_current=0,
+            progress_total=0,
+            user=self.user,
+            fasta=self.fasta,
+            queue="interactive",
+        )
+
+        response = self.client.get(reverse("mgw_api:list_result"))
+
+        self.assertContains(response, "Sequence name: example")
+        self.assertContains(response, "Current search")
+        self.assertContains(response, "Creating signature")
 
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT, CELERY_TASK_TIME_LIMIT=10)
