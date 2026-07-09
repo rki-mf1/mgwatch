@@ -9,6 +9,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 from django.db import models
+from django.db.models import Q
 
 from mgw.settings import LOGGER
 
@@ -162,3 +163,114 @@ class FilterSetting(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.result.name} Filters"
+
+
+class Job(models.Model):
+    class JobType(models.TextChoices):
+        SIGNATURE_PIPELINE = "signature_pipeline", "Signature pipeline"
+        SEARCH = "search", "Search"
+        CREATE_SIGNATURE = "create_signature", "Create signature"
+        METADATA = "metadata", "Metadata"
+        DOWNLOADS = "downloads", "Downloads"
+        INDEX = "index", "Index"
+        WATCH = "watch", "Watch"
+        DAILY = "daily", "Daily"
+
+    class State(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        WAITING = "waiting", "Waiting"
+        STARTING = "starting", "Starting"
+        RUNNING = "running", "Running"
+        COMBINING_RESULTS = "combining_results", "Combining results"
+        SAVING_RESULT = "saving_result", "Saving result"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    ACTIVE_STATES = (
+        State.QUEUED,
+        State.WAITING,
+        State.STARTING,
+        State.RUNNING,
+        State.COMBINING_RESULTS,
+        State.SAVING_RESULT,
+    )
+
+    job_type = models.CharField(max_length=64, choices=JobType.choices)
+    state = models.CharField(max_length=32, choices=State.choices, default=State.QUEUED)
+    status_message = models.CharField(max_length=255, default="Queued")
+    celery_task_id = models.CharField(max_length=255, blank=True)
+    queue = models.CharField(max_length=64, blank=True)
+    lock_name = models.CharField(max_length=128, blank=True)
+    progress_current = models.PositiveIntegerField(default=0)
+    progress_total = models.PositiveIntegerField(default=0)
+    error_message = models.TextField(blank=True)
+    failure_details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.CASCADE)
+    fasta = models.ForeignKey(Fasta, null=True, blank=True, on_delete=models.CASCADE)
+    signature = models.ForeignKey(
+        Signature, null=True, blank=True, on_delete=models.CASCADE
+    )
+    result = models.ForeignKey(Result, null=True, blank=True, on_delete=models.CASCADE)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["fasta", "job_type"],
+                condition=Q(
+                    fasta__isnull=False,
+                    state__in=[
+                        "queued",
+                        "waiting",
+                        "starting",
+                        "running",
+                        "combining_results",
+                        "saving_result",
+                    ],
+                    job_type="signature_pipeline",
+                ),
+                name="uniq_active_signature_pipeline_per_fasta",
+            ),
+            models.UniqueConstraint(
+                fields=["signature", "job_type"],
+                condition=Q(
+                    signature__isnull=False,
+                    state__in=[
+                        "queued",
+                        "waiting",
+                        "starting",
+                        "running",
+                        "combining_results",
+                        "saving_result",
+                    ],
+                    job_type="search",
+                ),
+                name="uniq_active_search_per_signature",
+            ),
+            models.UniqueConstraint(
+                fields=["job_type"],
+                condition=Q(
+                    state__in=[
+                        "queued",
+                        "waiting",
+                        "starting",
+                        "running",
+                        "combining_results",
+                        "saving_result",
+                    ],
+                    job_type__in=["downloads", "index", "daily"],
+                ),
+                name="uniq_active_global_maintenance_jobs",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.job_type}:{self.pk}:{self.state}"
+
+    @property
+    def progress_percent(self):
+        if not self.progress_total:
+            return 0
+        return min(100, int((self.progress_current / self.progress_total) * 100))

@@ -1,6 +1,8 @@
 from django.core.management.base import BaseCommand
 
-from mgw_api.services.maintenance import run_downloads
+from mgw_api.management.commands._celery import wait_for_task
+from mgw_api.tasks import MAINTENANCE_QUEUE
+from mgw_api.tasks import run_downloads_task
 
 
 class Command(BaseCommand):
@@ -12,11 +14,15 @@ class Command(BaseCommand):
         parser.add_argument("--retry-failed", action="store_true")
 
     def handle(self, *args, **kwargs):
-        run_downloads(
-            max_downloads=kwargs["max_downloads"],
-            max_simultaneous=kwargs["max_simultaneous"],
-            timeout=kwargs["timeout"],
-            ids=kwargs["ids"],
-            retry_failed=kwargs["retry_failed"],
+        wait_for_task(
+            run_downloads_task,
+            kwargs={
+                "max_downloads": kwargs["max_downloads"],
+                "max_simultaneous": kwargs["max_simultaneous"],
+                "timeout": kwargs["timeout"],
+                "ids": kwargs["ids"],
+                "retry_failed": kwargs["retry_failed"],
+            },
+            queue=MAINTENANCE_QUEUE,
         )
         self.stdout.write(self.style.SUCCESS("Signature downloads completed"))

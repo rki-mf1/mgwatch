@@ -3,9 +3,6 @@
 import json
 import os
 import re
-import subprocess
-import sys
-import threading
 
 import numpy as np
 from django.conf import settings
@@ -14,6 +11,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth import login
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import FileResponse
 from django.http import Http404
 from django.http import HttpResponse
@@ -34,12 +32,14 @@ from .functions import apply_regex
 from .functions import get_numeric_columns_pandas
 from .functions import get_results_with_metadata
 from .functions import is_float
-from .functions import run_create_signature_and_search
 from .models import Fasta
 from .models import FilterSetting
+from .models import Job
 from .models import Result
 from .models import Settings
 from .models import Signature
+from .tasks import submit_search_job
+from .tasks import submit_signature_pipeline_job
 
 ################################################################
 ## account management
@@ -105,23 +105,15 @@ def upload_fasta(request):
                             }
                         )
                     else:
-                        uploaded_file_instance = fasta_form.save(commit=False)
-                        uploaded_file_instance.user = request.user
-                        uploaded_file_instance.name = name
-                        uploaded_file_instance.size = uploaded_file.size
-                        uploaded_file_instance.processed = False
-                        uploaded_file_instance.status = "Processing"
-                        uploaded_file_instance.save()
-                        thread = threading.Thread(
-                            target=run_create_signature_and_search,
-                            args=(
-                                request.user.id,
-                                name,
-                                uploaded_file_instance.id,
-                                True,
-                            ),
-                        )
-                        thread.start()
+                        with transaction.atomic():
+                            uploaded_file_instance = fasta_form.save(commit=False)
+                            uploaded_file_instance.user = request.user
+                            uploaded_file_instance.name = name
+                            uploaded_file_instance.size = uploaded_file.size
+                            uploaded_file_instance.processed = False
+                            uploaded_file_instance.status = "Queued"
+                            uploaded_file_instance.save()
+                            submit_signature_pipeline_job(fasta=uploaded_file_instance)
                         return JsonResponse(
                             {
                                 "success": True,
@@ -151,9 +143,30 @@ def upload_fasta(request):
 @login_required
 def check_processing_status(request, fasta_id):
     fasta = get_object_or_404(Fasta, id=fasta_id, user=request.user)
-    return JsonResponse(
-        {"status": fasta.status, "fasta_id": fasta_id, "result_pk": fasta.result_pk}
+    job = (
+        Job.objects.filter(fasta=fasta, user=request.user)
+        .order_by("-created_at")
+        .first()
     )
+    if job:
+        payload = {
+            "status": fasta.status,
+            "state": job.state,
+            "message": job.status_message,
+            "current": job.progress_current,
+            "total": job.progress_total,
+            "percent": job.progress_percent,
+            "fasta_id": fasta_id,
+            "result_pk": fasta.result_pk,
+            "job_id": job.pk,
+        }
+    else:
+        payload = {
+            "status": fasta.status,
+            "fasta_id": fasta_id,
+            "result_pk": fasta.result_pk,
+        }
+    return JsonResponse(payload)
 
 
 @login_required
@@ -186,22 +199,11 @@ def process_signature(request, pk):
         try:
             signature = get_object_or_404(Signature, pk=pk, user=request.user)
             current_settings = Settings.objects.get(user=request.user)
-            signature.settings_used = current_settings.to_dict()
-            signature.submitted = True
-            signature.save()
-            manage_py_path = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "manage.py"
-            )
-            subprocess.Popen(
-                [
-                    sys.executable,
-                    manage_py_path,
-                    "create_search",
-                    str(request.user.id),
-                    signature.name,
-                ]
-            )
-            subprocess.Popen([sys.executable, manage_py_path, "create_search"])
+            with transaction.atomic():
+                signature.settings_used = current_settings.to_dict()
+                signature.submitted = True
+                signature.save(update_fields=["settings_used", "submitted"])
+                submit_search_job(signature=signature)
             messages.success(
                 request,
                 "Signature submission successful. Processing will happen in the background.",
@@ -270,17 +272,14 @@ def list_result(request):
                 signature = get_object_or_404(
                     Signature, id=signature_id, user=request.user
                 )
-                signature.submitted = True
-                signature.save()
-                fasta = signature.fasta
-                fasta.processed = False
-                fasta.status = "Processing"
-                fasta.save()
-                thread = threading.Thread(
-                    target=run_create_signature_and_search,
-                    args=(request.user.id, fasta.name, fasta.id, False),
-                )
-                thread.start()
+                with transaction.atomic():
+                    signature.submitted = True
+                    signature.save(update_fields=["submitted"])
+                    fasta = signature.fasta
+                    fasta.processed = False
+                    fasta.status = "Queued"
+                    fasta.save(update_fields=["processed", "status"])
+                    submit_search_job(signature=signature)
                 return JsonResponse(
                     {
                         "success": True,

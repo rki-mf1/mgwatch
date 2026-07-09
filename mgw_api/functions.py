@@ -1,16 +1,12 @@
 # mgw_api/functions.py
 
-import io
 import re
 
 import pandas as pd
 import pymongo as pm
 from django.conf import settings
-from django.core.management import call_command
 
 from mgw.settings import LOGGER
-
-from .models import Fasta
 
 
 def search_mongodb(headers, rows):
@@ -95,34 +91,6 @@ def apply_compare(modifier, rows, column, value):
             return False
     except (ValueError, TypeError):
         return True
-
-
-def run_create_signature_and_search(user_id, name, fasta_id, do_sketching):
-    try:
-        fasta = Fasta.objects.get(id=fasta_id)
-        if do_sketching:
-            LOGGER.info(f"Calling create_signature with args: {user_id} {name}")
-            call_command("create_signature", user_id, name)
-        output = io.StringIO()
-        LOGGER.info(
-            f"Calling create_search with args: user_id={user_id} name={name} False"
-        )
-        call_command("create_search", user_id, name, "False", stdout=output)
-        output.seek(0)
-        match = re.search(r"RESULT_PK:\s*(\d+)", output.getvalue())
-        result_pk = int(match.group(1)) if match else None
-        LOGGER.info(f"Search Result pk: {result_pk}")
-        if result_pk:
-            fasta.result_pk = result_pk
-            fasta.processed = True
-            fasta.status = "Complete"
-            fasta.save()
-        else:
-            raise Exception("Search failed.")
-    except Exception as e:
-        LOGGER.error(f"Error during background processing: {e}")
-        fasta.status = f"Error: {e}"
-        fasta.save()
 
 
 def human_sort_key(text):

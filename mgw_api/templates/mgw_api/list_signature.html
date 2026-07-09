@@ -50,9 +50,12 @@
         {% endif %}
     </div>
     <script>
-    document.getElementById('upload-form').addEventListener('submit', function(event) {
-        const submissionMessageDiv = document.querySelector('.submission-message');
-        submissionMessageDiv.innerHTML = '';
-    });
+    const uploadForm = document.getElementById('upload-form');
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', function() {
+            const submissionMessageDiv = document.querySelector('.submission-message');
+            submissionMessageDiv.innerHTML = '';
+        });
+    }
     </script>
 {% endblock content %}
