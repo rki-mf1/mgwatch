@@ -52,5 +52,6 @@ repos:
         name: Django tests
         entry: ./scripts/run-tests.sh
         language: system
+        always_run: true
         pass_filenames: false
         stages: [pre-push]
