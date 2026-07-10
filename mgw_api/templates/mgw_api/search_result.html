@@ -1,0 +1,8 @@
+{% extends "mgw_api/base_result.html" %}
+{% block content %}
+    {% if result %}
+        {% include "mgw_api/_result_table_content.html" %}
+    {% else %}
+        {% include "mgw_api/_search_result_status.html" %}
+    {% endif %}
+{% endblock content %}

@@ -120,6 +120,10 @@ def upload_fasta(request):
                                 "success": True,
                                 "message": "File submission successful. Processing will happen in the background.",
                                 "fasta_id": uploaded_file_instance.id,
+                                "result_url": reverse(
+                                    "mgw_api:search_result",
+                                    kwargs={"fasta_id": uploaded_file_instance.id},
+                                ),
                             }
                         )
                 except Exception as e:
@@ -414,84 +418,118 @@ def result_table(request, pk):
                 return redirect(reverse("mgw_api:result_table", kwargs={"pk": pk}))
             else:
                 messages.error(request, "Please correct the errors below.")
-    else:
-        # handle result table
-        result = get_object_or_404(Result, pk=pk, user=request.user)
-        watch_form = WatchForm(instance=result)
-        # Immediately stop if the search result set is empty
-        if result.num_results == 0:
-            return render(
-                request,
-                "mgw_api/result_table.html",
-                {
-                    "result": result,
-                    "watch_form": watch_form,
-                },
-            )
-        results_with_metadata = get_results_with_metadata(
-            result, max_results=settings.MAX_SEARCH_RESULTS
+    result = get_object_or_404(Result, pk=pk, user=request.user)
+    context = build_result_table_context(
+        request, result=result, settings_form=settings_form
+    )
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return result_table_json_response(context)
+
+    return render(request, "mgw_api/result_table.html", context)
+
+
+def build_result_table_context(request, *, result, settings_form):
+    watch_form = WatchForm(instance=result)
+    context = {
+        "result": result,
+        "watch_form": watch_form,
+        "settings_form": settings_form,
+    }
+    if result.num_results == 0:
+        return context
+
+    results_with_metadata = get_results_with_metadata(
+        result, max_results=settings.MAX_SEARCH_RESULTS
+    )
+    # We do this mainly to convert NaT to None in order to stop a crash
+    results_with_metadata = results_with_metadata.replace({np.nan: None})
+    filter_settings, created = FilterSetting.objects.get_or_create(
+        result=result, user=request.user
+    )
+    sort_column = filter_settings.sort_column
+    sort_reverse = filter_settings.sort_reverse
+    numeric_columns = get_numeric_columns_pandas(results_with_metadata)
+
+    # Convert from DataFrame to lists for serialization
+    headers = results_with_metadata.columns.tolist()
+    rows = results_with_metadata.values.tolist()
+
+    # FIXME: adapt filtering to pandas DataFrame
+    for column, value in filter_settings.filters.items():
+        rows = apply_regex(rows, column, value)
+    for column, range_values in filter_settings.range_filters.items():
+        for m, value in zip([1, -1], range_values):
+            if value == "":
+                value = None
+            if is_float(value):
+                rows = [row for row in rows if apply_compare(m, row, column, value)]
+            elif value is not None:
+                rows = apply_regex(rows, column, value)
+
+    filter_form = FilterSettingForm(instance=filter_settings)
+    context.update(
+        {
+            "headers": headers,
+            "rows": rows,
+            "filter_form": filter_form,
+            "numeric_columns": numeric_columns,
+            "sort_column": sort_column,
+            "sort_reverse": sort_reverse,
+        }
+    )
+    return context
+
+
+def result_table_json_response(context):
+    headers = context.get("headers", [])
+    rows = context.get("rows", [])
+    geo_loc_data = []
+    lat_lon_data = []
+    if headers and "geo loc name country calc" in headers and "lat lon" in headers:
+        geo_loc_name_country_calc_index = headers.index("geo loc name country calc")
+        lat_lon_index = headers.index("lat lon")
+        geo_loc_data = [row[geo_loc_name_country_calc_index] for row in rows]
+        lat_lon_data = [row[lat_lon_index] for row in rows]
+    return JsonResponse(
+        {
+            "headers": headers,
+            "rows": rows,
+            "geo_loc_data": geo_loc_data,
+            "lat_lon_data": lat_lon_data,
+        }
+    )
+
+
+@login_required
+def search_result(request, fasta_id):
+    fasta = get_object_or_404(Fasta, pk=fasta_id, user=request.user)
+    sourmash_settings, created = Settings.objects.get_or_create(user=request.user)
+    settings_form = SettingsForm(instance=sourmash_settings)
+    result = (
+        Result.objects.filter(pk=fasta.result_pk, user=request.user).first()
+        if fasta.result_pk
+        else None
+    )
+    if result:
+        context = build_result_table_context(
+            request, result=result, settings_form=settings_form
         )
-        # We do this mainly to convert NaT to None in order to stop a crash
-        results_with_metadata = results_with_metadata.replace({np.nan: None})
-        filter_settings, created = FilterSetting.objects.get_or_create(
-            result=result, user=request.user
-        )
-        sort_column = filter_settings.sort_column
-        sort_reverse = filter_settings.sort_reverse
-        # results_with_metadata = results_with_metadata.sort_values(
-        #    by=sort_column,
-        #    ascending=not sort_reverse,
-        #    na_position="last",
-        # )
-        numeric_columns = get_numeric_columns_pandas(results_with_metadata)
+        if request.headers.get("HX-Request"):
+            return render(request, "mgw_api/_result_table_content.html", context)
+        return render(request, "mgw_api/search_result.html", context)
 
-        # Convert from DataFrame to lists for serialization
-        headers = results_with_metadata.columns.tolist()
-        rows = results_with_metadata.values.tolist()
-
-        # FIXME: adapt filtering to pandas DataFrame
-        for column, value in filter_settings.filters.items():
-            rows = apply_regex(rows, column, value)
-        for column, range_values in filter_settings.range_filters.items():
-            for m, value in zip([1, -1], range_values):
-                if value == "":
-                    value = None
-                if is_float(value):
-                    rows = [row for row in rows if apply_compare(m, row, column, value)]
-                elif value is not None:
-                    rows = apply_regex(rows, column, value)
-
-        filter_form = FilterSettingForm(instance=filter_settings)
-
-        if request.headers.get("x-requested-with") == "XMLHttpRequest":
-            geo_loc_name_country_calc_index = headers.index("geo loc name country calc")
-            lat_lon_index = headers.index("lat lon")
-            geo_loc_data = [row[geo_loc_name_country_calc_index] for row in rows]
-            lat_lon_data = [row[lat_lon_index] for row in rows]
-            return JsonResponse(
-                {
-                    "headers": headers,
-                    "rows": rows,
-                    "geo_loc_data": geo_loc_data,
-                    "lat_lon_data": lat_lon_data,
-                }
-            )
-
-        return render(
-            request,
-            "mgw_api/result_table.html",
-            {
-                "result": result,
-                "headers": headers,
-                "rows": rows,
-                "watch_form": watch_form,
-                "filter_form": filter_form,
-                "numeric_columns": numeric_columns,
-                "sort_column": sort_column,
-                "sort_reverse": sort_reverse,
-                "settings_form": settings_form,
-            },
-        )
+    job = (
+        Job.objects.filter(fasta=fasta, user=request.user)
+        .order_by("-created_at")
+        .first()
+    )
+    context = {"fasta": fasta, "job": job, "result": None}
+    template = (
+        "mgw_api/_search_result_status.html"
+        if request.headers.get("HX-Request")
+        else "mgw_api/search_result.html"
+    )
+    return render(request, template, context)
 
 
 @login_required

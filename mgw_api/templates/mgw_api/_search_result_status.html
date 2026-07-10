@@ -1,0 +1,26 @@
+<section id="search-result-status"
+         hx-get="{% url 'mgw_api:search_result' fasta.pk %}"
+         hx-trigger="every 5s"
+         hx-swap="outerHTML">
+    <h2>Search: {{ fasta.name }}</h2>
+    {% if job and job.state == "failed" or fasta.status|slice:":5" == "Error" %}
+        <article>
+            <p>An error occurred while processing this search.</p>
+            <p>{{ job.error_message|default:fasta.status }}</p>
+        </article>
+    {% else %}
+        <article>
+            <p>The search is still running. You can keep this page open, bookmark it, or start another search in a new tab.</p>
+            <p>
+                {{ job.status_message|default:fasta.status }}
+                {% if job.progress_total %}({{ job.progress_current }}/{{ job.progress_total }}){% endif %}
+            </p>
+            <progress max="100" value="{{ job.progress_percent|default:0 }}">{{ job.progress_percent|default:0 }}%</progress>
+        </article>
+    {% endif %}
+    <p>
+        <a href="{% url 'mgw_api:upload_fasta' %}">Start another search</a>
+        |
+        <a href="{% url 'mgw_api:list_result' %}">View all results</a>
+    </p>
+</section>
