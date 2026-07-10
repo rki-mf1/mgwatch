@@ -51,25 +51,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          cp .env.template .env
-          cp vars.env.example vars.env
-
-          mkdir -p \
-            work/data/backend-data \
-            work/data/backend-crontabs \
-            work/mongo \
-            work/mongo-logs \
-            work/db \
-            work/django-logs
-
-          cleanup() {
-            docker compose -f compose.yml down -v --remove-orphans
-          }
-          trap cleanup EXIT
-
-          docker compose -f compose.yml up -d mgwatch-mongodb
-          docker compose -f compose.yml run --rm mgwatch \
-            "conda run --no-capture-output -n mgw ./manage.py test"
+          ./scripts/run-tests.sh --skip-build
   build-and-push:
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'

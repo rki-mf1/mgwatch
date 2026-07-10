@@ -46,3 +46,11 @@ repos:
     hooks:
       - id: bashate
         exclude: ^scripts/test-changeset-against-main\.sh$
+  - repo: local
+    hooks:
+      - id: django-tests
+        name: Django tests
+        entry: ./scripts/run-tests.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

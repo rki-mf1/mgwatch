@@ -17,7 +17,8 @@
 - HTML templates should remain lintable with `djlint` (config in `djlint.toml`); keep block/variable names consistent with existing templates.
 
 ## Testing Guidelines
-- Run the suite via `./scripts/dev-manage.sh test` (executes `manage.py test` in the container). Add regression tests alongside new Django apps or features; mirror module paths when creating `tests/` packages.
+- Run the suite via `./scripts/run-tests.sh` before pushing any branch. The script builds the backend image, starts the required Docker Compose services without the development port overrides, and executes `manage.py test mgw_api` in the container. To run a narrower target, pass Django test labels, e.g. `./scripts/run-tests.sh mgw_api.tests.test_jobs`.
+- Install the local pre-push guard with `pre-commit install --hook-type pre-push`; it runs `./scripts/run-tests.sh` before `git push`. If Docker or the local environment prevents the test run, pause the push and report the blocker instead of bypassing the check silently.
 - Prefer fixture-driven tests using existing data under `mgw_api/fixtures/`; keep large assets in `test-data/` and avoid committing generated indices.
 - Until coverage targets are set, ensure new features include tests that cover success and failure paths and verify search/watch workflows manually in dev.
 
