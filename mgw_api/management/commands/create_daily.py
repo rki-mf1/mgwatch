@@ -1,16 +1,15 @@
-# mgw_api/management/commands/create_daily.py
 from django.core.management.base import BaseCommand
 
-from mgw.settings import LOGGER
+from mgw_api.services.maintenance import run_downloads
+from mgw_api.services.maintenance import run_index
+from mgw_api.services.maintenance import run_metadata
+from mgw_api.services.maintenance import run_watch
 
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
-        try:
-            # call_command("create_metadata")
-            # call_command("create_downloads")
-            # call_command("create_index")
-            # call_command("create_watch")
-            LOGGER.info("Daily update successful")
-        except Exception as e:
-            LOGGER.error(f"Error processing daily update: {e}")
+        run_metadata()
+        run_downloads()
+        run_index()
+        run_watch()
+        self.stdout.write(self.style.SUCCESS("Daily update completed"))

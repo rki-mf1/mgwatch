@@ -377,7 +377,7 @@ run_quick_suite() {
       "conda run --no-capture-output -n mgw ./manage.py makemigrations --check --dry-run"
   run_logged "$label" "Django unit tests" \
     compose_run_no_deps "$repo_dir" "$label" \
-      "conda run --no-capture-output -n mgw ./manage.py test --verbosity 2"
+      "conda run --no-capture-output -n mgw ./manage.py test mgw_api --verbosity 2"
 
   if [[ "$include_smoke" != "1" ]]; then
     log "[$label] SKIP: in-process task and UI smoke"
