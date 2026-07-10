@@ -6,4 +6,4 @@ class MgwApiConfig(AppConfig):
     name = "mgw_api"
 
     def ready(self):
-        return
+        import mgw_api.signals  # noqa: F401
