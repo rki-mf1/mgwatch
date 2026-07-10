@@ -65,6 +65,15 @@ env = environ.Env(
     CELERY_TASK_RESULT_TIMEOUT=(int, 60 * 60 * 6),
     CELERY_LOCK_TIMEOUT=(int, 60 * 60 * 6),
     CELERY_LOCK_BLOCKING_TIMEOUT=(int, 60),
+    SECURE_SSL_REDIRECT=(bool, False),
+    SECURE_PROXY_SSL_HEADER_ENABLED=(bool, False),
+    SESSION_COOKIE_SECURE=(bool, False),
+    CSRF_COOKIE_SECURE=(bool, False),
+    SECURE_HSTS_SECONDS=(int, 0),
+    SECURE_HSTS_INCLUDE_SUBDOMAINS=(bool, False),
+    SECURE_HSTS_PRELOAD=(bool, False),
+    SECURE_CONTENT_TYPE_NOSNIFF=(bool, True),
+    SECURE_REFERRER_POLICY=(str, "same-origin"),
     DATA_UPLOAD_MAX_MEMORY_SIZE=(int, 10 * 1024 * 1024),
     FILE_UPLOAD_MAX_MEMORY_SIZE=(int, 10 * 1024 * 1024),
     MAX_FASTA_UPLOAD_SIZE=(int, 50 * 1024 * 1024),
@@ -114,6 +123,24 @@ ALLOWED_HOSTS = [] if env("ALLOWED_HOSTS") == "" else env("ALLOWED_HOSTS").split
 CSRF_TRUSTED_ORIGINS = (
     [] if env("CSRF_TRUSTED_ORIGINS") == "" else env("CSRF_TRUSTED_ORIGINS").split(",")
 )
+
+SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=False)
+SECURE_PROXY_SSL_HEADER = (
+    ("HTTP_X_FORWARDED_PROTO", "https")
+    if env.bool("SECURE_PROXY_SSL_HEADER_ENABLED", default=not DEBUG)
+    else None
+)
+SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=not DEBUG)
+CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=not DEBUG)
+SECURE_HSTS_SECONDS = env.int(
+    "SECURE_HSTS_SECONDS", default=31536000 if not DEBUG else 0
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool(
+    "SECURE_HSTS_INCLUDE_SUBDOMAINS", default=not DEBUG
+)
+SECURE_HSTS_PRELOAD = env.bool("SECURE_HSTS_PRELOAD", default=False)
+SECURE_CONTENT_TYPE_NOSNIFF = env.bool("SECURE_CONTENT_TYPE_NOSNIFF", default=True)
+SECURE_REFERRER_POLICY = env("SECURE_REFERRER_POLICY", default="same-origin")
 
 STATIC_ROOT = BASE_DIR / "static"
 
