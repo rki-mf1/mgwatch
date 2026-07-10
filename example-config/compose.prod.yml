@@ -1,0 +1,120 @@
+services:
+  mgwatch:
+    image: ${DOCKER_MGWATCH_IMAGE:?set DOCKER_MGWATCH_IMAGE in .env}
+    container_name: mgwatch
+    env_file:
+      - ./vars.env
+    volumes:
+      - ./vars.env:/code/vars.env:ro
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - ${EXTERNAL_DATA_DIR}/backend-data:/data
+      - ${SQLITE_DIR}:/data-db
+      - ${LOG_DIR}:/logs
+      - ${NGINX_DATA_DIR}/static:/static
+    environment:
+      - TZ=${TZ}
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    entrypoint: /bin/sh -c
+    command:
+      - conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:8100 mgw.wsgi:application
+    restart: unless-stopped
+    depends_on:
+      mgwatch-mongodb:
+        condition: service_started
+      mgwatch-redis:
+        condition: service_started
+  mgwatch-celery-interactive:
+    image: ${DOCKER_MGWATCH_IMAGE:?set DOCKER_MGWATCH_IMAGE in .env}
+    container_name: mgwatch-celery-interactive
+    env_file:
+      - ./vars.env
+    volumes:
+      - ./vars.env:/code/vars.env:ro
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - ${EXTERNAL_DATA_DIR}/backend-data:/data
+      - ${SQLITE_DIR}:/data-db
+      - ${LOG_DIR}:/logs
+    environment:
+      - TZ=${TZ}
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    entrypoint: /bin/sh -c
+    command:
+      - conda run --no-capture-output -n mgw celery -A mgw worker --queues interactive --concurrency 2 --hostname interactive@%h
+    restart: unless-stopped
+    depends_on:
+      mgwatch:
+        condition: service_started
+  mgwatch-celery-maintenance:
+    image: ${DOCKER_MGWATCH_IMAGE:?set DOCKER_MGWATCH_IMAGE in .env}
+    container_name: mgwatch-celery-maintenance
+    env_file:
+      - ./vars.env
+    volumes:
+      - ./vars.env:/code/vars.env:ro
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - ${EXTERNAL_DATA_DIR}/backend-data:/data
+      - ${SQLITE_DIR}:/data-db
+      - ${LOG_DIR}:/logs
+    environment:
+      - TZ=${TZ}
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    entrypoint: /bin/sh -c
+    command:
+      - conda run --no-capture-output -n mgw celery -A mgw worker --queues maintenance,indexing,watches --concurrency 1 --hostname maintenance@%h
+    restart: unless-stopped
+    depends_on:
+      mgwatch:
+        condition: service_started
+  mgwatch-celery-beat:
+    image: ${DOCKER_MGWATCH_IMAGE:?set DOCKER_MGWATCH_IMAGE in .env}
+    container_name: mgwatch-celery-beat
+    env_file:
+      - ./vars.env
+    volumes:
+      - ./vars.env:/code/vars.env:ro
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - ${EXTERNAL_DATA_DIR}/backend-data:/data
+      - ${SQLITE_DIR}:/data-db
+      - ${LOG_DIR}:/logs
+    environment:
+      - TZ=${TZ}
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    entrypoint: /bin/sh -c
+    command:
+      - conda run --no-capture-output -n mgw celery -A mgw beat --loglevel INFO
+    restart: unless-stopped
+    depends_on:
+      mgwatch:
+        condition: service_started
+  mgwatch-mongodb:
+    image: ${DOCKER_MONGODB_IMAGE:?set DOCKER_MONGODB_IMAGE in .env}
+    container_name: mgwatch-mongodb
+    environment:
+      - TZ=${TZ}
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=${MGWATCH_MONGO_ROOT_PASSWORD:?set MGWATCH_MONGO_ROOT_PASSWORD in .env}
+    volumes:
+      - ${MONGODB_DATA_DIR}:/data/db
+      - ${MONGODB_LOG_DIR}:/data/logs
+    command: --logpath /data/logs/mongodb.log
+    restart: unless-stopped
+  mgwatch-redis:
+    image: ${DOCKER_REDIS_IMAGE:?set DOCKER_REDIS_IMAGE in .env}
+    container_name: mgwatch-redis
+    restart: unless-stopped
+  mgwatch-proxy:
+    image: ${DOCKER_NGINX_IMAGE:?set DOCKER_NGINX_IMAGE in .env}
+    container_name: mgwatch-proxy
+    volumes:
+      - ./nginx-templates:/etc/nginx/templates:ro
+      - ${NGINX_DATA_DIR}/static:/static:ro
+      - ${EXTERNAL_DATA_DIR}/backend-data/media:/media:ro
+    environment:
+      - TZ=${TZ}
+      - NGINX_PORT=8000
+    ports:
+      - ${PUBLIC_BIND_ADDRESS}:${PUBLIC_HTTP_PORT}:8000
+    restart: unless-stopped
+    depends_on:
+      mgwatch:
+        condition: service_started
