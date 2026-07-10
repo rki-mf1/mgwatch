@@ -47,6 +47,14 @@ if [[ "$skip_build" -eq 0 ]]; then
     ./scripts/build-docker.sh
 fi
 
+test_volumes=(
+    --volume "$repo_root/scripts:/code/scripts:ro"
+)
+
+if [[ -d example-config ]]; then
+    test_volumes+=(--volume "$repo_root/example-config:/code/example-config:ro")
+fi
+
 docker compose -f compose.yml up -d mgwatch-mongodb
-docker compose -f compose.yml run --rm --entrypoint conda mgwatch \
+docker compose -f compose.yml run --rm --entrypoint conda "${test_volumes[@]}" mgwatch \
     run --no-capture-output -n mgw ./manage.py test "${django_args[@]}"
