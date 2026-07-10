@@ -65,6 +65,9 @@ env = environ.Env(
     CELERY_TASK_RESULT_TIMEOUT=(int, 60 * 60 * 6),
     CELERY_LOCK_TIMEOUT=(int, 60 * 60 * 6),
     CELERY_LOCK_BLOCKING_TIMEOUT=(int, 60),
+    DATA_UPLOAD_MAX_MEMORY_SIZE=(int, 10 * 1024 * 1024),
+    FILE_UPLOAD_MAX_MEMORY_SIZE=(int, 10 * 1024 * 1024),
+    MAX_FASTA_UPLOAD_SIZE=(int, 50 * 1024 * 1024),
 )
 
 environ.Env.read_env(BASE_DIR / "vars.env")
@@ -77,6 +80,9 @@ MGW_URL = env("MGW_URL")
 
 # The maximum number of search results to provide
 MAX_SEARCH_RESULTS = env("MAX_SEARCH_RESULTS")
+DATA_UPLOAD_MAX_MEMORY_SIZE = env("DATA_UPLOAD_MAX_MEMORY_SIZE")
+FILE_UPLOAD_MAX_MEMORY_SIZE = env("FILE_UPLOAD_MAX_MEMORY_SIZE")
+MAX_FASTA_UPLOAD_SIZE = env("MAX_FASTA_UPLOAD_SIZE")
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY")
