@@ -19,8 +19,20 @@ corresponding rocksdb indexes, records progress in `builder-state.json`, and del
 indexed signatures by default to keep disk usage bounded while still allowing safe
 stop-and-resume runs.
 
+Prepare/apply builder state bundles:
+
+```bash
+$ python scripts/wort-state-bundle.py prepare --bundle-dir /tmp/wort-state
+$ python scripts/wort-state-bundle.py apply --builder-output-dir /tmp/wort-build
+```
+
+`prepare` exports the current `work/data/backend-data/SRA/metagenomes` state into a
+portable bundle for remote standalone runs. `apply` merges a completed standalone
+builder output directory back into the local `work/` tree.
+
 Testing:
 
 ```
 $ python -m unittest mgw_api.tests.test_wort_index_builder
+$ python -m unittest mgw_api.tests.test_wort_state_bundle
 ```
