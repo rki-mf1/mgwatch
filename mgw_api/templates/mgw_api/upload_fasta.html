@@ -23,6 +23,8 @@
                 Searching for matches, please wait. Do not close or reload the page. This process might take a few minutes.
             </li>
         </ul>
+        <p id="progress-label">Queued</p>
+        <progress id="search-progress" max="100" value="0">0%</progress>
     </div>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -64,11 +66,20 @@
 
     function pollStatus(fastaId) {
         const url = `{% url 'mgw_api:check_status' 0 %}`.replace('0', fastaId);
+        const progressEl = document.getElementById('search-progress');
+        const progressLabel = document.getElementById('progress-label');
 
         function checkStatus() {
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
+                    if (progressEl && typeof data.percent !== 'undefined') {
+                        progressEl.value = data.percent;
+                    }
+                    if (progressLabel) {
+                        const countSuffix = data.total ? ` (${data.current}/${data.total})` : '';
+                        progressLabel.textContent = `${data.message || data.status}${countSuffix}`;
+                    }
                     if (data.status === 'Complete') {
                         window.location.href = `{% url 'mgw_api:result_table' 0 %}`.replace('0', data.result_pk);
                     } else if (data.status.startsWith('Error')) {

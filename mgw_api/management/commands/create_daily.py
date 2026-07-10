@@ -1,15 +1,11 @@
 from django.core.management.base import BaseCommand
 
-from mgw_api.services.maintenance import run_downloads
-from mgw_api.services.maintenance import run_index
-from mgw_api.services.maintenance import run_metadata
-from mgw_api.services.maintenance import run_watch
+from mgw_api.management.commands._celery import wait_for_task
+from mgw_api.tasks import MAINTENANCE_QUEUE
+from mgw_api.tasks import run_daily_pipeline_task
 
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
-        run_metadata()
-        run_downloads()
-        run_index()
-        run_watch()
+        wait_for_task(run_daily_pipeline_task, queue=MAINTENANCE_QUEUE)
         self.stdout.write(self.style.SUCCESS("Daily update completed"))

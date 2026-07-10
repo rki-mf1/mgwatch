@@ -23,24 +23,58 @@ services:
     depends_on:
       mgwatch-mongodb:
         condition: service_started
-  # This container just handles running cron jobs set up by the above backend
-  # container
-  mgwatch-cron:
+      mgwatch-redis:
+        condition: service_started
+  mgwatch-celery-interactive:
     image: mgwatch:local
-    container_name: mgwatch-cron
+    container_name: mgwatch-celery-interactive
     volumes:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      # Persist mgwatch cron jobs
-      - ${EXTERNAL_DATA_DIR}/backend-crontabs:/var/spool/cron/crontabs
       - ${SQLITE_DIR}:/data-db
       - ${LOG_DIR}:/logs
     environment:
       - TZ=$TZ
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
-    command: ["/usr/sbin/cron -f"]
+    command: ["conda run --no-capture-output -n mgw celery -A mgw worker --queues interactive --concurrency 2 --hostname interactive@%h"]
+    restart: unless-stopped
+    depends_on:
+      mgwatch:
+        condition: service_started
+  mgwatch-celery-maintenance:
+    image: mgwatch:local
+    container_name: mgwatch-celery-maintenance
+    volumes:
+      - ./vars.env:/code/vars.env:ro
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - ${EXTERNAL_DATA_DIR}/backend-data:/data
+      - ${SQLITE_DIR}:/data-db
+      - ${LOG_DIR}:/logs
+    environment:
+      - TZ=$TZ
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    entrypoint: /bin/sh -c
+    command: ["conda run --no-capture-output -n mgw celery -A mgw worker --queues maintenance,indexing,watches --concurrency 1 --hostname maintenance@%h"]
+    restart: unless-stopped
+    depends_on:
+      mgwatch:
+        condition: service_started
+  mgwatch-celery-beat:
+    image: mgwatch:local
+    container_name: mgwatch-celery-beat
+    volumes:
+      - ./vars.env:/code/vars.env:ro
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - ${EXTERNAL_DATA_DIR}/backend-data:/data
+      - ${SQLITE_DIR}:/data-db
+      - ${LOG_DIR}:/logs
+    environment:
+      - TZ=$TZ
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    entrypoint: /bin/sh -c
+    command: ["conda run --no-capture-output -n mgw celery -A mgw beat --loglevel INFO"]
     restart: unless-stopped
     depends_on:
       mgwatch:
@@ -56,4 +90,8 @@ services:
       - ${MONGODB_DATA_DIR}:/data/db
       - ${MONGODB_LOG_DIR}:/data/logs
     command: --logpath /data/logs/mongodb.log
+    restart: unless-stopped
+  mgwatch-redis:
+    image: redis:7-alpine
+    container_name: mgwatch-redis
     restart: unless-stopped
