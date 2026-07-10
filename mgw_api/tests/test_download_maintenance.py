@@ -9,6 +9,7 @@ from django.test.utils import override_settings
 
 from mgw_api.services.maintenance import download_from_wort
 from mgw_api.services.maintenance import get_update_accessions
+from mgw_api.services.maintenance import run_download_index
 from mgw_api.services.maintenance import run_index
 
 
@@ -89,3 +90,103 @@ class DownloadMaintenanceTests(SimpleTestCase):
 
             self.assertEqual(result, {"indexes_updated": 1})
             self.assertEqual(success_pickle.read_bytes(), b"sentinel")
+
+    @override_settings(
+        DATA_DIR=Path("/tmp/mgwatch-test-data"),
+        INDEX_MAX_SIGNATURES=2,
+        MAX_DOWNLOADS=0,
+    )
+    def test_run_download_index_processes_one_index_batch_at_a_time(self):
+        with TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir)
+            current_updates = set()
+            run_index_calls = []
+
+            async def fake_download_from_wort(
+                dir_paths,
+                sra_ids,
+                man_fail,
+                timeout_seconds,
+                retry_failed=False,
+                max_downloads=None,
+                max_simultaneous=100,
+            ):
+                current_updates.update(sra_ids)
+                return [
+                    {
+                        "id": accession,
+                        "status": 200,
+                        "path": str(dir_paths["updates"] / f"{accession}.sig"),
+                    }
+                    for accession in sra_ids
+                ]
+
+            def fake_get_update_accessions(_updates_dir):
+                return set(current_updates)
+
+            def fake_run_index_batches(
+                work_dir,
+                *,
+                index_max_signatures=None,
+                max_batches=None,
+                delete_indexed_sigs=False,
+            ):
+                run_index_calls.append(
+                    {
+                        "updates": sorted(current_updates),
+                        "index_max_signatures": index_max_signatures,
+                        "max_batches": max_batches,
+                        "delete_indexed_sigs": delete_indexed_sigs,
+                    }
+                )
+                current_updates.clear()
+                return {
+                    "indexes_updated": 1,
+                    "batches_processed": 1,
+                    "indexing_failed": False,
+                }
+
+            with (
+                override_settings(DATA_DIR=data_dir),
+                patch("mgw_api.services.maintenance.run_command"),
+                patch(
+                    "mgw_api.services.maintenance.prepare_download_targets",
+                    return_value=(
+                        {"updates": data_dir / "SRA" / "metagenomes" / "updates"},
+                        data_dir / "SRA" / "metagenomes" / "download_failed.pickle",
+                        ["SRR1", "SRR2", "SRR3"],
+                    ),
+                ),
+                patch(
+                    "mgw_api.services.maintenance.download_from_wort",
+                    side_effect=fake_download_from_wort,
+                ),
+                patch(
+                    "mgw_api.services.maintenance.get_update_accessions",
+                    side_effect=fake_get_update_accessions,
+                ),
+                patch(
+                    "mgw_api.services.maintenance.run_index_batches",
+                    side_effect=fake_run_index_batches,
+                ),
+            ):
+                result = run_download_index(index_max_signatures=2)
+
+        self.assertEqual(result, {"downloaded": 3, "indexes_updated": 2})
+        self.assertEqual(
+            run_index_calls,
+            [
+                {
+                    "updates": ["SRR1", "SRR2"],
+                    "index_max_signatures": 2,
+                    "max_batches": 1,
+                    "delete_indexed_sigs": True,
+                },
+                {
+                    "updates": ["SRR3"],
+                    "index_max_signatures": 2,
+                    "max_batches": 1,
+                    "delete_indexed_sigs": True,
+                },
+            ],
+        )
