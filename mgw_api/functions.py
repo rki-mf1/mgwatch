@@ -63,7 +63,11 @@ def get_branchwater_table(result, max_rows=None):
         result.file.path, index_col="match_name", nrows=max_rows, dtype=data_types
     )
     branchwater_subset = branchwater_results[branchwater_columns_for_output]
-    LOGGER.info(f"{branchwater_subset}")
+    LOGGER.debug(
+        "Loaded branchwater results: rows=%s columns=%s",
+        len(branchwater_subset),
+        list(branchwater_subset.columns),
+    )
     return branchwater_subset
 
 
@@ -134,9 +138,12 @@ def add_sra_metadata(branchwater_results):
     sra_metadata = get_sra_fields(sra_accessions, sra_columns)
     results_with_metadata = branchwater_results.join(sra_metadata, on="sra_accession")
     results_with_metadata = results_with_metadata.reset_index(drop=True)
-    LOGGER.info(f"branchwater_results: {branchwater_results}")
-    LOGGER.info(f"sra_metadata: {sra_metadata}")
-    LOGGER.info(f"joined: {results_with_metadata}")
+    LOGGER.debug(
+        "Joined branchwater results with SRA metadata: result_rows=%s metadata_rows=%s joined_rows=%s",
+        len(branchwater_results),
+        len(sra_metadata),
+        len(results_with_metadata),
+    )
     return results_with_metadata
 
 
@@ -180,8 +187,7 @@ def get_sra_fields(sra_accessions, fields):
         )
     mongo.close()
     sra_metadata = pd.DataFrame(results)
-    pd.set_option("display.max_columns", None)
-    LOGGER.info(f"get_sra_fields: {sra_metadata}")
+    LOGGER.debug("Loaded SRA metadata rows=%s fields=%s", len(sra_metadata), fields)
     sra_metadata.set_index("_id", inplace=True)
     missing_columns = set(fields) - set(sra_metadata.columns)
     if len(missing_columns) > 0:
