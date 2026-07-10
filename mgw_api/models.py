@@ -1,50 +1,101 @@
 import gzip
-import io
 import re
 from datetime import datetime
 from functools import partial
 from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.db.models import Q
 
 from mgw.settings import LOGGER
 
+FASTA_EXTENSIONS = (".fa", ".fasta", ".fsa", ".fna")
+FASTA_GZIP_EXTENSIONS = tuple(f"{extension}.gz" for extension in FASTA_EXTENSIONS)
+FASTA_SEQUENCE_RE = re.compile(r"^[ACGTRYSWKMBDHVN.-]+$", flags=re.IGNORECASE)
+
+
+def _filename(fieldfile):
+    return Path(getattr(fieldfile, "name", "")).name.lower()
+
+
+def validate_fasta_extension(fieldfile):
+    filename = _filename(fieldfile)
+    allowed_extensions = FASTA_EXTENSIONS + FASTA_GZIP_EXTENSIONS
+    if not filename.endswith(allowed_extensions):
+        raise ValidationError(
+            "Unsupported file extension. Use FASTA files ending in .fa, .fasta, "
+            ".fsa, .fna, or their .gz variants."
+        )
+
+
+def _reset_file(fieldfile):
+    if hasattr(fieldfile, "seek"):
+        fieldfile.seek(0)
+
+
+def _iter_fasta_lines(fieldfile):
+    if _filename(fieldfile).endswith(".gz"):
+        with gzip.GzipFile(fileobj=fieldfile, mode="rb") as fasta_file:
+            for line in fasta_file:
+                yield line
+    else:
+        for line in fieldfile:
+            yield line
+
 
 def validate_fasta_content(fieldfile):
-    # check if first two lines are in fasta format
+    upload_size = getattr(fieldfile, "size", None)
+    if upload_size and upload_size > settings.MAX_FASTA_UPLOAD_SIZE:
+        raise ValidationError("Uploaded FASTA file is larger than the allowed limit.")
+
+    saw_header = False
+    saw_sequence = False
+    decompressed_bytes = 0
     try:
-        if Path(fieldfile.path).suffix == ".gz":
-            # Input file is gzipped. Might be in memory so we need to read
-            # the actual contents and decompress them
-            fasta = gzip.decompress(fieldfile.read()).decode("utf-8")
-            fasta_io = io.StringIO(fasta)
-
-            header = fasta_io.readline().strip()
-            seq = fasta_io.readline().strip()
-        else:
-            header = fieldfile.readline().decode("utf-8").strip()
-            seq = fieldfile.readline().decode("utf-8").strip()
-
-        # Do actual validation. This is not exhaustive, it's only checking the
-        # first couple of lines as a sanity check.
-        if not re.match(r"^>", header):
-            LOGGER.error(f"header: {header}")
-            LOGGER.error(f"seq: {seq}")
+        _reset_file(fieldfile)
+        for raw_line in _iter_fasta_lines(fieldfile):
+            decompressed_bytes += len(raw_line)
+            if decompressed_bytes > settings.MAX_FASTA_UPLOAD_SIZE:
+                raise ValidationError(
+                    "Uploaded FASTA content is larger than the allowed limit."
+                )
+            if isinstance(raw_line, bytes):
+                line = raw_line.decode("utf-8").strip()
+            else:
+                line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                saw_header = True
+                continue
+            if not saw_header:
+                LOGGER.warning("Invalid FASTA upload rejected: missing header marker.")
+                raise ValidationError(
+                    "File does not start with '>' character, invalid FASTA format."
+                )
+            if not FASTA_SEQUENCE_RE.match(line):
+                LOGGER.warning(
+                    "Invalid FASTA upload rejected: non-IUPAC sequence data."
+                )
+                raise ValidationError(
+                    "Sequence contains non-IUPAC characters, invalid FASTA format."
+                )
+            saw_sequence = True
+        if not saw_header:
             raise ValidationError(
                 "File does not start with '>' character, invalid FASTA format."
             )
-        elif not re.match(r"^[ACGTRYSWKMBDHVN.-]+$", seq, flags=re.IGNORECASE):
-            LOGGER.error(f"header: {header}")
-            LOGGER.error(f"seq: {seq}")
-            raise ValidationError(
-                "Sequence contains non-IUPAC characters, invalid FASTA format."
-            )
-    except Exception as e:
-        raise ValidationError(f"Error reading file: {str(e)}")
+        if not saw_sequence:
+            raise ValidationError("FASTA file does not contain sequence data.")
+    except ValidationError:
+        raise
+    except (OSError, UnicodeDecodeError) as e:
+        raise ValidationError(f"Error reading FASTA file: {str(e)}")
+    finally:
+        _reset_file(fieldfile)
 
 
 def user_directory_path(instance, filename):
@@ -58,7 +109,7 @@ class Fasta(models.Model):
     file = models.FileField(
         upload_to=user_directory_path,
         validators=[
-            FileExtensionValidator(["fa", "fasta", "fsa", "fna", "gz"]),
+            validate_fasta_extension,
             validate_fasta_content,
         ],
     )
