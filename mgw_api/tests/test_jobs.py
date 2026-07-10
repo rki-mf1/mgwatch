@@ -4,6 +4,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.test import override_settings
 from django.urls import reverse
@@ -100,6 +101,111 @@ class JobStatusViewTests(TestCase):
 
         self.assertEqual(response.status_code, 204)
         self.assertEqual(response.headers["HX-Refresh"], "true")
+
+    def test_upload_returns_bookmarkable_search_result_url(self):
+        upload = SimpleUploadedFile(
+            "query.fasta",
+            b">query\nACGTACGT\n",
+            content_type="text/plain",
+        )
+
+        with patch("mgw_api.views.submit_signature_pipeline_job"):
+            response = self.client.post(
+                reverse("mgw_api:upload_fasta"),
+                {"name": "query", "file": upload},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        fasta = Fasta.objects.get(user=self.user, name="query")
+        self.assertTrue(payload["success"])
+        self.assertEqual(
+            payload["result_url"],
+            reverse("mgw_api:search_result", kwargs={"fasta_id": fasta.pk}),
+        )
+
+    def test_search_result_page_shows_active_job_progress_at_stable_url(self):
+        Job.objects.create(
+            job_type=Job.JobType.SIGNATURE_PIPELINE,
+            state=Job.State.RUNNING,
+            status_message="Searching indexes 1/3",
+            progress_current=1,
+            progress_total=3,
+            user=self.user,
+            fasta=self.fasta,
+            queue="interactive",
+        )
+
+        response = self.client.get(
+            reverse("mgw_api:search_result", kwargs={"fasta_id": self.fasta.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Search: example")
+        self.assertContains(response, "Searching indexes 1/3")
+        self.assertContains(response, "(1/3)")
+        self.assertContains(response, 'value="33"', html=False)
+        self.assertContains(response, 'hx-trigger="every 5s"')
+
+    def test_search_result_page_renders_result_without_redirect_after_completion(self):
+        signature = Signature.objects.create(
+            user=self.user,
+            name="example",
+            fasta=self.fasta,
+            file="user_1/example.sig",
+        )
+        result = Result.objects.create(
+            user=self.user,
+            name="example",
+            signature=signature,
+            file="",
+            num_results=0,
+            kmer=[21],
+            database=["SRA"],
+            containment=0.1,
+        )
+        self.fasta.result_pk = result.pk
+        self.fasta.status = "Complete"
+        self.fasta.save(update_fields=["result_pk", "status"])
+
+        url = reverse("mgw_api:search_result", kwargs={"fasta_id": self.fasta.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.request["PATH_INFO"], url)
+        self.assertContains(response, "Name: example")
+        self.assertContains(response, "This search found zero results")
+
+    def test_search_result_htmx_poll_swaps_to_result_content_when_complete(self):
+        signature = Signature.objects.create(
+            user=self.user,
+            name="example",
+            fasta=self.fasta,
+            file="user_1/example.sig",
+        )
+        result = Result.objects.create(
+            user=self.user,
+            name="example",
+            signature=signature,
+            file="",
+            num_results=0,
+            kmer=[21],
+            database=["SRA"],
+            containment=0.1,
+        )
+        self.fasta.result_pk = result.pk
+        self.fasta.status = "Complete"
+        self.fasta.save(update_fields=["result_pk", "status"])
+
+        response = self.client.get(
+            reverse("mgw_api:search_result", kwargs={"fasta_id": self.fasta.pk}),
+            HTTP_HX_REQUEST="true",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Name: example")
+        self.assertNotContains(response, "<html")
 
     def test_results_page_shows_active_search_job_progress(self):
         signature = Signature.objects.create(

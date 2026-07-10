@@ -3,7 +3,7 @@
     <div class="help-section">
         <h2>How to Get Started</h2>
         <p>
-            Welcome to MetagenomeWatch. To get started, simply upload a FASTA file with your favourite genomic sequence. The search will then happen in the background and you will be redirected to the result page as soon as it is finished. Depending on the size of the genome, this may take up to 5 minutes. Please refrain from reloading the page in the meantime. If you are not interested in directly seeing the results, you can just click on the "Search" button at the top to submit another genome. This will prevent the automate redirection, but your results will be available in the watch section by pressing the "Watches" button.
+            Welcome to MetagenomeWatch. To get started, simply upload a FASTA file with your favourite genomic sequence. The search will run in the background and you will be sent to a result page that updates while the search is running. You can bookmark that page, leave it open until the results appear, or start another search in a new tab.
         </p>
     </div>
     {% include "mgw_api/settings.html" %}
@@ -16,15 +16,6 @@
             <input type="submit" value="Search">
             <small id="upload-helper">The maximum sequence file size you can upload is 100 megabytes.</small>
         </form>
-    </div>
-    <div class="waiting-message" id="waiting-message" style="display: none;">
-        <ul class="messages">
-            <li class="info">
-                Searching for matches, please wait. Do not close or reload the page. This process might take a few minutes.
-            </li>
-        </ul>
-        <p id="progress-label">Queued</p>
-        <progress id="search-progress" max="100" value="0">0%</progress>
     </div>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -64,51 +55,13 @@
         submissionMessageDiv.innerHTML = `<ul class="messages"><li class="error">An error occurred: ${message}</li></ul>`;
     }
 
-    function pollStatus(fastaId) {
-        const url = `{% url 'mgw_api:check_status' 0 %}`.replace('0', fastaId);
-        const progressEl = document.getElementById('search-progress');
-        const progressLabel = document.getElementById('progress-label');
-
-        function checkStatus() {
-            fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    if (progressEl && typeof data.percent !== 'undefined') {
-                        progressEl.value = data.percent;
-                    }
-                    if (progressLabel) {
-                        const countSuffix = data.total ? ` (${data.current}/${data.total})` : '';
-                        progressLabel.textContent = `${data.message || data.status}${countSuffix}`;
-                    }
-                    if (data.status === 'Complete') {
-                        window.location.href = `{% url 'mgw_api:result_table' 0 %}`.replace('0', data.result_pk);
-                    } else if (data.status.startsWith('Error')) {
-                        handleError(data.status);
-                        document.getElementById('upload-section').style.display = 'block';
-                        document.getElementById('waiting-message').style.display = 'none';
-                    } else {
-                        setTimeout(checkStatus, 5000);
-                    }
-                }).catch(error => {
-                    handleError('An unexpected error occurred while checking the status.');
-                    document.getElementById('upload-section').style.display = 'block';
-                    document.getElementById('waiting-message').style.display = 'none';
-                });
-        }
-
-        checkStatus();
-    }
-
     function handleFormSubmission(event, headers = {}) {
         event.preventDefault();
         const form = event.target;
         const formData = new FormData(form);
-    
-        const uploadSection = document.getElementById('upload-section');
-        const waitingMessage = document.getElementById('waiting-message');
-    
-        uploadSection.style.display = 'none';
-        waitingMessage.style.display = 'block';
+        const submitButton = form.querySelector('input[type="submit"]');
+        submitButton.disabled = true;
+        submitButton.value = 'Starting search...';
     
         fetch(form.action, {
             method: 'POST',
@@ -121,16 +74,16 @@
             return response.json();
         }).then(data => {
             if (data.success) {
-                pollStatus(data.fasta_id);
+                window.location.href = data.result_url;
             } else {
                 handleError(data.error || 'An unexpected error occurred.');
-                uploadSection.style.display = 'block';
-                waitingMessage.style.display = 'none';
+                submitButton.disabled = false;
+                submitButton.value = 'Search';
             }
         }).catch(error => {
             handleError('An unexpected error occurred.');
-            uploadSection.style.display = 'block';
-            waitingMessage.style.display = 'none';
+            submitButton.disabled = false;
+            submitButton.value = 'Search';
         });
     }
 
