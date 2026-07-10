@@ -302,7 +302,7 @@ def get_update_accessions(updates_dir):
     return {sig_path.stem for sig_path in Path(updates_dir).glob("*.sig")}
 
 
-def run_index():
+def run_index(*, index_max_signatures=None):
     tmp_dir = settings.DATA_DIR / "tmp"
     os.makedirs(tmp_dir, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="mgwatch-index-", dir=tmp_dir) as work_dir:
@@ -317,7 +317,8 @@ def run_index():
         mani_list = get_manifest(manifest)
         last_sig_files, last_num, has_existing_index = get_last_index(dir_paths)
         delete_indexed_sigs = getattr(settings, "DELETE_INDEXED_SIGS", False)
-        new_sig_files = glob.glob(os.path.join(dir_paths["updates"], "*.sig"))
+        max_signatures = index_max_signatures or settings.INDEX_MAX_SIGNATURES
+        new_sig_files = sorted(glob.glob(os.path.join(dir_paths["updates"], "*.sig")))
         if not new_sig_files:
             return {"indexes_updated": 0}
         reuse_last_index = can_reuse_last_index(last_sig_files, has_existing_index)
@@ -328,9 +329,7 @@ def run_index():
             sig_files = new_sig_files
             start_index_number = last_num + 1
         indexing_ever_failed = False
-        for idx_offset, new_files in enumerate(
-            batched(sig_files, n=settings.INDEX_MAX_SIGNATURES), 0
-        ):
+        for idx_offset, new_files in enumerate(batched(sig_files, n=max_signatures), 0):
             write_signature_list(new_files, sig_list)
             index_number = start_index_number + idx_offset
             retvals = [
@@ -341,7 +340,7 @@ def run_index():
             delete_after_indexing = (
                 indexing_succeeded
                 and delete_indexed_sigs
-                and len(new_files) == settings.INDEX_MAX_SIGNATURES
+                and len(new_files) == max_signatures
             )
             if delete_after_indexing:
                 delete_files(new_files)
