@@ -244,6 +244,46 @@ class JobStatusViewTests(TestCase):
         self.assertContains(response, 'hx-trigger="every 5s"')
         self.assertContains(response, 'value="33"', html=False)
 
+    def test_results_page_preserves_results_for_duplicate_signature_names(self):
+        first_signature = Signature.objects.create(
+            user=self.user,
+            name="example",
+            fasta=self.fasta,
+            file="user_1/example-1.sig",
+        )
+        second_signature = Signature.objects.create(
+            user=self.user,
+            name="example",
+            fasta=self.fasta,
+            file="user_1/example-2.sig",
+        )
+        Result.objects.create(
+            user=self.user,
+            name="example",
+            signature=first_signature,
+            file="user_1/example-1.csv",
+            num_results=7,
+            kmer=[21],
+            database=["SRA"],
+            containment=0.1,
+        )
+        Result.objects.create(
+            user=self.user,
+            name="example",
+            signature=second_signature,
+            file="user_1/example-2.csv",
+            num_results=9,
+            kmer=[31],
+            database=["SRA"],
+            containment=0.1,
+        )
+
+        response = self.client.get(reverse("mgw_api:list_result"))
+
+        self.assertContains(response, "Sequence name: example", count=1)
+        self.assertContains(response, "<td>7</td>", html=True)
+        self.assertContains(response, "<td>9</td>", html=True)
+
     def test_results_page_shows_active_signature_pipeline_without_completed_results(
         self,
     ):

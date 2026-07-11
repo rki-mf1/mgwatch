@@ -343,12 +343,17 @@ def list_result(request):
                 active_job=None,
             ),
         )
-        entry.signature = signature
-        entry.fasta = signature.fasta
-        entry.sorted_results = list(
+        if entry.signature is None:
+            entry.signature = signature
+        if entry.fasta is None:
+            entry.fasta = signature.fasta
+        entry.sorted_results.extend(
             signature.result_set.all().order_by("-date", "-time")
         )
-        entry.active_job = active_search_jobs.get(signature.pk)
+        entry.sorted_results.sort(
+            key=lambda result: (result.date, result.time), reverse=True
+        )
+        entry.active_job = active_search_jobs.get(signature.pk) or entry.active_job
     for job in (
         Job.objects.filter(
             user=request.user,
