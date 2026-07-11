@@ -6,11 +6,6 @@ server {
     autoindex off;
   }
 
-  location /media/ {
-    alias /media/;
-    autoindex off;
-  }
-
   location / {
     proxy_pass http://mgwatch:8100;
     proxy_set_header Host $host;

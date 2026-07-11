@@ -10,7 +10,7 @@ services:
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
       - ${SQLITE_DIR}:/data-db
       - ${LOG_DIR}:/logs
-      - ${NGINX_DATA_DIR}/static:/static
+      - ${NGINX_DATA_DIR}/static:/code/static
     environment:
       - TZ=${TZ}
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
@@ -108,7 +108,6 @@ services:
     volumes:
       - ./nginx-templates:/etc/nginx/templates:ro
       - ${NGINX_DATA_DIR}/static:/static:ro
-      - ${EXTERNAL_DATA_DIR}/backend-data/media:/media:ro
     environment:
       - TZ=${TZ}
       - NGINX_PORT=8000
