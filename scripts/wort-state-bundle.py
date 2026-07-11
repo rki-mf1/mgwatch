@@ -13,6 +13,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WORK_DIR = REPO_ROOT / "work" / "data" / "backend-data"
+KMERS = (21, 31, 51)
 
 
 @dataclass
@@ -143,6 +144,13 @@ def load_pickle(path: Path, default):
         return pickle.load(handle)
 
 
+def save_pickle(path: Path, data) -> None:
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    with tmp_path.open("wb") as handle:
+        pickle.dump(data, handle, protocol=4)
+    os.replace(tmp_path, path)
+
+
 def save_json(path: Path, data: dict) -> None:
     tmp_path = path.with_name(f".{path.name}.tmp")
     with tmp_path.open("w", encoding="utf-8") as handle:
@@ -226,10 +234,70 @@ def replace_tree(src: Path, dst: Path) -> None:
     shutil.copytree(src, dst)
 
 
+def find_builder_state_path(builder_output_dir: Path, source_paths: MetagenomePaths):
+    candidates = [
+        builder_output_dir / "builder-state.json",
+        source_paths.root / "builder-state.json",
+        source_paths.root.parent / "builder-state.json",
+        source_paths.root.parent.parent / "builder-state.json",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def parse_index_dir(path: Path):
+    if not path.name.endswith(".rocksdb") or "mers-db" not in path.name:
+        return None
+    kmer_text, db_text = path.name.removesuffix(".rocksdb").split("mers-db", 1)
+    try:
+        return int(db_text), int(kmer_text)
+    except ValueError:
+        return None
+
+
+def validate_builder_output(builder_output_dir: Path, source_paths: MetagenomePaths):
+    state_path = find_builder_state_path(builder_output_dir, source_paths)
+    if state_path:
+        state_data = json.loads(state_path.read_text(encoding="utf-8"))
+        if state_data.get("active_batch"):
+            raise RuntimeError(
+                f"builder output still has active_batch in {state_path}; "
+                "refusing to apply incomplete output"
+            )
+
+    batches = {}
+    if source_paths.index.exists():
+        for index_dir in sorted(source_paths.index.glob("*.rocksdb")):
+            parsed = parse_index_dir(index_dir)
+            if parsed is None:
+                continue
+            index_number, kmer = parsed
+            batches.setdefault(index_number, set()).add(kmer)
+    expected_kmers = set(KMERS)
+    for index_number, kmers in sorted(batches.items()):
+        if kmers != expected_kmers:
+            missing = sorted(expected_kmers - kmers)
+            raise RuntimeError(
+                f"builder output is missing k-mer indexes {missing} "
+                f"for db{index_number}"
+            )
+
+
+def merge_manifest(source_manifest: Path, work_manifest: Path) -> bool:
+    if not source_manifest.exists():
+        return False
+    merged = set(load_pickle(work_manifest, [])) | set(load_pickle(source_manifest, []))
+    save_pickle(work_manifest, sorted(merged))
+    return True
+
+
 def apply_output(builder_output_dir: Path, work_dir: Path) -> None:
     source_paths = resolve_metagenome_paths(builder_output_dir)
     work_paths = resolve_metagenome_paths(work_dir)
     ensure_bundle_dirs(work_paths)
+    validate_builder_output(builder_output_dir, source_paths)
 
     copied_indexes = 0
     if source_paths.index.exists():
@@ -240,7 +308,7 @@ def apply_output(builder_output_dir: Path, work_dir: Path) -> None:
     copied_manifests = copy_manifest_pickles(
         source_paths.manifests, work_paths.manifests
     )
-    replaced_manifest = copy_file(source_paths.manifest, work_paths.manifest)
+    merged_manifest = merge_manifest(source_paths.manifest, work_paths.manifest)
     replaced_failed_downloads = copy_file(
         source_paths.failed_downloads, work_paths.failed_downloads
     )
@@ -260,7 +328,7 @@ def apply_output(builder_output_dir: Path, work_dir: Path) -> None:
     print(f"Applied builder output from {builder_output_dir}")
     print(f"Copied {copied_indexes} rocksdb indexes")
     print(f"Copied {copied_manifests} manifest batch files")
-    print(f"Replaced aggregate manifest: {'yes' if replaced_manifest else 'no'}")
+    print(f"Merged aggregate manifest: {'yes' if merged_manifest else 'no'}")
     print(
         f"Replaced failed-download state: {'yes' if replaced_failed_downloads else 'no'}"
     )
