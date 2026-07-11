@@ -175,6 +175,11 @@ def prepare_download_targets(ids=None):
     )
     man_fail = settings.DATA_DIR / database / "metagenomes" / "download_failed.pickle"
     manifest = settings.DATA_DIR / database / "metagenomes" / "manifest.pickle"
+    if not ids and not manifest.exists() and not settings.INDEX_FROM_SCRATCH:
+        raise RuntimeError(
+            "manifest.pickle is missing and INDEX_FROM_SCRATCH is disabled; "
+            "create manifests first or provide explicit IDs"
+        )
     mani_list = set(get_manifest(manifest))
     if ids:
         wanted_ids = set(ids) - mani_list
