@@ -440,6 +440,10 @@ def finalize_batch_files(
     if retain_indexed_signatures:
         for sig_path in sig_paths:
             destination = output_paths.signatures / sig_path.name
+            if not sig_path.exists():
+                if destination.exists():
+                    continue
+                raise FileNotFoundError(f"cannot finalize missing signature {sig_path}")
             if destination.exists():
                 destination.unlink()
             shutil.move(str(sig_path), str(destination))
