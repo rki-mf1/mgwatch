@@ -432,11 +432,15 @@ def process_index_batch(
     delete_indexed_sigs,
 ):
     write_signature_list(new_files, sig_list)
-    retvals = [
-        update_index(work_dir, dir_paths["index"], sig_list, k, index_number)
-        for k in kmers
-    ]
-    indexing_succeeded = all(val == 0 for val in retvals)
+    try:
+        retvals = [
+            update_index(work_dir, dir_paths["index"], sig_list, k, index_number)
+            for k in kmers
+        ]
+        indexing_succeeded = all(val == 0 for val in retvals)
+    except Exception:
+        LOGGER.exception("Index batch %s failed", index_number)
+        indexing_succeeded = False
     delete_after_indexing = (
         indexing_succeeded and delete_indexed_sigs and len(new_files) == max_signatures
     )
