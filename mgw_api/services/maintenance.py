@@ -295,6 +295,7 @@ async def download_from_wort(
 
 async def fetch_signature(session, url, target_dir, ids_fail, man_fail, lock):
     accession = url.split("/")[-1]
+    tmp_name = None
     try:
         async with session.get(url, ssl=ssl.SSLContext()) as response:
             status = response.status
@@ -304,15 +305,23 @@ async def fetch_signature(session, url, target_dir, ids_fail, man_fail, lock):
                     await asyncio.to_thread(save_pickle, ids_fail, man_fail)
                 return {"id": accession, "status": status, "error": "non-success"}
             async with aiofiles.tempfile.NamedTemporaryFile(
-                "wb", delete=False
+                "wb",
+                delete=False,
+                dir=target_dir,
+                prefix=f".{accession}.",
+                suffix=".tmp",
             ) as handle:
+                tmp_name = handle.name
                 async for chunk in response.content.iter_chunked(1024 * 1024):
                     await handle.write(chunk)
                 await handle.flush()
-                dest = f"{target_dir}/{accession}.sig"
-                await asyncio.to_thread(shutil.move, handle.name, dest)
-            return {"id": accession, "status": status, "path": dest}
+                dest = target_dir / f"{accession}.sig"
+                await asyncio.to_thread(os.replace, handle.name, dest)
+                tmp_name = None
+            return {"id": accession, "status": status, "path": str(dest)}
     except Exception:
+        if tmp_name:
+            await asyncio.to_thread(Path(tmp_name).unlink, missing_ok=True)
         LOGGER.exception("Download exception for %s", url)
         async with lock:
             ids_fail.add(accession)
