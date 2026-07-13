@@ -294,3 +294,23 @@ class WortIndexBuilderTests(TestCase):
         self.assertEqual(built_ksizes, [31, 51])
         self.assertEqual(manifest, ["SRR1", "SRR2"])
         self.assertIsNone(state_data["active_batch"])
+
+    def test_finalize_retained_signatures_allows_already_moved_files(self):
+        with TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            output_paths = wort_index_builder.create_output_paths(tmp_path / "output")
+            moved_source = output_paths.updates / "SRR1.sig"
+            missing_source = output_paths.updates / "SRR2.sig"
+            (output_paths.signatures / "SRR1.sig").write_text("sig", encoding="ascii")
+            (output_paths.updates / "SRR2.sig").write_text("sig", encoding="ascii")
+
+            wort_index_builder.finalize_batch_files(
+                sig_paths=[moved_source, missing_source],
+                output_paths=output_paths,
+                retain_indexed_signatures=True,
+            )
+
+            self.assertFalse(moved_source.exists())
+            self.assertFalse(missing_source.exists())
+            self.assertTrue((output_paths.signatures / "SRR1.sig").exists())
+            self.assertTrue((output_paths.signatures / "SRR2.sig").exists())
