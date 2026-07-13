@@ -158,7 +158,7 @@ def run_downloads(
             man_fail,
             timeout,
             retry_failed=True,
-            max_downloads=None,
+            max_downloads=len(selected_ids),
             max_simultaneous=max_simultaneous,
         )
     )
@@ -514,7 +514,7 @@ def run_download_index(
                         man_fail,
                         timeout,
                         retry_failed=True,
-                        max_downloads=None,
+                        max_downloads=len(selected_ids),
                         max_simultaneous=max_simultaneous,
                     )
                 )
