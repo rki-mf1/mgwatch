@@ -8,10 +8,50 @@ from django.test.utils import override_settings
 
 from mgw_api.services.maintenance import can_reuse_last_index
 from mgw_api.services.maintenance import get_last_index
+from mgw_api.services.maintenance import process_index_batch
 from mgw_api.services.maintenance import run_index
 
 
 class CreateIndexServiceTests(SimpleTestCase):
+    def test_process_index_batch_moves_files_to_failed_when_update_raises(self):
+        with TemporaryDirectory() as tmp_dir:
+            base_dir = Path(tmp_dir)
+            for name in ["index", "signatures", "indexing-failed", "manifests"]:
+                (base_dir / name).mkdir()
+            update_sig = base_dir / "updates-SRR1.sig"
+            update_sig.write_text("sig", encoding="ascii")
+
+            with (
+                patch(
+                    "mgw_api.services.maintenance.update_index",
+                    side_effect=RuntimeError("sourmash failed"),
+                ),
+                patch("mgw_api.services.maintenance.update_manifests") as manifest_mock,
+            ):
+                succeeded, manifest_ids = process_index_batch(
+                    work_dir=base_dir,
+                    dir_paths={
+                        "index": base_dir / "index",
+                        "signatures": base_dir / "signatures",
+                        "indexing-failed": base_dir / "indexing-failed",
+                        "manifests": base_dir / "manifests",
+                    },
+                    sig_list=base_dir / "sig-list.txt",
+                    kmers=[21, 31, 51],
+                    index_number=38,
+                    new_files=[str(update_sig)],
+                    mani_list=[],
+                    manifest=base_dir / "manifest.pickle",
+                    max_signatures=100,
+                    delete_indexed_sigs=False,
+                )
+
+            self.assertFalse(succeeded)
+            self.assertEqual(manifest_ids, [])
+            manifest_mock.assert_not_called()
+            self.assertFalse(update_sig.exists())
+            self.assertTrue((base_dir / "indexing-failed" / update_sig.name).exists())
+
     def test_get_last_index_filters_missing_signature_files(self):
         with TemporaryDirectory() as tmp_dir:
             base_dir = Path(tmp_dir)
