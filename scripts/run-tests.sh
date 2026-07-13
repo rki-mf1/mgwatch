@@ -6,11 +6,18 @@ cd "$repo_root"
 
 skip_build=0
 django_args=()
+coverage_enabled=${MGWATCH_COVERAGE:-1}
+coverage_fail_under=${COVERAGE_FAIL_UNDER:-}
+coverage_output_dir=${COVERAGE_OUTPUT_DIR:-"$repo_root/work/coverage"}
+run_full_suite=0
 
 for arg in "$@"; do
     case "$arg" in
         --skip-build)
             skip_build=1
+            ;;
+        --no-coverage)
+            coverage_enabled=0
             ;;
         *)
             django_args+=("$arg")
@@ -20,6 +27,11 @@ done
 
 if [[ "${#django_args[@]}" -eq 0 ]]; then
     django_args=(mgw_api)
+    run_full_suite=1
+fi
+
+if [[ -z "$coverage_fail_under" && "$run_full_suite" -eq 1 ]]; then
+    coverage_fail_under=50
 fi
 
 if [[ ! -f .env ]]; then
@@ -50,6 +62,9 @@ mkdir -p \
     "$LOG_DIR"
 chmod -R ugo+rwX "$test_root"
 
+mkdir -p "$coverage_output_dir"
+chmod ugo+rwX "$coverage_output_dir"
+
 cleanup() {
     docker compose -f compose.yml down --remove-orphans
     rm -rf "$test_root" 2>/dev/null || true
@@ -62,6 +77,7 @@ fi
 
 test_volumes=(
     --volume "$repo_root/scripts:/code/scripts:ro"
+    --volume "$coverage_output_dir:/coverage-output"
 )
 
 if [[ -d example-config ]]; then
@@ -69,9 +85,31 @@ if [[ -d example-config ]]; then
 fi
 
 docker compose -f compose.yml up -d mgwatch-mongodb
-docker compose -f compose.yml run --rm --entrypoint conda \
-    -e DEBUG=True \
-    -e LOG_LEVEL=DEBUG \
-    -e AXES_ENABLED=False \
-    "${test_volumes[@]}" mgwatch \
-    run --no-capture-output -n mgw ./manage.py test "${django_args[@]}"
+
+if [[ "$coverage_enabled" == "1" ]]; then
+    docker compose -f compose.yml run --rm --entrypoint /bin/sh \
+        -e DEBUG=True \
+        -e LOG_LEVEL=DEBUG \
+        -e AXES_ENABLED=False \
+        -e COVERAGE_FAIL_UNDER="$coverage_fail_under" \
+        "${test_volumes[@]}" mgwatch \
+        -c '
+            set -e
+            conda run --no-capture-output -n mgw coverage erase
+            conda run --no-capture-output -n mgw coverage run --parallel-mode ./manage.py test "$@"
+            conda run --no-capture-output -n mgw coverage combine
+            conda run --no-capture-output -n mgw coverage report
+            conda run --no-capture-output -n mgw coverage xml -o /coverage-output/coverage.xml
+            if [ -n "${COVERAGE_FAIL_UNDER}" ]; then
+                conda run --no-capture-output -n mgw coverage report \
+                    --fail-under="${COVERAGE_FAIL_UNDER}" >/dev/null
+            fi
+        ' sh "${django_args[@]}"
+else
+    docker compose -f compose.yml run --rm --entrypoint conda \
+        -e DEBUG=True \
+        -e LOG_LEVEL=DEBUG \
+        -e AXES_ENABLED=False \
+        "${test_volumes[@]}" mgwatch \
+        run --no-capture-output -n mgw ./manage.py test "${django_args[@]}"
+fi

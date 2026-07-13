@@ -1,0 +1,35 @@
+name: release-smoke
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref, branch, tag, or SHA to test. Defaults to the selected ref.
+        required: false
+        type: string
+permissions:
+  contents: read
+jobs:
+  full-smoke:
+    name: Full Docker/Celery smoke gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.2.0
+      - name: Run full release smoke gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ALLOW_STACK_RECREATE=1 ./scripts/test-changeset-against-main.sh --full
+      - name: Upload full-smoke logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: full-smoke-logs
+          path: work/changeset-test
+          if-no-files-found: warn

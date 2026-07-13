@@ -18,9 +18,10 @@ watch processing, and the result/status UI paths.
    - Run `makemigrations --check --dry-run`.
 
 3. Automated Django tests.
-   - Run the full Django test suite in the container.
+   - Run the full Django test suite in the container with coverage enabled.
    - Keep Celery eager for this layer so the unit tests are deterministic and do
      not depend on worker timing.
+   - Enforce the current coverage floor when the full `mgw_api` suite is run.
 
 4. In-process smoke coverage.
    - Create a temporary user, settings row, FASTA, signature job, search job, and
@@ -63,6 +64,11 @@ host-side data directories under `work/changeset-test/`, but the Compose files
 use fixed container names and ports, so it must be allowed to recreate the local
 `mgwatch` containers.
 
+The regular `./scripts/run-tests.sh` command writes an XML coverage report to
+`work/coverage/coverage.xml`. The default full-suite coverage floor is 50%.
+Targeted test labels still run with coverage, but do not enforce the full-suite
+threshold unless `COVERAGE_FAIL_UNDER` is explicitly set.
+
 ## Release Gate
 
 Before merging the changeset, the minimum recommended gate is:
@@ -75,3 +81,7 @@ ALLOW_STACK_RECREATE=1 ./scripts/test-changeset-against-main.sh --full
 The run passes only if the quick suite passes on `main`, the quick suite passes
 on the current branch, and the current branch passes the full Docker/Celery
 smoke suite.
+
+GitHub Actions runs the quick release gate for pull requests and `main` pushes
+through the `build-image` workflow. The `release-smoke` workflow provides a
+manual full Docker/Celery smoke gate for release candidates.

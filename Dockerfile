@@ -18,7 +18,7 @@ RUN if ! getent group "${MGWATCH_GID}" >/dev/null; then \
 WORKDIR /code
 COPY environment.yml .
 RUN conda env create --quiet --name mgw --file environment.yml && conda clean --all --yes
-COPY manage.py README.md .
+COPY manage.py README.md .coveragerc .
 COPY templates/ /code/templates
 COPY mgw/ /code/mgw
 COPY mgw_api/ /code/mgw_api

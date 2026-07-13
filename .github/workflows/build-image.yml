@@ -52,6 +52,26 @@ jobs:
           set -euo pipefail
 
           ./scripts/run-tests.sh --skip-build
+      - name: Run quick release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ./scripts/test-changeset-against-main.sh --quick --skip-build
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: work/coverage/coverage.xml
+          if-no-files-found: warn
+      - name: Upload release-gate logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: quick-release-gate-logs
+          path: work/changeset-test
+          if-no-files-found: warn
   build-and-push:
     runs-on: ubuntu-latest
     if: >-

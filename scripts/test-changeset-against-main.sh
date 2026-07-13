@@ -102,6 +102,16 @@ run_logged() {
   fi
 }
 
+compose_cmd() {
+  local repo_dir=$1
+  shift
+  docker compose \
+    --project-directory "$repo_dir" \
+    -f "$repo_dir/compose.yml" \
+    -f "$repo_dir/compose-dev.yml" \
+    "$@"
+}
+
 compose_env_args() {
   local suite_dir=$1
   local project=$2
@@ -125,20 +135,24 @@ compose_run_no_deps() {
   chmod -R ugo+rwX "$suite_dir"/{data,db,django-logs}
 
   mapfile -d '' env_args < <(compose_env_args "$suite_dir" "$project")
-  env "${env_args[@]}" "$repo_dir/scripts/dc-dev.sh" run --rm --no-deps \
-    -e DATA_DIR=/data \
-    -e DB_DIR=/data-db \
-    -e LOG_DIR=/logs \
-    -e DEBUG=True \
-    -e LOG_LEVEL=DEBUG \
-    -e AXES_ENABLED=False \
-    -e CELERY_TASK_ALWAYS_EAGER=True \
-    -e CELERY_TASK_EAGER_PROPAGATES=True \
-    -e REDIS_URL=redis://mgwatch-redis:6379/0 \
-    -e MONGO_URI=mongodb://root:example1@mgwatch-mongodb:27017/ \
-    -v "$repo_dir/scripts:/code/scripts:ro" \
-    -v "$suite_dir/smoke:/smoke:ro" \
-    mgwatch "$command"
+  (
+    export "${env_args[@]}"
+    compose_cmd "$repo_dir" run --rm --no-deps \
+      -e DATA_DIR=/data \
+      -e DB_DIR=/data-db \
+      -e LOG_DIR=/logs \
+      -e DEBUG=True \
+      -e LOG_LEVEL=DEBUG \
+      -e AXES_ENABLED=False \
+      -e CELERY_TASK_ALWAYS_EAGER=True \
+      -e CELERY_TASK_EAGER_PROPAGATES=True \
+      -e REDIS_URL=redis://mgwatch-redis:6379/0 \
+      -e MONGO_URI=mongodb://root:example1@mgwatch-mongodb:27017/ \
+      -v "$repo_dir/scripts:/code/scripts:ro" \
+      -v "$repo_dir/example-config:/code/example-config:ro" \
+      -v "$suite_dir/smoke:/smoke:ro" \
+      mgwatch "$command"
+  )
 }
 
 compose_down_quick() {
@@ -148,7 +162,10 @@ compose_down_quick() {
   local project="mgwatch-${label//[^a-zA-Z0-9]/-}"
 
   mapfile -d '' env_args < <(compose_env_args "$suite_dir" "$project")
-  env "${env_args[@]}" "$repo_dir/scripts/dc-dev.sh" down --remove-orphans
+  (
+    export "${env_args[@]}"
+    compose_cmd "$repo_dir" down --remove-orphans
+  )
 }
 
 write_quick_smoke() {
@@ -202,6 +219,7 @@ def fake_search_index(*, result_file, sketch_file, index_path, k, containment):
 username = "changeset_smoke"
 password = "testpass123"
 User.objects.filter(username=username).delete()
+User.objects.filter(username="changeset_smoke_other").delete()
 user = User.objects.create_user(username=username, password=password, email="smoke@example.invalid")
 other = User.objects.create_user(username="changeset_smoke_other", password=password)
 Settings.objects.create(user=user, kmer=[21], database=["SRA"], containment=0.05)
@@ -257,6 +275,7 @@ pipeline_fasta = Fasta.objects.create(
 )
 pipeline_fasta.file.save("pipeline-smoke.fa", ContentFile(b">smoke\nACGTACGTACGTACGTACGTACGT\n"), save=True)
 index_dir = Path(settings.DATA_DIR) / "SRA" / "metagenomes" / "index"
+shutil.rmtree(index_dir, ignore_errors=True)
 index_dir.mkdir(parents=True, exist_ok=True)
 (index_dir / "21mers-db38.rocksdb").mkdir(exist_ok=True)
 pipeline_job = Job.objects.create(
@@ -411,7 +430,10 @@ stack_compose() {
   local suite_dir=$2
   shift 2
   stack_env "$suite_dir"
-  env "${env_args[@]}" "$repo_dir/scripts/dc-dev.sh" "$@"
+  (
+    export "${env_args[@]}"
+    compose_cmd "$repo_dir" "$@"
+  )
 }
 
 stack_manage() {
