@@ -9,24 +9,27 @@ class LockTimeoutError(Exception):
 class ExternalCommandError(Exception):
     """Raised when an external command fails."""
 
-    max_output_length = 1000
-
     def __init__(self, command, returncode, stdout="", stderr=""):
         self.command = command
         self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
+        self.stdout = ""
+        self.stderr = ""
+        self.stdout_length = len(stdout or "")
+        self.stderr_length = len(stderr or "")
         executable = command[0] if command else "<empty>"
-        output = self._summarize_output(stderr or stdout)
+        output = self._summarize_output(stdout, stderr)
         message = (
             f"Command failed with exit code {returncode}: executable={executable}. "
             f"{output}".strip()
         )
         super().__init__(message)
 
-    def _summarize_output(self, output):
-        if not output:
+    def _summarize_output(self, stdout, stderr):
+        output = stderr or stdout
+        if output is None or output == "":
             return "No command output captured."
-        if len(output) <= self.max_output_length:
-            return output
-        return output[: self.max_output_length] + "... [truncated]"
+        stream = "stderr" if stderr else "stdout"
+        return (
+            f"{stream} captured {len(output)} characters; "
+            "content redacted from stored error details."
+        )
