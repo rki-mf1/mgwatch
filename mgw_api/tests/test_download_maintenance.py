@@ -12,6 +12,7 @@ from mgw_api.services.maintenance import fetch_signature
 from mgw_api.services.maintenance import get_update_accessions
 from mgw_api.services.maintenance import prepare_download_targets
 from mgw_api.services.maintenance import run_download_index
+from mgw_api.services.maintenance import run_downloads
 from mgw_api.services.maintenance import run_index
 
 
@@ -112,6 +113,53 @@ class DownloadMaintenanceTests(SimpleTestCase):
             self.assertEqual(result["path"], str(target_dir / "SRR1.sig"))
             self.assertEqual((target_dir / "SRR1.sig").read_bytes(), b"signature")
             self.assertEqual(list(target_dir.glob("*.tmp")), [])
+
+    @override_settings(MAX_DOWNLOADS=1)
+    def test_run_downloads_preserves_explicit_download_limit(self):
+        with TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir)
+            captured = {}
+
+            async def fake_download_from_wort(
+                dir_paths,
+                sra_ids,
+                man_fail,
+                timeout_seconds,
+                retry_failed=False,
+                max_downloads=None,
+                max_simultaneous=100,
+            ):
+                captured["sra_ids"] = list(sra_ids)
+                captured["max_downloads"] = max_downloads
+                return [
+                    {
+                        "id": accession,
+                        "status": 200,
+                        "path": str(dir_paths["updates"] / f"{accession}.sig"),
+                    }
+                    for accession in sra_ids
+                ]
+
+            with (
+                patch("mgw_api.services.maintenance.run_command"),
+                patch(
+                    "mgw_api.services.maintenance.prepare_download_targets",
+                    return_value=(
+                        {"updates": data_dir / "updates"},
+                        data_dir / "download_failed.pickle",
+                        ["SRR1", "SRR2", "SRR3"],
+                    ),
+                ),
+                patch(
+                    "mgw_api.services.maintenance.download_from_wort",
+                    side_effect=fake_download_from_wort,
+                ),
+            ):
+                result = run_downloads(max_downloads=3)
+
+        self.assertEqual(result, {"downloaded": 3})
+        self.assertEqual(captured["sra_ids"], ["SRR1", "SRR2", "SRR3"])
+        self.assertEqual(captured["max_downloads"], 3)
 
     @override_settings(
         DATA_DIR=Path("/tmp/mgwatch-test-data"),
@@ -246,3 +294,80 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 },
             ],
         )
+
+    @override_settings(
+        DATA_DIR=Path("/tmp/mgwatch-test-data"),
+        INDEX_MAX_SIGNATURES=100000,
+        MAX_DOWNLOADS=1,
+    )
+    def test_run_download_index_preserves_selected_batch_size_for_downloader(self):
+        with TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir)
+            current_updates = set()
+            captured_max_downloads = []
+
+            async def fake_download_from_wort(
+                dir_paths,
+                sra_ids,
+                man_fail,
+                timeout_seconds,
+                retry_failed=False,
+                max_downloads=None,
+                max_simultaneous=100,
+            ):
+                captured_max_downloads.append(max_downloads)
+                current_updates.update(sra_ids)
+                return [
+                    {
+                        "id": accession,
+                        "status": 200,
+                        "path": str(dir_paths["updates"] / f"{accession}.sig"),
+                    }
+                    for accession in sra_ids
+                ]
+
+            def fake_get_update_accessions(_updates_dir):
+                return set(current_updates)
+
+            def fake_run_index_batches(
+                work_dir,
+                *,
+                index_max_signatures=None,
+                max_batches=None,
+                delete_indexed_sigs=False,
+            ):
+                current_updates.clear()
+                return {
+                    "indexes_updated": 1,
+                    "batches_processed": 1,
+                    "indexing_failed": False,
+                }
+
+            with (
+                override_settings(DATA_DIR=data_dir),
+                patch("mgw_api.services.maintenance.run_command"),
+                patch(
+                    "mgw_api.services.maintenance.prepare_download_targets",
+                    return_value=(
+                        {"updates": data_dir / "SRA" / "metagenomes" / "updates"},
+                        data_dir / "SRA" / "metagenomes" / "download_failed.pickle",
+                        ["SRR1", "SRR2", "SRR3"],
+                    ),
+                ),
+                patch(
+                    "mgw_api.services.maintenance.download_from_wort",
+                    side_effect=fake_download_from_wort,
+                ),
+                patch(
+                    "mgw_api.services.maintenance.get_update_accessions",
+                    side_effect=fake_get_update_accessions,
+                ),
+                patch(
+                    "mgw_api.services.maintenance.run_index_batches",
+                    side_effect=fake_run_index_batches,
+                ),
+            ):
+                result = run_download_index(index_max_signatures=3)
+
+        self.assertEqual(result, {"downloaded": 3, "indexes_updated": 1})
+        self.assertEqual(captured_max_downloads, [3])
