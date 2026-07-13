@@ -9,11 +9,25 @@ from django.test.utils import override_settings
 
 from mgw_api.services.maintenance import download_from_wort
 from mgw_api.services.maintenance import get_update_accessions
+from mgw_api.services.maintenance import prepare_download_targets
 from mgw_api.services.maintenance import run_download_index
 from mgw_api.services.maintenance import run_index
 
 
 class DownloadMaintenanceTests(SimpleTestCase):
+    @override_settings(
+        DATA_DIR=Path("/tmp/mgwatch-test-data"),
+        INDEX_FROM_SCRATCH=False,
+    )
+    def test_prepare_download_targets_requires_manifest_without_explicit_ids(self):
+        with TemporaryDirectory() as tmp_dir:
+            with override_settings(DATA_DIR=Path(tmp_dir)):
+                with self.assertRaisesMessage(
+                    RuntimeError,
+                    "manifest.pickle is missing and INDEX_FROM_SCRATCH is disabled",
+                ):
+                    prepare_download_targets()
+
     def test_get_update_accessions_reads_pending_signatures_from_updates_dir(self):
         with TemporaryDirectory() as tmp_dir:
             updates_dir = Path(tmp_dir)
