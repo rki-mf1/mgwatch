@@ -8,10 +8,32 @@ from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
 from mgw_api.services.maintenance import download_from_wort
+from mgw_api.services.maintenance import fetch_signature
 from mgw_api.services.maintenance import get_update_accessions
 from mgw_api.services.maintenance import prepare_download_targets
 from mgw_api.services.maintenance import run_download_index
 from mgw_api.services.maintenance import run_index
+
+
+class FakeDownloadContent:
+    async def iter_chunked(self, _chunk_size):
+        yield b"signature"
+
+
+class FakeDownloadResponse:
+    status = 200
+    content = FakeDownloadContent()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return False
+
+
+class FakeDownloadSession:
+    def get(self, url, ssl=None):
+        return FakeDownloadResponse()
 
 
 class DownloadMaintenanceTests(SimpleTestCase):
@@ -70,6 +92,26 @@ class DownloadMaintenanceTests(SimpleTestCase):
             fetch_mock.call_args.args[1],
             "https://wort.sourmash.bio/v1/view/sra/SRR2",
         )
+
+    def test_fetch_signature_publishes_only_final_signature_path(self):
+        with TemporaryDirectory() as tmp_dir:
+            target_dir = Path(tmp_dir)
+            failed_pickle = target_dir / "download_failed.pickle"
+
+            result = asyncio.run(
+                fetch_signature(
+                    FakeDownloadSession(),
+                    "https://wort.sourmash.bio/v1/view/sra/SRR1",
+                    target_dir,
+                    set(),
+                    failed_pickle,
+                    asyncio.Lock(),
+                )
+            )
+
+            self.assertEqual(result["path"], str(target_dir / "SRR1.sig"))
+            self.assertEqual((target_dir / "SRR1.sig").read_bytes(), b"signature")
+            self.assertEqual(list(target_dir.glob("*.tmp")), [])
 
     @override_settings(
         DATA_DIR=Path("/tmp/mgwatch-test-data"),
