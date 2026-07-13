@@ -70,6 +70,8 @@ class WortStateBundleTests(TestCase):
             (work_metagenomes / "updates" / "SRR3.sig").write_text(
                 "old", encoding="ascii"
             )
+            with open(work_metagenomes / "manifest.pickle", "wb") as handle:
+                pickle.dump(["SRR0", "SRR1"], handle, protocol=4)
             (work_metagenomes / "index" / "21mers-db41.rocksdb").mkdir()
             (work_metagenomes / "index" / "21mers-db41.rocksdb" / "OLD").write_text(
                 "stale", encoding="ascii"
@@ -83,12 +85,16 @@ class WortStateBundleTests(TestCase):
                 pickle.dump({"SRR9"}, handle, protocol=4)
             with open(output_metagenomes / "manifests" / "db41.pickle", "wb") as handle:
                 pickle.dump(["SRR3"], handle, protocol=4)
-            (output_metagenomes / "index" / "21mers-db41.rocksdb").mkdir(
-                parents=True, exist_ok=True
-            )
-            (
-                output_metagenomes / "index" / "21mers-db41.rocksdb" / "CURRENT"
-            ).write_text("fresh", encoding="ascii")
+            for kmer in wort_state_bundle.KMERS:
+                (output_metagenomes / "index" / f"{kmer}mers-db41.rocksdb").mkdir(
+                    parents=True, exist_ok=True
+                )
+                (
+                    output_metagenomes
+                    / "index"
+                    / f"{kmer}mers-db41.rocksdb"
+                    / "CURRENT"
+                ).write_text("fresh", encoding="ascii")
             (output_metagenomes / "signatures" / "SRR3.sig").write_text(
                 "sig", encoding="ascii"
             )
@@ -113,6 +119,42 @@ class WortStateBundleTests(TestCase):
                 ).exists()
             )
             with open(work_metagenomes / "manifest.pickle", "rb") as handle:
-                self.assertEqual(pickle.load(handle), ["SRR1", "SRR2", "SRR3"])
+                self.assertEqual(pickle.load(handle), ["SRR0", "SRR1", "SRR2", "SRR3"])
             with open(work_metagenomes / "download_failed.pickle", "rb") as handle:
                 self.assertEqual(pickle.load(handle), {"SRR9"})
+
+    def test_apply_output_refuses_active_builder_batch(self):
+        with TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            work_dir, _work_metagenomes = self.make_work_metagenomes(tmp_path)
+            output_dir = tmp_path / "builder-output"
+            _, output_metagenomes = self.make_work_metagenomes(output_dir)
+            (output_metagenomes / "index" / "21mers-db41.rocksdb").mkdir(
+                parents=True, exist_ok=True
+            )
+            wort_state_bundle.save_json(
+                output_dir / "work" / "data" / "backend-data" / "builder-state.json",
+                {"active_batch": {"index_number": 41}},
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "active_batch"):
+                wort_state_bundle.apply_output(
+                    builder_output_dir=output_dir / "work" / "data" / "backend-data",
+                    work_dir=work_dir,
+                )
+
+    def test_apply_output_refuses_incomplete_kmer_siblings(self):
+        with TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            work_dir, _work_metagenomes = self.make_work_metagenomes(tmp_path)
+            output_dir = tmp_path / "builder-output"
+            _, output_metagenomes = self.make_work_metagenomes(output_dir)
+            (output_metagenomes / "index" / "21mers-db41.rocksdb").mkdir(
+                parents=True, exist_ok=True
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "missing k-mer indexes"):
+                wort_state_bundle.apply_output(
+                    builder_output_dir=output_dir / "work" / "data" / "backend-data",
+                    work_dir=work_dir,
+                )
