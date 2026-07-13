@@ -216,6 +216,29 @@ class FilterSetting(models.Model):
         return f"{self.user.username} - {self.result.name} Filters"
 
 
+class UserDeprovisionState(models.Model):
+    class Source(models.TextChoices):
+        LDAP = "ldap", "LDAP"
+        LOCAL = "local", "Local"
+
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="deprovision_state"
+    )
+    source = models.CharField(
+        max_length=16, choices=Source.choices, default=Source.LDAP
+    )
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    last_seen_in_ldap_at = models.DateTimeField(null=True, blank=True)
+    first_missing_from_ldap_at = models.DateTimeField(null=True, blank=True)
+    disabled_at = models.DateTimeField(null=True, blank=True)
+    deletion_due_at = models.DateTimeField(null=True, blank=True)
+    notification_sent_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.user.username}:{self.source}"
+
+
 class Job(models.Model):
     class JobType(models.TextChoices):
         SIGNATURE_PIPELINE = "signature_pipeline", "Signature pipeline"
