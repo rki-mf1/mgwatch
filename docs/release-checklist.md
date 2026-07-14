@@ -30,6 +30,7 @@ Use this checklist when promoting a MetagenomeWatch change from merge to safe pr
 - [ ] Record immutable image digest (`sha256:...`) for deployment.
 - [ ] Optional: create a semantic release tag (e.g. `v1.6.0`) mapped to the same digest.
 - [ ] Record CI run links and image digest artifact location in the operations log or change request.
+- [ ] Verify the latest successful `vulnerability-scan` run covers the release commit on `main`; if not, run it manually with `workflow_dispatch` and record the result.
 
 ## 3) Promote to staging first
 

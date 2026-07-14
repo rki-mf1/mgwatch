@@ -30,10 +30,17 @@ Repository administrators should configure `main` branch protection in GitHub
 where available:
 
 - prevent force pushes and branch deletion;
-- require status checks for the test, lint, image build, and vulnerability scan
-  workflows that are relevant to the change;
+- require status checks that run on pull requests for the test, lint, and image
+  build workflows that are relevant to the change;
 - require branches to be up to date before merge when practical;
 - restrict direct pushes to `main`, except documented emergency admin actions.
+
+Do not configure scheduled or manual-only workflows as required PR status checks
+unless they also report a `pull_request` status. The `vulnerability-scan`
+workflow is intentionally release evidence rather than a PR merge gate: it runs
+on pushes to `main`, by weekly schedule, and by manual dispatch. Releases must
+use a scanned `main` commit or a manual scan result for the release commit before
+production rollout.
 
 These settings live in GitHub repository configuration rather than in this
 repository. Verify them periodically and record the verification date or
@@ -46,6 +53,7 @@ and how it was deployed:
 
 - pull request or merge commit link;
 - passing CI run links;
+- vulnerability scan evidence for the released `main` commit;
 - generated release notes or changelog entry;
 - published image digest;
 - production deployment digest;
