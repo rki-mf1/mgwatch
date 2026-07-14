@@ -66,6 +66,8 @@ jobs:
           ./scripts/run-tests.sh --skip-build
       - name: Run quick release gate
         shell: bash
+        env:
+          SKIP_DJANGO_TESTS: "1"
         run: |
           set -euo pipefail
 

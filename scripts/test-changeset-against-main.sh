@@ -17,6 +17,7 @@ Environment:
   BASE_REF=main             Git ref to compare against.
   ALLOW_STACK_RECREATE=1    Required for --full because compose uses fixed names.
   KEEP_STACK=1              Leave the full smoke compose stack running.
+  SKIP_DJANGO_TESTS=1       Skip Django unit tests when an earlier CI step already ran them.
 USAGE
 }
 
@@ -28,6 +29,7 @@ RUN_BASELINE=0
 SKIP_BUILD=0
 KEEP_STACK=${KEEP_STACK:-0}
 ALLOW_STACK_RECREATE=${ALLOW_STACK_RECREATE:-0}
+SKIP_DJANGO_TESTS=${SKIP_DJANGO_TESTS:-0}
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 RUN_ROOT="$REPO_ROOT/work/changeset-test/$TIMESTAMP"
 SUMMARY="$RUN_ROOT/summary.log"
@@ -443,9 +445,13 @@ run_quick_suite() {
   run_logged "$label" "Django migration check" \
     compose_run_no_deps "$repo_dir" "$label" \
       "conda run --no-capture-output -n mgw ./manage.py makemigrations --check --dry-run"
-  run_logged "$label" "Django unit tests" \
-    compose_run_no_deps "$repo_dir" "$label" \
-      "conda run --no-capture-output -n mgw ./manage.py test mgw_api --verbosity 2"
+  if [[ "$SKIP_DJANGO_TESTS" == "1" ]]; then
+    log "[$label] SKIP: Django unit tests"
+  else
+    run_logged "$label" "Django unit tests" \
+      compose_run_no_deps "$repo_dir" "$label" \
+        "conda run --no-capture-output -n mgw ./manage.py test mgw_api --verbosity 2"
+  fi
 
   if [[ "$include_smoke" != "1" ]]; then
     log "[$label] SKIP: in-process task and UI smoke"
