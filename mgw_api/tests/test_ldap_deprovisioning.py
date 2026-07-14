@@ -46,6 +46,7 @@ LDAP_SETTINGS = {
     "LDAP_DEPROVISION_NOTIFY_EMAIL": "ops@example.test",
     "LDAP_DEPROVISION_EXEMPT_STAFF": True,
     "LDAP_DEPROVISION_EXEMPT_USERNAMES": [],
+    "LDAP_ALLOW_LOCAL_AUTH_FALLBACK": True,
     "DEFAULT_FROM_EMAIL": "mgwatch@example.test",
     "EMAIL_BACKEND": "django.core.mail.backends.locmem.EmailBackend",
 }
@@ -62,6 +63,7 @@ class LDAPDeprovisioningTests(TestCase):
 
     def test_missing_ldap_user_is_disabled_tracked_and_notified(self):
         user = User.objects.create_user(username="missing", password="testpass123")
+        UserDeprovisionState.objects.create(user=user)
 
         self._run_command(FakeLDAPConnection(existing_users=[]))
 
@@ -81,6 +83,7 @@ class LDAPDeprovisioningTests(TestCase):
 
     def test_ldap_outage_does_not_mark_user_missing(self):
         user = User.objects.create_user(username="owner", password="testpass123")
+        UserDeprovisionState.objects.create(user=user)
 
         with patch(
             "mgw_api.management.commands.reconcile_ldap_users.ldap.initialize",
@@ -90,8 +93,10 @@ class LDAPDeprovisioningTests(TestCase):
                 call_command("reconcile_ldap_users")
 
         user.refresh_from_db()
+        state = user.deprovision_state
         self.assertTrue(user.is_active)
-        self.assertFalse(UserDeprovisionState.objects.filter(user=user).exists())
+        self.assertIsNone(state.first_missing_from_ldap_at)
+        self.assertIsNone(state.disabled_at)
 
     def test_reappearing_user_clears_pending_deletion_and_reactivates(self):
         user = User.objects.create_user(
@@ -102,6 +107,7 @@ class LDAPDeprovisioningTests(TestCase):
             first_missing_from_ldap_at=timezone.now() - timedelta(days=1),
             disabled_at=timezone.now() - timedelta(days=1),
             deletion_due_at=timezone.now() + timedelta(days=6),
+            notification_sent_at=timezone.now() - timedelta(days=1),
         )
 
         self._run_command(FakeLDAPConnection(existing_users=["returned"]))
@@ -112,6 +118,7 @@ class LDAPDeprovisioningTests(TestCase):
         self.assertIsNone(state.first_missing_from_ldap_at)
         self.assertIsNone(state.disabled_at)
         self.assertIsNone(state.deletion_due_at)
+        self.assertIsNone(state.notification_sent_at)
         self.assertIsNotNone(state.last_seen_in_ldap_at)
 
     @override_settings(LDAP_DEPROVISION_DELETE_AFTER_GRACE=True)
@@ -140,3 +147,31 @@ class LDAPDeprovisioningTests(TestCase):
         self.assertTrue(user.is_active)
         state = user.deprovision_state
         self.assertIsNone(state.first_missing_from_ldap_at)
+
+    def test_untracked_local_fallback_user_is_marked_local_and_skipped(self):
+        user = User.objects.create_user(username="fallback", password="testpass123")
+        connection = FakeLDAPConnection(existing_users=[])
+
+        self._run_command(connection)
+
+        user.refresh_from_db()
+        state = user.deprovision_state
+        self.assertTrue(user.is_active)
+        self.assertEqual(state.source, UserDeprovisionState.Source.LOCAL)
+        self.assertIsNotNone(state.last_checked_at)
+        self.assertIsNone(state.first_missing_from_ldap_at)
+        self.assertEqual(connection.search_filters, [])
+
+    @override_settings(LDAP_ALLOW_LOCAL_AUTH_FALLBACK=False)
+    def test_local_password_user_is_reconciled_when_fallback_is_disabled(self):
+        user = User.objects.create_user(
+            username="authoritative", password="testpass123"
+        )
+
+        self._run_command(FakeLDAPConnection(existing_users=[]))
+
+        user.refresh_from_db()
+        state = user.deprovision_state
+        self.assertFalse(user.is_active)
+        self.assertEqual(state.source, UserDeprovisionState.Source.LDAP)
+        self.assertIsNotNone(state.first_missing_from_ldap_at)

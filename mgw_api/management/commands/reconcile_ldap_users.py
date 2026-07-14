@@ -76,6 +76,14 @@ def _save_state(state, update_fields):
         state.save()
 
 
+def _is_untracked_local_fallback_user(user, state):
+    return (
+        state is None
+        and _ldap_setting("LDAP_ALLOW_LOCAL_AUTH_FALLBACK", True)
+        and user.has_usable_password()
+    )
+
+
 class Command(BaseCommand):
     help = "Reconcile local users against LDAP and handle deprovisioned accounts."
 
@@ -130,6 +138,15 @@ class Command(BaseCommand):
             if state and state.source == UserDeprovisionState.Source.LOCAL:
                 skipped += 1
                 continue
+            if _is_untracked_local_fallback_user(user, state):
+                if not dry_run:
+                    UserDeprovisionState.objects.create(
+                        user=user,
+                        source=UserDeprovisionState.Source.LOCAL,
+                        last_checked_at=now,
+                    )
+                skipped += 1
+                continue
 
             checked += 1
             user_exists = _ldap_user_exists(connection, user.username)
@@ -137,23 +154,30 @@ class Command(BaseCommand):
 
             if user_exists:
                 found += 1
+                was_disabled_by_reconciliation = state.disabled_at is not None
                 update_fields = [
                     "last_checked_at",
                     "last_seen_in_ldap_at",
                     "first_missing_from_ldap_at",
+                    "disabled_at",
                     "deletion_due_at",
+                    "notification_sent_at",
                     "last_error",
                 ]
                 state.last_checked_at = now
                 state.last_seen_in_ldap_at = now
                 state.first_missing_from_ldap_at = None
+                state.disabled_at = None
                 state.deletion_due_at = None
+                state.notification_sent_at = None
                 state.last_error = ""
-                if state.disabled_at and not user.is_active and not dry_run:
+                if (
+                    was_disabled_by_reconciliation
+                    and not user.is_active
+                    and not dry_run
+                ):
                     user.is_active = True
                     user.save(update_fields=["is_active"])
-                    state.disabled_at = None
-                    update_fields.append("disabled_at")
                 if not dry_run:
                     _save_state(state, update_fields)
                 continue
