@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM condaforge/miniforge3:25.11.0-0
+FROM condaforge/miniforge3:26.3.2-3
 ARG DEBIAN_FRONTEND=noninteractive
 ARG MGWATCH_UID=1000
 ARG MGWATCH_GID=1000
