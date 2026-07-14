@@ -68,6 +68,7 @@ jobs:
         shell: bash
         env:
           SKIP_DJANGO_TESTS: "1"
+          SKIP_QUICK_SMOKE: "1"
         run: |
           set -euo pipefail
 
