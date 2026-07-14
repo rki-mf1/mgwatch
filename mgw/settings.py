@@ -86,6 +86,16 @@ env = environ.Env(
     AXES_COOLOFF_MINUTES=(int, 30),
     AXES_RESET_ON_SUCCESS=(bool, True),
     AXES_IPWARE_PROXY_COUNT=(int, 0),
+    RETENTION_CLEANUP_ENABLED=(bool, True),
+    RETENTION_UNWATCHED_RESULTS_DAYS=(int, 180),
+    RETENTION_WATCHED_RESULTS_DAYS=(int, 365),
+    RETENTION_SIGNATURES_DAYS=(int, 180),
+    RETENTION_UNPROCESSED_FASTA_DAYS=(int, 7),
+    RETENTION_COMPLETED_JOBS_DAYS=(int, 180),
+    RETENTION_FAILED_JOBS_DAYS=(int, 90),
+    RETENTION_TEMP_FILES_DAYS=(int, 7),
+    RETENTION_FAILED_INDEX_FILES_DAYS=(int, 30),
+    RETENTION_LOG_FILES_DAYS=(int, 180),
 )
 
 environ.Env.read_env(BASE_DIR / "vars.env")
@@ -376,17 +386,34 @@ CELERY_TASK_ROUTES = {
     "mgw_api.tasks.run_index_task": {"queue": "indexing"},
     "mgw_api.tasks.run_watch_task": {"queue": "watches"},
     "mgw_api.tasks.run_daily_pipeline_task": {"queue": "maintenance"},
+    "mgw_api.tasks.run_retention_cleanup_task": {"queue": "maintenance"},
 }
 CELERY_BEAT_SCHEDULE = {
     "daily-maintenance-pipeline": {
         "task": "mgw_api.tasks.run_daily_pipeline_task",
         "schedule": crontab(minute=0, hour=1),
         "options": {"queue": "maintenance"},
-    }
+    },
+    "daily-retention-cleanup": {
+        "task": "mgw_api.tasks.run_retention_cleanup_task",
+        "schedule": crontab(minute=30, hour=2),
+        "options": {"queue": "maintenance"},
+    },
 }
 CELERY_TASK_RESULT_TIMEOUT = env("CELERY_TASK_RESULT_TIMEOUT")
 CELERY_LOCK_TIMEOUT = env("CELERY_LOCK_TIMEOUT")
 CELERY_LOCK_BLOCKING_TIMEOUT = env("CELERY_LOCK_BLOCKING_TIMEOUT")
+
+RETENTION_CLEANUP_ENABLED = env("RETENTION_CLEANUP_ENABLED")
+RETENTION_UNWATCHED_RESULTS_DAYS = env("RETENTION_UNWATCHED_RESULTS_DAYS")
+RETENTION_WATCHED_RESULTS_DAYS = env("RETENTION_WATCHED_RESULTS_DAYS")
+RETENTION_SIGNATURES_DAYS = env("RETENTION_SIGNATURES_DAYS")
+RETENTION_UNPROCESSED_FASTA_DAYS = env("RETENTION_UNPROCESSED_FASTA_DAYS")
+RETENTION_COMPLETED_JOBS_DAYS = env("RETENTION_COMPLETED_JOBS_DAYS")
+RETENTION_FAILED_JOBS_DAYS = env("RETENTION_FAILED_JOBS_DAYS")
+RETENTION_TEMP_FILES_DAYS = env("RETENTION_TEMP_FILES_DAYS")
+RETENTION_FAILED_INDEX_FILES_DAYS = env("RETENTION_FAILED_INDEX_FILES_DAYS")
+RETENTION_LOG_FILES_DAYS = env("RETENTION_LOG_FILES_DAYS")
 
 if CELERY_TASK_ALWAYS_EAGER:
     CACHES = {
