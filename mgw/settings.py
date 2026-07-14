@@ -13,11 +13,15 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import logging
 import os
 from datetime import datetime
+from datetime import timedelta
 from pathlib import Path
+from urllib.parse import unquote
+from urllib.parse import urlsplit
 
 import environ
 import ldap
 from celery.schedules import crontab
+from django.core.exceptions import ImproperlyConfigured
 from django_auth_ldap.config import LDAPSearch
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -41,7 +45,7 @@ env = environ.Env(
     EMAIL_HOST_PASSWORD=(str, None),
     DEFAULT_FROM_EMAIL=(str, "test@mail.de"),
     LOG_DIR=(Path, Path("/logs")),
-    LOG_LEVEL=(str, "DEBUG"),
+    LOG_LEVEL=(str, "INFO"),
     INDEX_FROM_SCRATCH=(bool, False),
     INDEX_MAX_SIGNATURES=(int, 100000),
     DELETE_INDEXED_SIGS=(bool, False),
@@ -77,9 +81,64 @@ env = environ.Env(
     DATA_UPLOAD_MAX_MEMORY_SIZE=(int, 10 * 1024 * 1024),
     FILE_UPLOAD_MAX_MEMORY_SIZE=(int, 10 * 1024 * 1024),
     MAX_FASTA_UPLOAD_SIZE=(int, 50 * 1024 * 1024),
+    AXES_ENABLED=(bool, True),
+    AXES_FAILURE_LIMIT=(int, 5),
+    AXES_COOLOFF_MINUTES=(int, 30),
+    AXES_RESET_ON_SUCCESS=(bool, True),
+    AXES_IPWARE_PROXY_COUNT=(int, 0),
 )
 
 environ.Env.read_env(BASE_DIR / "vars.env")
+
+UNSAFE_SECRET_MARKERS = (
+    "CHANGE_ME",
+    "django-insecure-",
+)
+UNSAFE_SECRET_VALUES = {
+    "",
+    "dummy",
+    "example",
+    "example1",
+    "password",
+    "secret",
+    "test",
+    "test-secret",
+    "CHANGE_ME_LONG_RANDOM_DJANGO_SECRET_KEY",
+    "CHANGE_ME_LONG_RANDOM_MONGODB_PASSWORD",
+    "django-insecure-em&y0o^!@ha-kujz4qch11-a*qy8t3peg8@%+=(_+-bnwzr2%z",
+}
+
+
+def _is_unsafe_secret(value):
+    if value is None:
+        return True
+    normalized_value = str(value).strip().strip("\"'")
+    if normalized_value in UNSAFE_SECRET_VALUES:
+        return True
+    return any(marker in normalized_value for marker in UNSAFE_SECRET_MARKERS)
+
+
+def _mongo_password_from_uri(uri):
+    if not uri:
+        return None
+    try:
+        return unquote(urlsplit(uri).password or "")
+    except ValueError:
+        return None
+
+
+def unsafe_production_secret_reasons(secret_key, mongo_uri):
+    reasons = []
+    if _is_unsafe_secret(secret_key):
+        reasons.append("SECRET_KEY is unset or uses a known placeholder/default value")
+
+    mongo_password = _mongo_password_from_uri(mongo_uri)
+    if _is_unsafe_secret(mongo_password):
+        reasons.append(
+            "MONGO_URI is unset or uses a known placeholder/default password"
+        )
+    return reasons
+
 
 # The hostname to use for links (e.g. https://mgwatch.example.com)
 MGW_URL = env("MGW_URL")
@@ -118,6 +177,14 @@ MAX_DOWNLOADS = env("MAX_DOWNLOADS")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG")
+
+if not DEBUG:
+    unsafe_secret_reasons = unsafe_production_secret_reasons(SECRET_KEY, MONGO_URI)
+    if unsafe_secret_reasons:
+        raise ImproperlyConfigured(
+            "Unsafe production secrets are configured: "
+            + "; ".join(unsafe_secret_reasons)
+        )
 
 ALLOWED_HOSTS = [] if env("ALLOWED_HOSTS") == "" else env("ALLOWED_HOSTS").split(",")
 CSRF_TRUSTED_ORIGINS = (
@@ -184,6 +251,7 @@ LOGGING = {
 #    'branchwater.apps.BranchwaterConfig',
 INSTALLED_APPS = [
     "mgw_api.apps.MgwApiConfig",
+    "axes",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -346,6 +414,22 @@ if DEBUG:
         "INTERCEPT_REDIRECTS": False,
     }
 
+AXES_ENABLED = env("AXES_ENABLED")
+AXES_FAILURE_LIMIT = env("AXES_FAILURE_LIMIT")
+AXES_COOLOFF_TIME = timedelta(minutes=env("AXES_COOLOFF_MINUTES"))
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_RESET_ON_SUCCESS = env("AXES_RESET_ON_SUCCESS")
+AXES_HTTP_RESPONSE_CODE = 429
+AXES_IPWARE_PROXY_COUNT = env("AXES_IPWARE_PROXY_COUNT") or None
+if AXES_IPWARE_PROXY_COUNT:
+    AXES_IPWARE_META_PRECEDENCE_ORDER = (
+        "HTTP_X_FORWARDED_FOR",
+        "REMOTE_ADDR",
+    )
+else:
+    AXES_IPWARE_META_PRECEDENCE_ORDER = ("REMOTE_ADDR",)
+MIDDLEWARE += ("axes.middleware.AxesMiddleware",)
+
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
 LOGIN_URL = "/login/"
@@ -366,6 +450,7 @@ else:
 ################################################################################
 # By default use Django's default user authentication
 AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
     "django.contrib.auth.backends.ModelBackend",
 ]
 
@@ -386,4 +471,4 @@ if env("LDAP_SERVER_URI"):
     # Populate Django's user database automatically with data from LDAP
     AUTH_LDAP_ALWAYS_UPDATE_USER = True
     # Try LDAP first, before reverting to default user authentication
-    AUTHENTICATION_BACKENDS.insert(0, "django_auth_ldap.backend.LDAPBackend")
+    AUTHENTICATION_BACKENDS.insert(1, "django_auth_ldap.backend.LDAPBackend")

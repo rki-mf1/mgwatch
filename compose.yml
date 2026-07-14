@@ -1,6 +1,16 @@
+x-mgwatch-runtime: &mgwatch-runtime
+  user: "${MGWATCH_UID:-1000}:${MGWATCH_GID:-1000}"
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+x-container-runtime: &container-runtime
+  security_opt:
+    - no-new-privileges:true
 services:
   # This container handles both Django as well as serving static files using Whitenoise
   mgwatch:
+    !!merge <<: *mgwatch-runtime
     image: mgwatch:local
     container_name: mgwatch
     volumes:
@@ -17,14 +27,21 @@ services:
     entrypoint: /bin/sh -c
     command: ["conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:8100 mgw.wsgi:application"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "conda run --no-capture-output -n mgw python -c \"import urllib.request; request = urllib.request.Request('http://127.0.0.1:8100/', headers={'Host': 'localhost'}); urllib.request.urlopen(request, timeout=5).close()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     ports:
       - "127.0.0.1:8100:8100"
     depends_on:
       mgwatch-mongodb:
-        condition: service_started
+        condition: service_healthy
       mgwatch-redis:
-        condition: service_started
+        condition: service_healthy
   mgwatch-celery-interactive:
+    !!merge <<: *mgwatch-runtime
     image: mgwatch:local
     container_name: mgwatch-celery-interactive
     volumes:
@@ -39,10 +56,17 @@ services:
     entrypoint: /bin/sh -c
     command: ["conda run --no-capture-output -n mgw celery -A mgw worker --queues interactive --concurrency 2 --hostname interactive@%h"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f '[c]elery.*worker.*interactive' >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     depends_on:
       mgwatch:
-        condition: service_started
+        condition: service_healthy
   mgwatch-celery-maintenance:
+    !!merge <<: *mgwatch-runtime
     image: mgwatch:local
     container_name: mgwatch-celery-maintenance
     volumes:
@@ -57,10 +81,17 @@ services:
     entrypoint: /bin/sh -c
     command: ["conda run --no-capture-output -n mgw celery -A mgw worker --queues maintenance,indexing,watches --concurrency 1 --hostname maintenance@%h"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f '[c]elery.*worker.*maintenance' >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     depends_on:
       mgwatch:
-        condition: service_started
+        condition: service_healthy
   mgwatch-celery-beat:
+    !!merge <<: *mgwatch-runtime
     image: mgwatch:local
     container_name: mgwatch-celery-beat
     volumes:
@@ -73,12 +104,19 @@ services:
       - TZ=$TZ
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
-    command: ["conda run --no-capture-output -n mgw celery -A mgw beat --loglevel INFO"]
+    command: ["conda run --no-capture-output -n mgw celery -A mgw beat --loglevel INFO --schedule /tmp/celerybeat-schedule"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f '[c]elery.*beat' >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     depends_on:
       mgwatch:
-        condition: service_started
+        condition: service_healthy
   mgwatch-mongodb:
+    !!merge <<: *container-runtime
     image: $DOCKER_MONGODB_IMAGE
     container_name: mgwatch-mongodb
     environment:
@@ -90,7 +128,20 @@ services:
       - ${MONGODB_LOG_DIR}:/data/logs
     command: --logpath /data/logs/mongodb.log
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' --username root --password \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin | grep -q 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
   mgwatch-redis:
+    !!merge <<: *container-runtime
     image: redis:7-alpine
     container_name: mgwatch-redis
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

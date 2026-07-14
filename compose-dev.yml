@@ -5,6 +5,9 @@
 # rebuild the container.
 services:
   mgwatch:
+    environment:
+      - DEBUG=True
+      - LOG_LEVEL=DEBUG
     ports: !override
       - "8100:8100"
     command: ["conda run --no-capture-output -n mgw ./manage.py runserver 0.0.0.0:8100"]
@@ -35,3 +38,15 @@ services:
   mgwatch-redis:
     ports: !override
       - "6379:6379"
+  mgwatch-celery-interactive:
+    environment:
+      - DEBUG=True
+      - LOG_LEVEL=DEBUG
+  mgwatch-celery-maintenance:
+    environment:
+      - DEBUG=True
+      - LOG_LEVEL=DEBUG
+  mgwatch-celery-beat:
+    environment:
+      - DEBUG=True
+      - LOG_LEVEL=DEBUG

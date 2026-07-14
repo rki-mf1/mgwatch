@@ -74,6 +74,11 @@ $ cp vars.env.example vars.env
 $ cp .env.template .env
 ```
 
+The application image runs as the non-root `mgwatch` user. For bind-mounted
+deployment directories, set `MGWATCH_UID` and `MGWATCH_GID` in `.env` and make
+sure the mounted data, SQLite, log, and static directories are writable by that
+UID/GID before starting the stack.
+
 ### Managing MetagenomeWatch docker containers
 
 The `./scripts` folder contains helper scripts you can use to perform most docker-related tasks for MetagenomeWatch.
@@ -141,3 +146,52 @@ Recommended operator workflow:
 2. Set `DOCKER_MGWATCH_IMAGE` to a pinned digest such as `ghcr.io/rki-mf1/mgwatch:sha-<git digest>`.
 3. Start services with `docker compose -f compose.prod.yml up -d`.
 4. Run maintenance commands with `docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py <command>"`.
+
+## Backups
+
+Backups must cover both databases and the filesystem state used by
+MetagenomeWatch: SQLite, MongoDB, media uploads, signatures, indexes, manifests,
+logs, `.env`, `vars.env`, Compose files, and NGINX/deployment configuration.
+
+Run the backup script from the deployment directory that contains `.env`,
+`vars.env`, and the Compose file:
+
+```console
+$ COMPOSE_FILE=compose.prod.yml ./scripts/backup.sh /srv/mgwatch/backups
+```
+
+For repository-local development, the defaults target `compose.yml` and write to
+`./backups`:
+
+```console
+$ ./scripts/backup.sh
+```
+
+Each run creates `mgwatch-<timestamp>/` with:
+
+- `sqlite/db.sqlite3`: online SQLite backup created through the SQLite backup API.
+- `mongodb.archive.gz`: `mongodump --archive --gzip` output when the MongoDB container is running.
+- `archives/backend-data.tar.gz`: uploaded media, signatures, indexes, manifests, and other `/data` state.
+- `archives/logs.tar.gz` and `archives/nginx-data.tar.gz`: operational logs and proxy/static deployment data.
+- `config/`: copied environment, Compose, and NGINX template files.
+- `MANIFEST.txt`: source paths and file sizes for the backup set.
+
+Store backup output outside the application data directories and protect it like
+production data because it can contain uploaded sequences, metadata, credentials,
+and operational logs. Before migrations, image upgrades, or data/index rebuilds,
+create a fresh backup and record its path in the release notes. Periodically test
+restores in a staging environment.
+
+To restore a backup, stop application traffic, make sure the target `.env` points
+to the intended restore paths, and run:
+
+```console
+$ COMPOSE_FILE=compose.prod.yml ./scripts/restore.sh --force /srv/mgwatch/backups/mgwatch-<timestamp>
+```
+
+The restore script overwrites the configured SQLite database, backend data,
+logs, NGINX/static data, and copied deployment config. If
+`mongodb.archive.gz` exists and `mgwatch-mongodb` is running, it imports the
+dump with `mongorestore --drop --archive --gzip`. After restore, start the stack,
+run migrations if required by the restored application version, and run the smoke
+tests from the release checklist.

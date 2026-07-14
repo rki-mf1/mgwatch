@@ -33,3 +33,45 @@ class ExampleDeploymentConfigTests(TestCase):
         self.assertNotIn("ALLOWED_HOSTS='*'", combined)
         self.assertNotIn("DEBUG=True", combined)
         self.assertNotIn("example1", combined)
+
+    def test_production_compose_includes_runtime_hardening_and_healthchecks(self):
+        compose_text = (EXAMPLE_CONFIG_DIR / "compose.prod.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            'user: "${MGWATCH_UID:-1000}:${MGWATCH_GID:-1000}"',
+            compose_text,
+        )
+        self.assertIn("no-new-privileges:true", compose_text)
+        self.assertIn("cap_drop:", compose_text)
+        self.assertIn("read_only: true", compose_text)
+        self.assertEqual(compose_text.count("healthcheck:"), 7)
+
+    def test_production_nginx_template_rate_limits_login(self):
+        nginx_text = (
+            EXAMPLE_CONFIG_DIR / "nginx-templates" / "mgwatch.conf.template"
+        ).read_text(encoding="utf-8")
+        env_text = (EXAMPLE_CONFIG_DIR / ".env.example").read_text(encoding="utf-8")
+        compose_text = (EXAMPLE_CONFIG_DIR / "compose.prod.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("limit_req_zone $binary_remote_addr", nginx_text)
+        self.assertIn("zone=mgwatch_login:10m", nginx_text)
+        self.assertIn("rate=${NGINX_LOGIN_RATE_LIMIT}", nginx_text)
+        self.assertIn("location = /login/", nginx_text)
+        self.assertIn(
+            "limit_req zone=mgwatch_login burst=${NGINX_LOGIN_RATE_BURST} nodelay;",
+            nginx_text,
+        )
+        self.assertIn("NGINX_LOGIN_RATE_LIMIT=10r/m", env_text)
+        self.assertIn("NGINX_LOGIN_RATE_BURST=5", env_text)
+        self.assertIn(
+            "NGINX_LOGIN_RATE_LIMIT=${NGINX_LOGIN_RATE_LIMIT:-10r/m}",
+            compose_text,
+        )
+        self.assertIn(
+            "NGINX_LOGIN_RATE_BURST=${NGINX_LOGIN_RATE_BURST:-5}",
+            compose_text,
+        )

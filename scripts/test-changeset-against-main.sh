@@ -122,12 +122,16 @@ compose_run_no_deps() {
   local suite_dir="$RUN_ROOT/$label"
   local project="mgwatch-${label//[^a-zA-Z0-9]/-}"
   mkdir -p "$suite_dir"/{data/backend-data,db,django-logs,smoke}
+  chmod -R ugo+rwX "$suite_dir"/{data,db,django-logs}
 
   mapfile -d '' env_args < <(compose_env_args "$suite_dir" "$project")
   env "${env_args[@]}" "$repo_dir/scripts/dc-dev.sh" run --rm --no-deps \
     -e DATA_DIR=/data \
     -e DB_DIR=/data-db \
     -e LOG_DIR=/logs \
+    -e DEBUG=True \
+    -e LOG_LEVEL=DEBUG \
+    -e AXES_ENABLED=False \
     -e CELERY_TASK_ALWAYS_EAGER=True \
     -e CELERY_TASK_EAGER_PROPAGATES=True \
     -e REDIS_URL=redis://mgwatch-redis:6379/0 \

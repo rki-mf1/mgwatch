@@ -26,3 +26,4 @@
 - Use concise, present-tense commit subjects (recent history uses short sentences like “Make wort signature downloads asynchronous”). Group related changes per commit; avoid noisy rebuild artifacts or local data.
 - Pull requests should describe the change, why it’s needed, and how to verify (commands and expected outcomes). Link issues or tickets when relevant.
 - Include screenshots or sample payloads for UI/API changes, note schema or migration impacts, and call out any operational steps (e.g., rerunning `create_metadata` or `create_search` commands).
+- Do not use the `gh` CLI for GitHub operations in this sandbox. Its auth configuration is expected to fail; use the configured GitHub connector for issues, pull requests, comments, and repository metadata instead.
