@@ -86,12 +86,12 @@ class RetentionCleanupTests(TestCase):
         self._set_model_time(signature, "date", age_days=age_days)
         return signature
 
-    def _result(self, name, signature, *, age_days, watched=False):
+    def _result(self, name, signature, *, age_days, watched=False, file_path=None):
         result = Result.objects.create(
             user=self.user,
             name=name,
             signature=signature,
-            file=self._media_file(f"user_{self.user.pk}/{name}.csv"),
+            file=file_path or self._media_file(f"user_{self.user.pk}/{name}.csv"),
             num_results=1,
             kmer=[21],
             database=["SRA"],
@@ -123,11 +123,23 @@ class RetentionCleanupTests(TestCase):
 
     def test_apply_deletes_expired_objects_and_preserves_protected_data(self):
         expired_signature = self._signature("expired", age_days=220)
+        expired_result_date = "20240101-010101-000001"
         expired_result = self._result(
             "expired-result",
             expired_signature,
             age_days=220,
             watched=False,
+            file_path=self._media_file(
+                f"user_{self.user.pk}/result_expired-result.{expired_result_date}.csv"
+            ),
+        )
+        expired_result_shard = self.media_root / self._media_file(
+            "user_"
+            f"{self.user.pk}/result_expired-result.SRA-21-38-{expired_result_date}.csv"
+        )
+        fresh_result_shard = self.media_root / self._media_file(
+            "user_"
+            f"{self.user.pk}/result_expired-result.SRA-21-38-20260701-010101-000001.csv"
         )
         fresh_signature = self._signature("fresh", age_days=220)
         fresh_result = self._result(
@@ -190,6 +202,7 @@ class RetentionCleanupTests(TestCase):
         summary = run_retention_cleanup(dry_run=False)
 
         self.assertEqual(summary["unwatched_results"], 1)
+        self.assertEqual(summary["result_shard_files"], 1)
         self.assertEqual(summary["orphaned_signatures"], 2)
         self.assertEqual(summary["unprocessed_fastas"], 1)
         self.assertEqual(summary["completed_jobs"], 1)
@@ -200,6 +213,8 @@ class RetentionCleanupTests(TestCase):
         self.assertFalse(Fasta.objects.filter(pk=stale_fasta.pk).exists())
         self.assertFalse(Job.objects.filter(pk=old_completed_job.pk).exists())
         self.assertFalse((self.media_root / expired_result.file.name).exists())
+        self.assertFalse(expired_result_shard.exists())
+        self.assertTrue(fresh_result_shard.exists())
         self.assertFalse((self.media_root / expired_signature.file.name).exists())
         self.assertFalse((self.media_root / orphaned_signature.file.name).exists())
         self.assertFalse((self.media_root / stale_fasta.file.name).exists())

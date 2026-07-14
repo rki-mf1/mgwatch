@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone as datetime_timezone
@@ -19,6 +20,7 @@ SUMMARY_KEYS = (
     "unprocessed_fastas",
     "unwatched_results",
     "watched_results",
+    "result_shard_files",
     "orphaned_signatures",
     "temp_files",
     "failed_index_files",
@@ -54,6 +56,79 @@ def _delete_objects(queryset, *, dry_run):
         if not dry_run:
             obj.delete()
     return count
+
+
+def _result_search_output_dir(result):
+    if result.file and result.file.name:
+        return Path(result.file.path).parent
+    if result.signature and result.signature.file and result.signature.file.name:
+        return Path(result.signature.file.path).parent
+    return None
+
+
+def _result_file_date(result):
+    if not result.file or not result.file.name:
+        return None
+    filename = Path(result.file.name).name
+    prefix = f"result_{result.name}."
+    if not filename.startswith(prefix) or not filename.endswith(".csv"):
+        return None
+    return filename.removeprefix(prefix).removesuffix(".csv")
+
+
+def _is_result_shard_file(path, *, result, result_date, cutoff):
+    filename = path.name
+    prefix = f"result_{result.name}."
+    if not filename.startswith(prefix) or not filename.endswith(".csv"):
+        return False
+    if result.file and Path(result.file.name).name == filename:
+        return False
+    if result_date:
+        return filename.endswith(f"-{result_date}.csv")
+
+    escaped_prefix = re.escape(prefix)
+    shard_pattern = re.compile(
+        rf"^{escaped_prefix}.+-\d+-\d+-\d{{8}}-\d{{6}}-\d{{6}}\.csv$"
+    )
+    return bool(shard_pattern.match(filename)) and _old_mtime(path, cutoff)
+
+
+def _delete_result_shard_files(result, *, cutoff, dry_run):
+    output_dir = _result_search_output_dir(result)
+    if not output_dir or not output_dir.exists():
+        return 0
+
+    result_date = _result_file_date(result)
+    count = 0
+    for path in output_dir.iterdir():
+        if not path.is_file():
+            continue
+        if not _is_result_shard_file(
+            path,
+            result=result,
+            result_date=result_date,
+            cutoff=cutoff,
+        ):
+            continue
+        count += 1
+        if not dry_run:
+            path.unlink(missing_ok=True)
+    return count
+
+
+def _delete_result_objects(queryset, *, cutoff, dry_run):
+    result_count = 0
+    shard_count = 0
+    for result in queryset.select_related("signature").iterator():
+        result_count += 1
+        shard_count += _delete_result_shard_files(
+            result,
+            cutoff=cutoff,
+            dry_run=dry_run,
+        )
+        if not dry_run:
+            result.delete()
+    return result_count, shard_count
 
 
 def _delete_old_files(root, *, cutoff, dry_run, suffixes=None):
@@ -149,27 +224,33 @@ def _cleanup_results(now, *, dry_run, summary):
 
     unwatched_cutoff = _cutoff(now, settings.RETENTION_UNWATCHED_RESULTS_DAYS)
     if unwatched_cutoff is not None:
-        summary["unwatched_results"] = _delete_objects(
+        result_count, shard_count = _delete_result_objects(
             Result.objects.filter(
                 is_watched=False,
                 time__lte=unwatched_cutoff,
             )
             .exclude(pk__in=active_result_ids)
             .order_by("pk"),
+            cutoff=unwatched_cutoff,
             dry_run=dry_run,
         )
+        summary["unwatched_results"] = result_count
+        summary["result_shard_files"] += shard_count
 
     watched_cutoff = _cutoff(now, settings.RETENTION_WATCHED_RESULTS_DAYS)
     if watched_cutoff is not None:
-        summary["watched_results"] = _delete_objects(
+        result_count, shard_count = _delete_result_objects(
             Result.objects.filter(
                 is_watched=True,
                 time__lte=watched_cutoff,
             )
             .exclude(pk__in=active_result_ids)
             .order_by("pk"),
+            cutoff=watched_cutoff,
             dry_run=dry_run,
         )
+        summary["watched_results"] = result_count
+        summary["result_shard_files"] += shard_count
 
 
 def _cleanup_signatures(now, *, dry_run, summary):
