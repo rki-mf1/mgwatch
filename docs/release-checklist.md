@@ -11,7 +11,9 @@ Use this checklist when promoting a MetagenomeWatch change from merge to safe pr
   ```
 
 - [ ] Review generated migration files and commit them with the application change.
-- [ ] Pull request or tracked branch exists, CI passed, and the release owner reviewed the final diff.
+- [ ] Pull request or tracked branch exists, CI passed, including pre-commit,
+      Django migration check, full Django tests, coverage threshold, and quick
+      release gate, and the release owner reviewed the final diff.
 - [ ] Generate draft release notes:
 
   ```bash
@@ -33,6 +35,15 @@ Use this checklist when promoting a MetagenomeWatch change from merge to safe pr
 - [ ] Verify the latest successful `vulnerability-scan` run covers the release commit on `main`; if not, run it manually with `workflow_dispatch` and record the result.
 
 ## 3) Promote to staging first
+
+If no staging instance is operated for this release, run the manual
+`release-smoke` GitHub Actions workflow or:
+
+```bash
+ALLOW_STACK_RECREATE=1 ./scripts/test-changeset-against-main.sh --full
+```
+
+Record the result in the release notes before production rollout.
 
 - [ ] Update staging deployment config to the new digest:
 

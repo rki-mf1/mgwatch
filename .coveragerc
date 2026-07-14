@@ -1,0 +1,27 @@
+[run]
+branch = True
+source =
+    mgw
+    mgw_api
+parallel = True
+relative_files = True
+
+[report]
+precision = 1
+show_missing = True
+skip_covered = True
+exclude_also =
+    if __name__ == .__main__.:
+    pragma: no cover
+
+omit =
+    manage.py
+    mgw/asgi.py
+    mgw/wsgi.py
+    mgw_api/fixtures/*
+    mgw_api/migrations/*
+    mgw_api/static/*
+    mgw_api/tests/*
+
+[xml]
+output = coverage.xml

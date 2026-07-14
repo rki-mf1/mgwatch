@@ -22,6 +22,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'release' && format('refs/tags/{0}', github.event.release.tag_name) || github.ref }}
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v6
       - name: Run pre-commit
@@ -35,6 +36,17 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'release' && format('refs/tags/{0}', github.event.release.tag_name) || github.ref }}
+          fetch-depth: 0
+      - name: Fetch release gate base ref
+        shell: bash
+        env:
+          BASE_BRANCH: ${{ github.base_ref || 'main' }}
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags --prune origin \
+            "refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"
+          echo "BASE_REF=$(git rev-parse FETCH_HEAD)" >> "${GITHUB_ENV}"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.2.0
       - name: Build backend image for tests
@@ -52,6 +64,29 @@ jobs:
           set -euo pipefail
 
           ./scripts/run-tests.sh --skip-build
+      - name: Run quick release gate
+        shell: bash
+        env:
+          SKIP_DJANGO_TESTS: "1"
+          SKIP_QUICK_SMOKE: "1"
+        run: |
+          set -euo pipefail
+
+          ./scripts/test-changeset-against-main.sh --quick --skip-build
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: work/coverage/coverage.xml
+          if-no-files-found: warn
+      - name: Upload release-gate logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: quick-release-gate-logs
+          path: work/changeset-test
+          if-no-files-found: warn
   build-and-push:
     runs-on: ubuntu-latest
     if: >-

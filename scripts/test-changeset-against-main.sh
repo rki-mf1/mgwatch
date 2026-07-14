@@ -17,6 +17,8 @@ Environment:
   BASE_REF=main             Git ref to compare against.
   ALLOW_STACK_RECREATE=1    Required for --full because compose uses fixed names.
   KEEP_STACK=1              Leave the full smoke compose stack running.
+  SKIP_DJANGO_TESTS=1       Skip Django unit tests when an earlier CI step already ran them.
+  SKIP_QUICK_SMOKE=1        Skip in-process quick smoke checks.
 USAGE
 }
 
@@ -28,6 +30,8 @@ RUN_BASELINE=0
 SKIP_BUILD=0
 KEEP_STACK=${KEEP_STACK:-0}
 ALLOW_STACK_RECREATE=${ALLOW_STACK_RECREATE:-0}
+SKIP_DJANGO_TESTS=${SKIP_DJANGO_TESTS:-0}
+SKIP_QUICK_SMOKE=${SKIP_QUICK_SMOKE:-0}
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 RUN_ROOT="$REPO_ROOT/work/changeset-test/$TIMESTAMP"
 SUMMARY="$RUN_ROOT/summary.log"
@@ -80,6 +84,51 @@ die() {
   exit 1
 }
 
+bootstrap_env_file() {
+  local source=$1
+  local target=$2
+
+  if [[ -f "$target" ]]; then
+    return 0
+  fi
+
+  [[ -f "$source" ]] || die "Cannot create $(basename "$target"); missing $(basename "$source")"
+  cp "$source" "$target"
+  log "Created $(basename "$target") from $(basename "$source")"
+}
+
+bootstrap_env_files() {
+  bootstrap_env_file "$REPO_ROOT/.env.template" "$REPO_ROOT/.env"
+  bootstrap_env_file "$REPO_ROOT/vars.env.example" "$REPO_ROOT/vars.env"
+}
+
+resolve_base_ref() {
+  if git -C "$REPO_ROOT" rev-parse --verify "$BASE_REF^{commit}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ "$BASE_REF" == origin/* ]]; then
+    local remote_branch=${BASE_REF#origin/}
+    if git -C "$REPO_ROOT" fetch --no-tags --prune origin \
+      "refs/heads/$remote_branch:refs/remotes/origin/$remote_branch" >/dev/null 2>&1 &&
+      git -C "$REPO_ROOT" rev-parse --verify "$BASE_REF^{commit}" >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+
+  if [[ "$BASE_REF" != origin/* ]] &&
+    git -C "$REPO_ROOT" fetch --no-tags --prune origin \
+      "refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF" >/dev/null 2>&1; then
+    if git -C "$REPO_ROOT" rev-parse --verify "origin/$BASE_REF^{commit}" >/dev/null 2>&1; then
+      BASE_REF="origin/$BASE_REF"
+      log "Resolved base ref to $BASE_REF"
+      return 0
+    fi
+  fi
+
+  die "BASE_REF '$BASE_REF' does not resolve"
+}
+
 sanitize_label() {
   printf '%s' "$1" | tr -c '[:alnum:]_.-' '-'
 }
@@ -100,6 +149,16 @@ run_logged() {
     log "[$label] FAIL: $step"
     return 1
   fi
+}
+
+compose_cmd() {
+  local repo_dir=$1
+  shift
+  docker compose \
+    --project-directory "$repo_dir" \
+    -f "$repo_dir/compose.yml" \
+    -f "$repo_dir/compose-dev.yml" \
+    "$@"
 }
 
 compose_env_args() {
@@ -125,20 +184,24 @@ compose_run_no_deps() {
   chmod -R ugo+rwX "$suite_dir"/{data,db,django-logs}
 
   mapfile -d '' env_args < <(compose_env_args "$suite_dir" "$project")
-  env "${env_args[@]}" "$repo_dir/scripts/dc-dev.sh" run --rm --no-deps \
-    -e DATA_DIR=/data \
-    -e DB_DIR=/data-db \
-    -e LOG_DIR=/logs \
-    -e DEBUG=True \
-    -e LOG_LEVEL=DEBUG \
-    -e AXES_ENABLED=False \
-    -e CELERY_TASK_ALWAYS_EAGER=True \
-    -e CELERY_TASK_EAGER_PROPAGATES=True \
-    -e REDIS_URL=redis://mgwatch-redis:6379/0 \
-    -e MONGO_URI=mongodb://root:example1@mgwatch-mongodb:27017/ \
-    -v "$repo_dir/scripts:/code/scripts:ro" \
-    -v "$suite_dir/smoke:/smoke:ro" \
-    mgwatch "$command"
+  (
+    export "${env_args[@]}"
+    compose_cmd "$repo_dir" run --rm --no-deps \
+      -e DATA_DIR=/data \
+      -e DB_DIR=/data-db \
+      -e LOG_DIR=/logs \
+      -e DEBUG=True \
+      -e LOG_LEVEL=DEBUG \
+      -e AXES_ENABLED=False \
+      -e CELERY_TASK_ALWAYS_EAGER=True \
+      -e CELERY_TASK_EAGER_PROPAGATES=True \
+      -e REDIS_URL=redis://mgwatch-redis:6379/0 \
+      -e MONGO_URI=mongodb://root:example1@mgwatch-mongodb:27017/ \
+      -v "$repo_dir/scripts:/code/scripts:ro" \
+      -v "$repo_dir/example-config:/code/example-config:ro" \
+      -v "$suite_dir/smoke:/smoke:ro" \
+      mgwatch "$command"
+  )
 }
 
 compose_down_quick() {
@@ -148,7 +211,10 @@ compose_down_quick() {
   local project="mgwatch-${label//[^a-zA-Z0-9]/-}"
 
   mapfile -d '' env_args < <(compose_env_args "$suite_dir" "$project")
-  env "${env_args[@]}" "$repo_dir/scripts/dc-dev.sh" down --remove-orphans
+  (
+    export "${env_args[@]}"
+    compose_cmd "$repo_dir" down --remove-orphans
+  )
 }
 
 write_quick_smoke() {
@@ -202,6 +268,7 @@ def fake_search_index(*, result_file, sketch_file, index_path, k, containment):
 username = "changeset_smoke"
 password = "testpass123"
 User.objects.filter(username=username).delete()
+User.objects.filter(username="changeset_smoke_other").delete()
 user = User.objects.create_user(username=username, password=password, email="smoke@example.invalid")
 other = User.objects.create_user(username="changeset_smoke_other", password=password)
 Settings.objects.create(user=user, kmer=[21], database=["SRA"], containment=0.05)
@@ -257,6 +324,7 @@ pipeline_fasta = Fasta.objects.create(
 )
 pipeline_fasta.file.save("pipeline-smoke.fa", ContentFile(b">smoke\nACGTACGTACGTACGTACGTACGT\n"), save=True)
 index_dir = Path(settings.DATA_DIR) / "SRA" / "metagenomes" / "index"
+shutil.rmtree(index_dir, ignore_errors=True)
 index_dir.mkdir(parents=True, exist_ok=True)
 (index_dir / "21mers-db38.rocksdb").mkdir(exist_ok=True)
 pipeline_job = Job.objects.create(
@@ -379,11 +447,15 @@ run_quick_suite() {
   run_logged "$label" "Django migration check" \
     compose_run_no_deps "$repo_dir" "$label" \
       "conda run --no-capture-output -n mgw ./manage.py makemigrations --check --dry-run"
-  run_logged "$label" "Django unit tests" \
-    compose_run_no_deps "$repo_dir" "$label" \
-      "conda run --no-capture-output -n mgw ./manage.py test mgw_api --verbosity 2"
+  if [[ "$SKIP_DJANGO_TESTS" == "1" ]]; then
+    log "[$label] SKIP: Django unit tests"
+  else
+    run_logged "$label" "Django unit tests" \
+      compose_run_no_deps "$repo_dir" "$label" \
+        "conda run --no-capture-output -n mgw ./manage.py test mgw_api --verbosity 2"
+  fi
 
-  if [[ "$include_smoke" != "1" ]]; then
+  if [[ "$include_smoke" != "1" || "$SKIP_QUICK_SMOKE" == "1" ]]; then
     log "[$label] SKIP: in-process task and UI smoke"
     run_logged "$label" "cleanup quick compose resources" \
       compose_down_quick "$repo_dir" "$label"
@@ -411,7 +483,10 @@ stack_compose() {
   local suite_dir=$2
   shift 2
   stack_env "$suite_dir"
-  env "${env_args[@]}" "$repo_dir/scripts/dc-dev.sh" "$@"
+  (
+    export "${env_args[@]}"
+    compose_cmd "$repo_dir" "$@"
+  )
 }
 
 stack_manage() {
@@ -618,13 +693,15 @@ run_full_suite() {
 }
 
 log "Writing logs under $RUN_ROOT"
-git -C "$REPO_ROOT" rev-parse --verify "$BASE_REF" >/dev/null || die "BASE_REF '$BASE_REF' does not resolve"
+bootstrap_env_files
+resolve_base_ref
 
 if [[ "$RUN_BASELINE" -eq 1 ]]; then
-  BASE_WORKTREE="$RUN_ROOT/worktree-$BASE_REF"
+  BASE_LABEL=$(sanitize_label "$BASE_REF")
+  BASE_WORKTREE="$RUN_ROOT/worktree-$BASE_LABEL"
   run_logged baseline-worktree "create $BASE_REF worktree" \
     git -C "$REPO_ROOT" worktree add --detach "$BASE_WORKTREE" "$BASE_REF"
-  run_quick_suite "$BASE_WORKTREE" "baseline-$BASE_REF" 0
+  run_quick_suite "$BASE_WORKTREE" "baseline-$BASE_LABEL" 0
 fi
 
 if [[ "$RUN_QUICK" -eq 1 ]]; then
