@@ -235,3 +235,25 @@ Set a retention period to a negative value to disable cleanup for that data
 class. Cleanup logs report aggregate counts only and must not include uploaded
 sequence content, metadata rows, user filenames, or detailed paths. Take a fresh
 backup before lowering retention periods because applied cleanup is destructive.
+
+## LDAP deprovisioning
+
+When LDAP is configured, run `reconcile_ldap_users` periodically from the
+application container to detect users that no longer exist in LDAP:
+
+```console
+$ docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py reconcile_ldap_users"
+```
+
+The command aborts on LDAP connection/search errors, so LDAP outages do not mark
+users as missing. Missing LDAP users are tracked in the database, disabled
+according to `LDAP_DEPROVISION_DISABLE_IMMEDIATELY`, and assigned a configurable
+deletion due date from `LDAP_DEPROVISION_GRACE_DAYS`. Set
+`LDAP_DEPROVISION_NOTIFY_EMAIL` to notify operators, and set
+`LDAP_DEPROVISION_DELETE_AFTER_GRACE=True` only when the deployment is ready for
+automatic user deletion and the corresponding media cleanup after the grace
+period.
+
+`LDAP_ALLOW_LOCAL_AUTH_FALLBACK=False` makes LDAP authoritative by removing the
+Django local password backend when LDAP is configured. Keep a documented
+break-glass administrative path before disabling local fallback.

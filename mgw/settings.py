@@ -62,6 +62,14 @@ env = environ.Env(
     LDAP_SEARCH_ROOT=(str, None),
     LDAP_ATTR_USERNAME=(str, None),
     LDAP_ATTR_EMAIL=(str, None),
+    LDAP_USER_SEARCH_FILTER=(str, "(cn=%(user)s)"),
+    LDAP_ALLOW_LOCAL_AUTH_FALLBACK=(bool, True),
+    LDAP_DEPROVISION_GRACE_DAYS=(int, 30),
+    LDAP_DEPROVISION_DISABLE_IMMEDIATELY=(bool, True),
+    LDAP_DEPROVISION_DELETE_AFTER_GRACE=(bool, False),
+    LDAP_DEPROVISION_NOTIFY_EMAIL=(str, ""),
+    LDAP_DEPROVISION_EXEMPT_STAFF=(bool, True),
+    LDAP_DEPROVISION_EXEMPT_USERNAMES=(list, []),
     MAX_SEARCH_RESULTS=(int, 100),
     REDIS_URL=(str, "redis://mgwatch-redis:6379/0"),
     CELERY_TASK_ALWAYS_EAGER=(bool, False),
@@ -461,6 +469,21 @@ LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
 LOGIN_URL = "/login/"
 
+LDAP_SERVER_URI = env("LDAP_SERVER_URI")
+LDAP_BIND_DN = env("LDAP_BIND_DN")
+LDAP_BIND_PASSWORD = env("LDAP_BIND_PASSWORD")
+LDAP_SEARCH_ROOT = env("LDAP_SEARCH_ROOT")
+LDAP_ATTR_USERNAME = env("LDAP_ATTR_USERNAME")
+LDAP_ATTR_EMAIL = env("LDAP_ATTR_EMAIL")
+LDAP_USER_SEARCH_FILTER = env("LDAP_USER_SEARCH_FILTER")
+LDAP_ALLOW_LOCAL_AUTH_FALLBACK = env("LDAP_ALLOW_LOCAL_AUTH_FALLBACK")
+LDAP_DEPROVISION_GRACE_DAYS = env("LDAP_DEPROVISION_GRACE_DAYS")
+LDAP_DEPROVISION_DISABLE_IMMEDIATELY = env("LDAP_DEPROVISION_DISABLE_IMMEDIATELY")
+LDAP_DEPROVISION_DELETE_AFTER_GRACE = env("LDAP_DEPROVISION_DELETE_AFTER_GRACE")
+LDAP_DEPROVISION_NOTIFY_EMAIL = env("LDAP_DEPROVISION_NOTIFY_EMAIL")
+LDAP_DEPROVISION_EXEMPT_STAFF = env("LDAP_DEPROVISION_EXEMPT_STAFF")
+LDAP_DEPROVISION_EXEMPT_USERNAMES = env("LDAP_DEPROVISION_EXEMPT_USERNAMES")
+
 ################################################################################
 EMAIL_HOST = env("EMAIL_HOST")
 if EMAIL_HOST:
@@ -475,27 +498,31 @@ else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 ################################################################################
-# By default use Django's default user authentication
+# By default use Django's default user authentication.
 AUTHENTICATION_BACKENDS = [
     "axes.backends.AxesStandaloneBackend",
     "django.contrib.auth.backends.ModelBackend",
 ]
 
 # Optionally check LDAP/Active Directory server for user accounts first
-if env("LDAP_SERVER_URI"):
+if LDAP_SERVER_URI:
     AUTH_LDAP_CONNECTION_OPTIONS = {ldap.OPT_REFERRALS: 0}
-    AUTH_LDAP_SERVER_URI = env("LDAP_SERVER_URI")
-    AUTH_LDAP_BIND_DN = env("LDAP_BIND_DN")
-    AUTH_LDAP_BIND_PASSWORD = env("LDAP_BIND_PASSWORD")
+    AUTH_LDAP_SERVER_URI = LDAP_SERVER_URI
+    AUTH_LDAP_BIND_DN = LDAP_BIND_DN
+    AUTH_LDAP_BIND_PASSWORD = LDAP_BIND_PASSWORD
 
     AUTH_LDAP_USER_SEARCH = LDAPSearch(
-        env("LDAP_SEARCH_ROOT"), ldap.SCOPE_SUBTREE, "(cn=%(user)s)"
+        LDAP_SEARCH_ROOT, ldap.SCOPE_SUBTREE, LDAP_USER_SEARCH_FILTER
     )
     AUTH_LDAP_USER_ATTR_MAP = {
-        "username": env("LDAP_ATTR_USERNAME"),
-        "email": env("LDAP_ATTR_EMAIL"),
+        "username": LDAP_ATTR_USERNAME,
+        "email": LDAP_ATTR_EMAIL,
     }
     # Populate Django's user database automatically with data from LDAP
     AUTH_LDAP_ALWAYS_UPDATE_USER = True
-    # Try LDAP first, before reverting to default user authentication
-    AUTHENTICATION_BACKENDS.insert(1, "django_auth_ldap.backend.LDAPBackend")
+    AUTHENTICATION_BACKENDS = [
+        "axes.backends.AxesStandaloneBackend",
+        "django_auth_ldap.backend.LDAPBackend",
+    ]
+    if LDAP_ALLOW_LOCAL_AUTH_FALLBACK:
+        AUTHENTICATION_BACKENDS.append("django.contrib.auth.backends.ModelBackend")
