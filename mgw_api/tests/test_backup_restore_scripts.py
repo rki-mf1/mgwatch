@@ -138,4 +138,6 @@ class BackupRestoreScriptTests(TestCase):
         for line in stdout.splitlines():
             if line.startswith(prefix):
                 return Path(line.removeprefix(prefix))
-        self.fail(f"backup output did not include backup directory: {stdout}")
+        raise AssertionError(
+            f"backup output did not include backup directory: {stdout}"
+        )
