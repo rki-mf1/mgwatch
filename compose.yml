@@ -28,7 +28,7 @@ services:
     command: ["conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:8100 mgw.wsgi:application"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "conda run --no-capture-output -n mgw python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/', timeout=5).close()\""]
+      test: ["CMD-SHELL", "conda run --no-capture-output -n mgw python -c \"import urllib.request; request = urllib.request.Request('http://127.0.0.1:8100/', headers={'Host': 'localhost'}); urllib.request.urlopen(request, timeout=5).close()\""]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -11,12 +11,19 @@ Use this checklist when promoting a MetagenomeWatch change from merge to safe pr
   ```
 
 - [ ] Review generated migration files and commit them with the application change.
-- [ ] Pull request approved and merged to `main`.
-- [ ] CI passed, including pre-commit, Django migration check, full Django tests,
-      coverage threshold, and quick release gate.
-- [ ] Changelog/release notes drafted (what changed, risk areas, rollback notes).
+- [ ] Pull request or tracked branch exists, CI passed, including pre-commit,
+      Django migration check, full Django tests, coverage threshold, and quick
+      release gate, and the release owner reviewed the final diff.
+- [ ] Generate draft release notes:
+
+  ```bash
+  python scripts/generate-release-notes.py --from <previous-release-ref> --to <release-ref> --output release-notes.md
+  ```
+
+- [ ] Review generated release notes for what changed, security-relevant changes, risk areas, migration notes, and rollback notes.
 - [ ] Any required schema/data migration steps identified.
 - [ ] Confirm the merge commit already contains every required migration file before the image build starts.
+- [ ] Confirm release governance evidence expectations in [release-governance.md](./release-governance.md).
 
 ## 2) Build and publish the backend image
 
@@ -24,6 +31,8 @@ Use this checklist when promoting a MetagenomeWatch change from merge to safe pr
 - [ ] Image is published to GHCR.
 - [ ] Record immutable image digest (`sha256:...`) for deployment.
 - [ ] Optional: create a semantic release tag (e.g. `v1.6.0`) mapped to the same digest.
+- [ ] Record CI run links and image digest artifact location in the operations log or change request.
+- [ ] Verify the latest successful `vulnerability-scan` run covers the release commit on `main`; if not, run it manually with `workflow_dispatch` and record the result.
 
 ## 3) Promote to staging first
 
@@ -68,6 +77,7 @@ Record the result in the release notes before production rollout.
 - [ ] Verify `DEBUG=False`, `ALLOWED_HOSTS`, and other production settings in `vars.env`.
 - [ ] Confirm maintenance window and owner/on-call coverage.
 - [ ] Capture rollback target digest before rollout.
+- [ ] Record the last branch-protection verification date or evidence location.
 
 ## 5) Roll out to production
 
@@ -102,12 +112,14 @@ Record the result in the release notes before production rollout.
 ## 7) Post-release closeout
 
 - [ ] Announce rollout completion.
-- [ ] Save the deployed digest + release notes in your operations log.
+- [ ] Finalize `CHANGELOG.md` or attach finalized notes to the GitHub Release.
+- [ ] Save the deployed digest, rollback digest, release notes, CI links, and smoke-test result in your operations log.
 - [ ] Track any follow-up fixes discovered during rollout.
 
 ## Suggested policy guardrails
 
 - Keep production deployment artifacts in a dedicated ops repo/directory.
 - Pin production to image digests (not mutable tags like `latest`).
-- Require review/approval for digest updates in production configuration.
+- In the current single-maintainer model, document release-owner final diff review instead of requiring independent PR approval.
+- Require independent review/approval for production-impacting changes once a second qualified maintainer is available.
 - Do not keep dev helper scripts on production hosts.

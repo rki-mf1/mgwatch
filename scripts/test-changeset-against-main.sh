@@ -80,6 +80,39 @@ die() {
   exit 1
 }
 
+bootstrap_env_file() {
+  local source=$1
+  local target=$2
+
+  if [[ -f "$target" ]]; then
+    return 0
+  fi
+
+  [[ -f "$source" ]] || die "Cannot create $(basename "$target"); missing $(basename "$source")"
+  cp "$source" "$target"
+  log "Created $(basename "$target") from $(basename "$source")"
+}
+
+bootstrap_env_files() {
+  bootstrap_env_file "$REPO_ROOT/.env.template" "$REPO_ROOT/.env"
+  bootstrap_env_file "$REPO_ROOT/vars.env.example" "$REPO_ROOT/vars.env"
+}
+
+resolve_base_ref() {
+  if git -C "$REPO_ROOT" rev-parse --verify "$BASE_REF^{commit}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ "$BASE_REF" != origin/* ]] &&
+    git -C "$REPO_ROOT" rev-parse --verify "origin/$BASE_REF^{commit}" >/dev/null 2>&1; then
+    BASE_REF="origin/$BASE_REF"
+    log "Resolved base ref to $BASE_REF"
+    return 0
+  fi
+
+  die "BASE_REF '$BASE_REF' does not resolve"
+}
+
 sanitize_label() {
   printf '%s' "$1" | tr -c '[:alnum:]_.-' '-'
 }
@@ -640,13 +673,15 @@ run_full_suite() {
 }
 
 log "Writing logs under $RUN_ROOT"
-git -C "$REPO_ROOT" rev-parse --verify "$BASE_REF" >/dev/null || die "BASE_REF '$BASE_REF' does not resolve"
+bootstrap_env_files
+resolve_base_ref
 
 if [[ "$RUN_BASELINE" -eq 1 ]]; then
-  BASE_WORKTREE="$RUN_ROOT/worktree-$BASE_REF"
+  BASE_LABEL=$(sanitize_label "$BASE_REF")
+  BASE_WORKTREE="$RUN_ROOT/worktree-$BASE_LABEL"
   run_logged baseline-worktree "create $BASE_REF worktree" \
     git -C "$REPO_ROOT" worktree add --detach "$BASE_WORKTREE" "$BASE_REF"
-  run_quick_suite "$BASE_WORKTREE" "baseline-$BASE_REF" 0
+  run_quick_suite "$BASE_WORKTREE" "baseline-$BASE_LABEL" 0
 fi
 
 if [[ "$RUN_QUICK" -eq 1 ]]; then
