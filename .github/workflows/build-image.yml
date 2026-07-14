@@ -46,6 +46,7 @@ jobs:
 
           git fetch --no-tags --prune origin \
             "refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"
+          echo "BASE_REF=$(git rev-parse FETCH_HEAD)" >> "${GITHUB_ENV}"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.2.0
       - name: Build backend image for tests
@@ -65,8 +66,6 @@ jobs:
           ./scripts/run-tests.sh --skip-build
       - name: Run quick release gate
         shell: bash
-        env:
-          BASE_REF: origin/${{ github.base_ref || 'main' }}
         run: |
           set -euo pipefail
 

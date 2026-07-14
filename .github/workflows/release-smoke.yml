@@ -26,12 +26,11 @@ jobs:
 
           git fetch --no-tags --prune origin \
             "refs/heads/main:refs/remotes/origin/main"
+          echo "BASE_REF=$(git rev-parse FETCH_HEAD)" >> "${GITHUB_ENV}"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.2.0
       - name: Run full release smoke gate
         shell: bash
-        env:
-          BASE_REF: origin/main
         run: |
           set -euo pipefail
 

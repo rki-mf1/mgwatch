@@ -103,11 +103,23 @@ resolve_base_ref() {
     return 0
   fi
 
+  if [[ "$BASE_REF" == origin/* ]]; then
+    local remote_branch=${BASE_REF#origin/}
+    if git -C "$REPO_ROOT" fetch --no-tags --prune origin \
+      "refs/heads/$remote_branch:refs/remotes/origin/$remote_branch" >/dev/null 2>&1 &&
+      git -C "$REPO_ROOT" rev-parse --verify "$BASE_REF^{commit}" >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+
   if [[ "$BASE_REF" != origin/* ]] &&
-    git -C "$REPO_ROOT" rev-parse --verify "origin/$BASE_REF^{commit}" >/dev/null 2>&1; then
-    BASE_REF="origin/$BASE_REF"
-    log "Resolved base ref to $BASE_REF"
-    return 0
+    git -C "$REPO_ROOT" fetch --no-tags --prune origin \
+      "refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF" >/dev/null 2>&1; then
+    if git -C "$REPO_ROOT" rev-parse --verify "origin/$BASE_REF^{commit}" >/dev/null 2>&1; then
+      BASE_REF="origin/$BASE_REF"
+      log "Resolved base ref to $BASE_REF"
+      return 0
+    fi
   fi
 
   die "BASE_REF '$BASE_REF' does not resolve"
