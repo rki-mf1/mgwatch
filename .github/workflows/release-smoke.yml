@@ -19,6 +19,13 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 0
+      - name: Fetch release gate base ref
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags --prune origin \
+            "refs/heads/main:refs/remotes/origin/main"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.2.0
       - name: Run full release smoke gate
