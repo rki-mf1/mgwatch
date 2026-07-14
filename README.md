@@ -196,6 +196,46 @@ dump with `mongorestore --drop --archive --gzip`. After restore, start the stack
 run migrations if required by the restored application version, and run the smoke
 tests from the release checklist.
 
+## Retention cleanup
+
+MetagenomeWatch has a scheduled retention cleanup task for user-facing search
+data, stale job rows, temporary files, failed index artifacts, and old Django log
+files. The task runs daily at 02:30 on the maintenance queue when
+`RETENTION_CLEANUP_ENABLED=True`.
+
+Default retention periods:
+
+- Unwatched results: 180 days.
+- Watched results: 365 days.
+- Orphaned signatures with no remaining result rows: 180 days.
+- Stale unprocessed FASTA uploads: 7 days.
+- Completed job rows: 180 days.
+- Failed job rows: 90 days.
+- Temporary files: 7 days.
+- Failed index artifacts: 30 days.
+- Django `.log` files: 180 days.
+
+The cleanup does not age-delete canonical metadata, manifests, SQLite, MongoDB,
+production indexes, or current WORT search state. Those data classes are managed
+through explicit backup, restore, release, and index rebuild procedures.
+
+Run a dry-run before changing retention settings or applying cleanup manually:
+
+```console
+$ ./scripts/dev-manage.sh cleanup_retention
+```
+
+Apply cleanup explicitly with:
+
+```console
+$ ./scripts/dev-manage.sh cleanup_retention --apply
+```
+
+Set a retention period to a negative value to disable cleanup for that data
+class. Cleanup logs report aggregate counts only and must not include uploaded
+sequence content, metadata rows, user filenames, or detailed paths. Take a fresh
+backup before lowering retention periods because applied cleanup is destructive.
+
 ## LDAP deprovisioning
 
 When LDAP is configured, run `reconcile_ldap_users` periodically from the

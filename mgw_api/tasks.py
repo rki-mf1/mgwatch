@@ -1,4 +1,5 @@
 from celery import shared_task
+from django.conf import settings
 from django.db import transaction
 
 from mgw_api.locking import acquire_lock
@@ -262,3 +263,13 @@ def run_daily_pipeline_task(self):
     run_downloads_task.apply(kwargs={}).get()
     run_index_task.apply(kwargs={}).get()
     return run_watch_task.apply(kwargs={}).get()
+
+
+@shared_task(**NO_RETRY_TASK_OPTIONS)
+def run_retention_cleanup_task(self):
+    from mgw_api.services.retention import run_retention_cleanup
+
+    if not settings.RETENTION_CLEANUP_ENABLED:
+        return {"skipped": True}
+    with acquire_lock("retention-cleanup-lock"):
+        return run_retention_cleanup(dry_run=False)

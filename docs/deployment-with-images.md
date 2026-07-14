@@ -48,3 +48,4 @@ Prefer digest pinning for reproducibility.
 ## Related documentation
 
 - [Production release checklist](./release-checklist.md)
+- [Release governance](./release-governance.md)
