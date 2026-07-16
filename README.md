@@ -1,259 +1,139 @@
 # MetagenomeWatch
 
-MetagenomeWatch is a system that uses [sourmash branchwater](https://github.com/sourmash-bio/sourmash_plugin_branchwater) to index and peform fast content searches of genomic sequencing data. Compared to the exising [branchwater website](https://branchwater.jgi.doe.gov/advanced), MetagenomeWatch has a few unique features:
+MetagenomeWatch is a web service for searching genome sequences against large
+metagenomic sequencing indexes and keeping important searches under watch as new
+data becomes available.
 
-- the ability to set up "watches", which will automatically search any new sequences that are added to the database and notify you via email if high quality matches are found
-- user accounts, so you can save and review search results from previous searches
+It combines [sourmash branchwater](https://github.com/sourmash-bio/sourmash_plugin_branchwater)
+search with a persistent, multi-user application: users can upload FASTA files,
+review saved results, and turn a result into a watch that is rerun automatically
+when the local search index is updated.
 
-## Initial Setup
+## What MetagenomeWatch Does
 
-We use docker both when doing development as well as when running in production. Specifically, we use [rootless docker](https://docs.docker.com/engine/security/rootless/).
+MetagenomeWatch helps researchers and analysts answer questions such as: where
+has this genome, organism, or marker-like sequence appeared in public
+metagenomic sequencing data?
 
-### Setting up rootless docker
+The typical workflow is:
 
-Instructions will vary based on your operating system and are outlined [here](https://docs.docker.com/engine/security/rootless/), but for Debian or Ubuntu the process should roughly be:
+1. Upload a FASTA file through the web interface.
+2. MetagenomeWatch creates a sourmash signature in the background.
+3. The signature is searched against the configured metagenomic index.
+4. Results are saved to the user's account for later review.
+5. Any result can be marked as a watch and rerun automatically after future
+   index updates.
 
-Install and check some dependencies:
+## Why MetagenomeWatch
 
-```
-$ sudo apt install -y dbus-user-session uidmap docker-ce-rootless-extras
-$ slirp4netns --version  # Must be > v0.4.0
-slirp4netns version 1.2.0
-commit: 656041d45cfca7a4176f6b7eed9e4fe6c11e8383
-libslirp: 4.7.0
-SLIRP_CONFIG_VERSION_MAX: 4
-libseccomp: 2.5.4
-```
+MetagenomeWatch is designed for teams that need more than a one-off search form.
+Compared with using branchwater directly or a public search page, it adds:
 
-Make sure your user has a set of subordinate UIDs and GIDs. If not, edit the `/etc/subuid` and `/etc/subgid` files as needed:
+- Persistent user accounts with saved searches and result history.
+- Watch workflows that notify users by email when updated indexes produce new
+  high-quality matches.
+- Background processing with visible job status and progress reporting.
+- Metadata-enriched result tables for filtering, sorting, and reviewing matches.
+- A self-hosted deployment model suitable for institutional services.
+- Operational support for scheduled metadata/index updates, backups, retention
+  cleanup, and optional LDAP user deprovisioning.
 
-```
-$ id -u
-1001
-$ whoami
-testuser
-$ grep ^$(whoami): /etc/subuid
-testuser:231072:65536
-$ grep ^$(whoami): /etc/subgid
-testuser:231072:65536
-```
+## Screenshot
 
-Disable system-wide docker daemon
+<!-- TODO: Add a screenshot of the search/results workflow here.
+Suggested path: docs/images/metagenomewatch-results.png -->
 
-```
-sudo systemctl disable --now docker.service docker.socket
-sudo rm /var/run/docker.sock
-```
+_Screenshot coming soon._
 
-To launch the daemon on system startup, enable the systemd service and lingering:
+## Who It Is For
 
-```console
-$ systemctl --user enable docker
-$ sudo loginctl enable-linger $(whoami)
-```
+**Researchers and analysts** can use MetagenomeWatch to search uploaded sequences,
+come back to previous results, and keep biologically or operationally important
+queries under continuous watch.
 
-As your normal user, run the command:
+**Service operators** can run MetagenomeWatch for a group, institute, or project
+using Docker Compose, persistent storage, background workers, and documented
+maintenance workflows.
 
-```
-$ dockerd-rootless-setuptool.sh install
-```
+## Quick Start With Docker Compose
 
-### Configuring MetagenomeWatch
+The recommended deployment path is to run published container images with the
+example Docker Compose deployment files in [`example-config/`](example-config/).
 
-There are currently two places where you MetagenomeWatch configuration is stored:
+```bash
+mkdir mgwatch-deploy
+cp example-config/compose.prod.yml mgwatch-deploy/
+cp example-config/.env.example mgwatch-deploy/.env
+cp example-config/vars.env.example mgwatch-deploy/vars.env
+cp -r example-config/nginx-templates mgwatch-deploy/
 
-`vars.env`: this file doesn't exist by default. An example is provided in the project root directory, called `vars.env.example`. You should copy this file to `vars.env` and customize its contents as needed.
+cd mgwatch-deploy
+# Edit .env and vars.env, replacing every CHANGE_ME value.
 
-```
-$ cp vars.env.example vars.env
-```
-
-`.env`: these are variables that are needed to properly set up the docker containers. As with vars.env, the file is missing by default. You should copy the `.env.template` and customize its contents as needed.
-
-```
-$ cp .env.template .env
-```
-
-The application image runs as the non-root `mgwatch` user. For bind-mounted
-deployment directories, set `MGWATCH_UID` and `MGWATCH_GID` in `.env` and make
-sure the mounted data, SQLite, log, and static directories are writable by that
-UID/GID before starting the stack.
-
-### Managing MetagenomeWatch docker containers
-
-The `./scripts` folder contains helper scripts you can use to perform most docker-related tasks for MetagenomeWatch.
-
-1. Rebuild the Django docker container: `./scripts/build-docker.sh`
-1. Start all containers: `./scripts/dc-dev.sh up -d`
-1. Stop all containers: `./scripts/dc-dev.sh down`
-1. Apply Django migrations: `./scripts/dev-migrate.sh`
-1. Run Django mangement tasks: `./scripts/dev-manage.sh create_metadata` (downloads and builds metadata database)
-
-Additionally, the `./mgw.sh` convenience script can also be used to run several commands in a more convenient way:
-
-```
-$ ./mgw.sh -h
-./mgw.sh [-b] [-c] [-m]
- -b     build backend docker container
- -c     create (=make) migrations
- -m     migrate
-# Bring down all containers, rebuild Django container, bring up containers and apply migrations:
-$ ./mgw.sh -bm
+docker compose -f compose.prod.yml up -d
+docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py migrate"
 ```
 
-### Automatic behaviour in developer mode
+For production, pin `DOCKER_MGWATCH_IMAGE`, `DOCKER_NGINX_IMAGE`, MongoDB, and
+Redis images by immutable digest. Keep the persistent data, SQLite, MongoDB,
+logs, and static-file paths on durable storage and make sure they are writable by
+the configured `MGWATCH_UID:MGWATCH_GID`.
 
-Staring MetagenomeWatch in developer mode will do a few things automatically, which aren't done in production:
+Only the reverse proxy service should publish a host port. MongoDB and Redis are
+internal Compose services and should not be exposed directly.
 
-- first start will download the metadata and create the mongodb
-- currently set to use a maximum of 80% of available processors
-- will create `mgw-data/SRA/metadata/initial_setup.txt` if it was successful
-- takes a while
+See [Deploying MetagenomeWatch from published Docker images](docs/deployment-with-images.md)
+for the full image-based deployment workflow.
 
-## Directories
+## Operations
 
-- code: `mgw_api/`
-- index: `mgw-data/SRA/metagenomes/`
-- metadata: `mgw-data/SRA/metadata/`
+Operators should plan for the following before running a shared instance:
 
-## Current update settings
+- Configure email if users should receive watch notifications.
+- Back up SQLite, MongoDB, uploaded media, signatures, indexes, manifests, logs,
+  and deployment configuration.
+- Review retention settings before enabling automatic cleanup.
+- Use the release checklist before image upgrades, migrations, or index rebuilds.
+- Configure LDAP only when a tested break-glass administrative path exists.
 
-### mgw_api/management/commands/create_crons.py
-- change line 39 to adjust update timing
-- currently set to 1 am every day
+Useful references:
 
-### mgw_api/management/commands/create_daily.py
-- line 15: runs metadata update
-- line 16: runs index update
-- line 17: runs watches (also run after successfull index update)
-- currently all are deactivated
+- [Production release checklist](docs/release-checklist.md)
+- [Release governance](docs/release-governance.md)
+- [Architecture and index maintenance notes](docs/architecture.md)
+- [Example deployment config](example-config/README.md)
 
-### mgw_api/management/commands/create_search.py
-- modified to only work with SRA and k=21
-- change line 35 to change this behavior
+## Development
 
-### mgw_api/management/commands/create_metadata.py
-- modify line 107 to allow for more cores
+Development commands and conventions are documented in [AGENTS.md](AGENTS.md) and
+[CONTRIBUTING.md](CONTRIBUTING.md). The main test entry point is:
 
-
-## Production deployment without cloning the repository
-
-To deploy from prebuilt images, use a production compose file that references `DOCKER_MGWATCH_IMAGE` from GHCR and keep deployment files in a separate ops directory/repository.
-
-Recommended operator workflow:
-
-1. Download or sync a deployment bundle (`compose.prod.yml`, `.env`, `vars.env`).
-2. Set `DOCKER_MGWATCH_IMAGE` to a pinned digest such as `ghcr.io/rki-mf1/mgwatch:sha-<git digest>`.
-3. Start services with `docker compose -f compose.prod.yml up -d`.
-4. Run maintenance commands with `docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py <command>"`.
-
-## Backups
-
-Backups must cover both databases and the filesystem state used by
-MetagenomeWatch: SQLite, MongoDB, media uploads, signatures, indexes, manifests,
-logs, `.env`, `vars.env`, Compose files, and NGINX/deployment configuration.
-
-Run the backup script from the deployment directory that contains `.env`,
-`vars.env`, and the Compose file:
-
-```console
-$ COMPOSE_FILE=compose.prod.yml ./scripts/backup.sh /srv/mgwatch/backups
+```bash
+./scripts/run-tests.sh
 ```
 
-For repository-local development, the defaults target `compose.yml` and write to
-`./backups`:
+To run a narrower Django test target, pass the test label:
 
-```console
-$ ./scripts/backup.sh
+```bash
+./scripts/run-tests.sh mgw_api.tests.test_jobs
 ```
 
-Each run creates `mgwatch-<timestamp>/` with:
+## Acknowledgements
 
-- `sqlite/db.sqlite3`: online SQLite backup created through the SQLite backup API.
-- `mongodb.archive.gz`: `mongodump --archive --gzip` output when the MongoDB container is running.
-- `archives/backend-data.tar.gz`: uploaded media, signatures, indexes, manifests, and other `/data` state.
-- `archives/logs.tar.gz` and `archives/nginx-data.tar.gz`: operational logs and proxy/static deployment data.
-- `config/`: copied environment, Compose, and NGINX template files.
-- `MANIFEST.txt`: source paths and file sizes for the backup set.
+We thank the sourmash team for their helpful communications during this project
+and for developing excellent software. MetagenomeWatch depends on sourmash and
+sourmash branchwater; without that work, this project would not be possible.
 
-Store backup output outside the application data directories and protect it like
-production data because it can contain uploaded sequences, metadata, credentials,
-and operational logs. Before migrations, image upgrades, or data/index rebuilds,
-create a fresh backup and record its path in the release notes. Periodically test
-restores in a staging environment.
+## Similar Tools
 
-To restore a backup, stop application traffic, make sure the target `.env` points
-to the intended restore paths, and run:
+- [Branchwater Search](https://branchwater.sourmash.bio/) provides public
+  sourmash branchwater searches; MetagenomeWatch builds on similar search
+  technology but adds user accounts, saved results, watches, notifications, and
+  self-hosted service operations.
+- [Logan Search](https://logan-search.org/) searches over pre-assembled SRA
+  genomes, while MetagenomeWatch is designed around searching metagenomic
+  sequencing indexes derived from raw reads.
 
-```console
-$ COMPOSE_FILE=compose.prod.yml ./scripts/restore.sh --force /srv/mgwatch/backups/mgwatch-<timestamp>
-```
+## License
 
-The restore script overwrites the configured SQLite database, backend data,
-logs, NGINX/static data, and copied deployment config. If
-`mongodb.archive.gz` exists and `mgwatch-mongodb` is running, it imports the
-dump with `mongorestore --drop --archive --gzip`. After restore, start the stack,
-run migrations if required by the restored application version, and run the smoke
-tests from the release checklist.
-
-## Retention cleanup
-
-MetagenomeWatch has a scheduled retention cleanup task for user-facing search
-data, stale job rows, temporary files, failed index artifacts, and old Django log
-files. The task runs daily at 02:30 on the maintenance queue when
-`RETENTION_CLEANUP_ENABLED=True`.
-
-Default retention periods:
-
-- Unwatched results: 180 days.
-- Watched results: 365 days.
-- Orphaned signatures with no remaining result rows: 180 days.
-- Stale unprocessed FASTA uploads: 7 days.
-- Completed job rows: 180 days.
-- Failed job rows: 90 days.
-- Temporary files: 7 days.
-- Failed index artifacts: 30 days.
-- Django `.log` files: 180 days.
-
-The cleanup does not age-delete canonical metadata, manifests, SQLite, MongoDB,
-production indexes, or current WORT search state. Those data classes are managed
-through explicit backup, restore, release, and index rebuild procedures.
-
-Run a dry-run before changing retention settings or applying cleanup manually:
-
-```console
-$ ./scripts/dev-manage.sh cleanup_retention
-```
-
-Apply cleanup explicitly with:
-
-```console
-$ ./scripts/dev-manage.sh cleanup_retention --apply
-```
-
-Set a retention period to a negative value to disable cleanup for that data
-class. Cleanup logs report aggregate counts only and must not include uploaded
-sequence content, metadata rows, user filenames, or detailed paths. Take a fresh
-backup before lowering retention periods because applied cleanup is destructive.
-
-## LDAP deprovisioning
-
-When LDAP is configured, run `reconcile_ldap_users` periodically from the
-application container to detect users that no longer exist in LDAP:
-
-```console
-$ docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py reconcile_ldap_users"
-```
-
-The command aborts on LDAP connection/search errors, so LDAP outages do not mark
-users as missing. Missing LDAP users are tracked in the database, disabled
-according to `LDAP_DEPROVISION_DISABLE_IMMEDIATELY`, and assigned a configurable
-deletion due date from `LDAP_DEPROVISION_GRACE_DAYS`. Set
-`LDAP_DEPROVISION_NOTIFY_EMAIL` to notify operators, and set
-`LDAP_DEPROVISION_DELETE_AFTER_GRACE=True` only when the deployment is ready for
-automatic user deletion and the corresponding media cleanup after the grace
-period.
-
-`LDAP_ALLOW_LOCAL_AUTH_FALLBACK=False` makes LDAP authoritative by removing the
-Django local password backend when LDAP is configured. Keep a documented
-break-glass administrative path before disabling local fallback.
+See [LICENSE.txt](LICENSE.txt).
