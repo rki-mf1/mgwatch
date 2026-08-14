@@ -1,7 +1,6 @@
-# mgw_api/management/commands/create_crons.py
-
-import subprocess
-import sys
+import shlex
+import shutil
+from pathlib import Path
 
 from crontab import CronTab
 from django.conf import settings
@@ -34,19 +33,27 @@ class Command(BaseCommand):
         except Exception as e:
             LOGGER.error(f"Error adding cron jobs: {e}")
 
-    def get_conda_path(self):
-        conda_path = subprocess.check_output(["which", "conda"], text=True).strip()
-        return conda_path
+    def get_pixi_path(self):
+        pixi_path = shutil.which("pixi")
+        if not pixi_path:
+            raise RuntimeError("pixi executable not found in PATH")
+        return pixi_path
 
     def get_cron_jobs(self, manage_py_path):
         """Generate the crontab lines we want to add for each command"""
-        cron_jobs, env_name = list(), "mgw"
-        conda_path = self.get_conda_path()
+        cron_jobs = list()
+        pixi_path = self.get_pixi_path()
+        manifest_path = Path(manage_py_path).resolve().parent / "pixi.toml"
         log_file_path = settings.LOG_DIR / "log_crons.log"
         for script in [
             "create_daily",
         ]:
-            python_command = f"{conda_path} run -n {env_name} {sys.executable} {manage_py_path} {script} >> {log_file_path} 2>&1"
+            python_command = (
+                f"{shlex.quote(pixi_path)} run --frozen "
+                f"--manifest-path {shlex.quote(str(manifest_path))} "
+                f"python {shlex.quote(manage_py_path)} {script} "
+                f">> {shlex.quote(str(log_file_path))} 2>&1"
+            )
             # 0 - At minute 0 | 1 - At 1 AM | * - Every day of the month | * - Every month | 6 - On Saturday
             cron_jobs.append({"schedule": "0 1 * * *", "command": f"{python_command}"})
         return cron_jobs

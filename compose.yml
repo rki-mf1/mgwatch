@@ -25,10 +25,10 @@ services:
       - TZ=$TZ
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
-    command: ["conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:8100 mgw.wsgi:application"]
+    command: ["pixi run --frozen gunicorn --workers 2 --threads 2 --bind 0.0.0.0:8100 mgw.wsgi:application"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "conda run --no-capture-output -n mgw python -c \"import urllib.request; request = urllib.request.Request('http://127.0.0.1:8100/', headers={'Host': 'localhost'}); urllib.request.urlopen(request, timeout=5).close()\""]
+      test: ["CMD-SHELL", "pixi run --frozen python -c \"import urllib.request; request = urllib.request.Request('http://127.0.0.1:8100/', headers={'Host': 'localhost'}); urllib.request.urlopen(request, timeout=5).close()\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -54,7 +54,7 @@ services:
       - TZ=$TZ
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
-    command: ["conda run --no-capture-output -n mgw celery -A mgw worker --queues interactive --concurrency 2 --hostname interactive@%h"]
+    command: ["pixi run --frozen celery -A mgw worker --queues interactive --concurrency 2 --hostname interactive@%h"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f '[c]elery.*worker.*interactive' >/dev/null"]
@@ -79,7 +79,7 @@ services:
       - TZ=$TZ
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
-    command: ["conda run --no-capture-output -n mgw celery -A mgw worker --queues maintenance,indexing,watches --concurrency 1 --hostname maintenance@%h"]
+    command: ["pixi run --frozen celery -A mgw worker --queues maintenance,indexing,watches --concurrency 1 --hostname maintenance@%h"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f '[c]elery.*worker.*maintenance' >/dev/null"]
@@ -104,7 +104,7 @@ services:
       - TZ=$TZ
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
-    command: ["conda run --no-capture-output -n mgw celery -A mgw beat --loglevel INFO --schedule /tmp/celerybeat-schedule"]
+    command: ["pixi run --frozen celery -A mgw beat --loglevel INFO --schedule /tmp/celerybeat-schedule"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f '[c]elery.*beat' >/dev/null"]

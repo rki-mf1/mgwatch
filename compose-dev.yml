@@ -10,7 +10,7 @@ services:
       - LOG_LEVEL=DEBUG
     ports: !override
       - "8100:8100"
-    command: ["conda run --no-capture-output -n mgw ./manage.py runserver 0.0.0.0:8100"]
+    command: ["pixi run --frozen ./manage.py runserver 0.0.0.0:8100"]
     #    build: .
     #    develop:
     #      watch:
@@ -31,7 +31,7 @@ services:
     #          target: /code/mgw
     #          initial_sync: true
     #        - action: rebuild
-    #          path: environment.yml
+    #          path: pixi.toml
   mgwatch-mongodb:
     ports: !override
       - "27018:27017"

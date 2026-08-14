@@ -1,0 +1,43 @@
+[workspace]
+name = "mgwatch"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "==3.12.5"
+pip = "==24.2.0"
+django = "==5.1.0"
+django-debug-toolbar = "==4.4.6"
+django-environ = "==0.11.2"
+pillow = "==10.4.0"
+pandas = "==2.2.2"
+pymongo = "==4.8.0"
+awscli = "==2.17.37"
+pyarrow = "==17.0.0"
+numpy = "==2.1.0"
+pyyaml = "==6.0.2"
+python-crontab = "==3.2.0"
+sourmash-minimal = "==4.9.4"
+sourmash_plugin_branchwater = "==0.9.14"
+aiosmtpd = "==1.4.6"
+gunicorn = "==23.0.0"
+python-ldap = "==3.4.3"
+curl = "==8.11.1"
+polars = "==1.22.0"
+httpx = "==0.28.1"
+httpx-retries = "==0.4.5"
+aiofiles = "==25.1.0"
+aiohttp = "*"
+rich = "==14.2.0"
+whitenoise = "==6.12.0"
+celery = "==5.5.3"
+redis-py = "==6.4.0"
+coverage = "==7.6.1"
+
+[pypi-dependencies]
+django-auth-ldap = "==5.0.0"
+django-axes = { version = "==7.1.0", extras = ["ipware"] }
+django-redis = "==5.4.0"
+
+[tasks]
+manage = "./manage.py"

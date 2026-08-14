@@ -29,10 +29,10 @@ services:
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
     command:
-      - conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input && conda run --no-capture-output -n mgw gunicorn --workers 2 --threads 2 --bind 0.0.0.0:8100 mgw.wsgi:application
+      - pixi run --frozen ./manage.py collectstatic --no-input && pixi run --frozen gunicorn --workers 2 --threads 2 --bind 0.0.0.0:8100 mgw.wsgi:application
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "conda run --no-capture-output -n mgw python -c \"import os, urllib.request; host=(os.environ.get('ALLOWED_HOSTS') or 'localhost').split(',')[0].strip(); req=urllib.request.Request('http://127.0.0.1:8100/', headers={'Host': host, 'X-Forwarded-Proto': 'https'}); urllib.request.urlopen(req, timeout=5).close()\""]
+      test: ["CMD-SHELL", "pixi run --frozen python -c \"import os, urllib.request; host=(os.environ.get('ALLOWED_HOSTS') or 'localhost').split(',')[0].strip(); req=urllib.request.Request('http://127.0.0.1:8100/', headers={'Host': host, 'X-Forwarded-Proto': 'https'}); urllib.request.urlopen(req, timeout=5).close()\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -59,7 +59,7 @@ services:
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
     command:
-      - conda run --no-capture-output -n mgw celery -A mgw worker --queues interactive --concurrency 2 --hostname interactive@%h
+      - pixi run --frozen celery -A mgw worker --queues interactive --concurrency 2 --hostname interactive@%h
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f '[c]elery.*worker.*interactive' >/dev/null"]
@@ -87,7 +87,7 @@ services:
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
     command:
-      - conda run --no-capture-output -n mgw celery -A mgw worker --queues maintenance,indexing,watches --concurrency 1 --hostname maintenance@%h
+      - pixi run --frozen celery -A mgw worker --queues maintenance,indexing,watches --concurrency 1 --hostname maintenance@%h
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f '[c]elery.*worker.*maintenance' >/dev/null"]
@@ -115,7 +115,7 @@ services:
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
     command:
-      - conda run --no-capture-output -n mgw celery -A mgw beat --loglevel INFO --schedule /tmp/celerybeat-schedule
+      - pixi run --frozen celery -A mgw beat --loglevel INFO --schedule /tmp/celerybeat-schedule
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f '[c]elery.*beat' >/dev/null"]

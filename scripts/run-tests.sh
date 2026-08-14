@@ -95,21 +95,21 @@ if [[ "$coverage_enabled" == "1" ]]; then
         "${test_volumes[@]}" mgwatch \
         -c '
             set -e
-            conda run --no-capture-output -n mgw coverage erase
-            conda run --no-capture-output -n mgw coverage run --parallel-mode ./manage.py test "$@"
-            conda run --no-capture-output -n mgw coverage combine
-            conda run --no-capture-output -n mgw coverage report
-            conda run --no-capture-output -n mgw coverage xml -o /coverage-output/coverage.xml
+            pixi run --frozen coverage erase
+            pixi run --frozen coverage run --parallel-mode ./manage.py test "$@"
+            pixi run --frozen coverage combine
+            pixi run --frozen coverage report
+            pixi run --frozen coverage xml -o /coverage-output/coverage.xml
             if [ -n "${COVERAGE_FAIL_UNDER}" ]; then
-                conda run --no-capture-output -n mgw coverage report \
+                pixi run --frozen coverage report \
                     --fail-under="${COVERAGE_FAIL_UNDER}" >/dev/null
             fi
         ' sh "${django_args[@]}"
 else
-    docker compose -f compose.yml run --rm --entrypoint conda \
+    docker compose -f compose.yml run --rm --entrypoint pixi \
         -e DEBUG=True \
         -e LOG_LEVEL=DEBUG \
         -e AXES_ENABLED=False \
         "${test_volumes[@]}" mgwatch \
-        run --no-capture-output -n mgw ./manage.py test "${django_args[@]}"
+        run --frozen ./manage.py test "${django_args[@]}"
 fi

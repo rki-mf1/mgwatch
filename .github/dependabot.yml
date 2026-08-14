@@ -40,12 +40,3 @@ updates:
         applies-to: version-updates
         patterns:
           - "*"
-  - package-ecosystem: "conda"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-versions:
-        applies-to: version-updates
-        patterns:
-          - "*"

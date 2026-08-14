@@ -61,7 +61,7 @@ Record the result in the release notes before production rollout.
 - [ ] Run migrations (if needed):
 
   ```bash
-  docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py migrate"
+  docker compose -f compose.prod.yml run --rm mgwatch "pixi run --frozen ./manage.py migrate"
   ```
 
 - [ ] Run smoke tests (login, search, watch workflow, admin paths).
@@ -91,7 +91,7 @@ Record the result in the release notes before production rollout.
 - [ ] Run migrations (if required):
 
   ```bash
-  docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py migrate"
+  docker compose -f compose.prod.yml run --rm mgwatch "pixi run --frozen ./manage.py migrate"
   ```
 
 - [ ] Verify service health endpoints / core user flows.
