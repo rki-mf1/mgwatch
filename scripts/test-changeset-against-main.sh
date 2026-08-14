@@ -443,16 +443,16 @@ run_quick_suite() {
 
   run_logged "$label" "Django system check" \
     compose_run_no_deps "$repo_dir" "$label" \
-      "conda run --no-capture-output -n mgw ./manage.py check"
+      "pixi run --frozen ./manage.py check"
   run_logged "$label" "Django migration check" \
     compose_run_no_deps "$repo_dir" "$label" \
-      "conda run --no-capture-output -n mgw ./manage.py makemigrations --check --dry-run"
+      "pixi run --frozen ./manage.py makemigrations --check --dry-run"
   if [[ "$SKIP_DJANGO_TESTS" == "1" ]]; then
     log "[$label] SKIP: Django unit tests"
   else
     run_logged "$label" "Django unit tests" \
       compose_run_no_deps "$repo_dir" "$label" \
-        "conda run --no-capture-output -n mgw ./manage.py test mgw_api --verbosity 2"
+        "pixi run --frozen ./manage.py test mgw_api --verbosity 2"
   fi
 
   if [[ "$include_smoke" != "1" || "$SKIP_QUICK_SMOKE" == "1" ]]; then
@@ -464,11 +464,11 @@ run_quick_suite() {
 
   run_logged "$label" "migrate quick smoke database" \
     compose_run_no_deps "$repo_dir" "$label" \
-      "conda run --no-capture-output -n mgw ./manage.py migrate --noinput"
+      "pixi run --frozen ./manage.py migrate --noinput"
   write_quick_smoke "$suite_dir/smoke/quick_smoke.py"
   run_logged "$label" "in-process task and UI smoke" \
     compose_run_no_deps "$repo_dir" "$label" \
-      "conda run --no-capture-output -n mgw ./manage.py shell < /smoke/quick_smoke.py"
+      "pixi run --frozen ./manage.py shell < /smoke/quick_smoke.py"
   run_logged "$label" "cleanup quick compose resources" \
     compose_down_quick "$repo_dir" "$label"
 }
@@ -494,7 +494,7 @@ stack_manage() {
   local suite_dir=$2
   shift 2
   stack_compose "$repo_dir" "$suite_dir" exec -T mgwatch \
-    conda run --no-capture-output -n mgw ./manage.py "$@"
+    pixi run --frozen ./manage.py "$@"
 }
 
 stack_shell_script() {
@@ -502,7 +502,7 @@ stack_shell_script() {
   local suite_dir=$2
   local script_path=$3
   stack_compose "$repo_dir" "$suite_dir" exec -T mgwatch \
-    sh -lc "cat > /tmp/mgwatch-smoke.py && conda run --no-capture-output -n mgw ./manage.py shell < /tmp/mgwatch-smoke.py" \
+    sh -lc "cat > /tmp/mgwatch-smoke.py && pixi run --frozen ./manage.py shell < /tmp/mgwatch-smoke.py" \
     < "$script_path"
 }
 
@@ -650,17 +650,17 @@ run_full_suite() {
     stack_compose "$repo_dir" "$suite_dir" up -d mgwatch-mongodb mgwatch-redis
   run_logged "$label" "run migrations" \
     stack_compose "$repo_dir" "$suite_dir" run --rm --no-deps mgwatch \
-      "conda run --no-capture-output -n mgw ./manage.py migrate --noinput"
+      "pixi run --frozen ./manage.py migrate --noinput"
   run_logged "$label" "start full stack" \
     stack_compose "$repo_dir" "$suite_dir" up -d --force-recreate --remove-orphans
   run_logged "$label" "wait for web" \
     wait_for_http "http://localhost:8100/login/"
   run_logged "$label" "celery worker ping" \
     stack_compose "$repo_dir" "$suite_dir" exec -T mgwatch \
-      conda run --no-capture-output -n mgw celery -A mgw inspect ping --timeout=20
+      pixi run --frozen celery -A mgw inspect ping --timeout=20
   run_logged "$label" "celery active queues" \
     stack_compose "$repo_dir" "$suite_dir" exec -T mgwatch \
-      conda run --no-capture-output -n mgw celery -A mgw inspect active_queues --timeout=20
+      pixi run --frozen celery -A mgw inspect active_queues --timeout=20
 
   write_full_setup "$smoke_dir/full_setup.py" "$username" "$sequence_name"
   run_logged "$label" "create smoke fasta" \

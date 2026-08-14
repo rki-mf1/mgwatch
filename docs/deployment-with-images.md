@@ -30,7 +30,7 @@ Prefer digest pinning for reproducibility.
 4. Run migrations if needed:
 
    ```bash
-   docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py migrate"
+   docker compose -f compose.prod.yml run --rm mgwatch "pixi run --frozen ./manage.py migrate"
    ```
 
 5. Verify service logs:

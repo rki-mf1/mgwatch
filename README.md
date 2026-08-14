@@ -71,7 +71,7 @@ cd mgwatch-deploy
 # Edit .env and vars.env, replacing every CHANGE_ME value.
 
 docker compose -f compose.prod.yml up -d
-docker compose -f compose.prod.yml run --rm mgwatch "conda run --no-capture-output -n mgw ./manage.py migrate"
+docker compose -f compose.prod.yml run --rm mgwatch "pixi run --frozen ./manage.py migrate"
 ```
 
 For production, pin `DOCKER_MGWATCH_IMAGE`, `DOCKER_NGINX_IMAGE`, MongoDB, and

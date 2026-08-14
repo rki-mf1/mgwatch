@@ -1,10 +1,13 @@
 # syntax=docker/dockerfile:1
-FROM condaforge/miniforge3:26.3.2-3
+FROM ghcr.io/prefix-dev/pixi:0.70.2 AS pixi
+FROM debian:bookworm-slim
 ARG DEBIAN_FRONTEND=noninteractive
 ARG MGWATCH_UID=1000
 ARG MGWATCH_GID=1000
 
-RUN apt update --allow-releaseinfo-change && apt install -y procps wget gzip pigz bc cron && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+COPY --from=pixi /usr/local/bin/pixi /usr/local/bin/pixi
+
+RUN apt update --allow-releaseinfo-change && apt install -y ca-certificates procps wget gzip pigz bc cron && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 RUN if ! getent group "${MGWATCH_GID}" >/dev/null; then \
         groupadd --gid "${MGWATCH_GID}" mgwatch; \
     fi && \
@@ -16,17 +19,19 @@ RUN if ! getent group "${MGWATCH_GID}" >/dev/null; then \
     fi
 
 WORKDIR /code
-COPY environment.yml .
-RUN conda env create --quiet --name mgw --file environment.yml && conda clean --all --yes
-COPY manage.py README.md .coveragerc .
-COPY templates/ /code/templates
-COPY mgw/ /code/mgw
-COPY mgw_api/ /code/mgw_api
-RUN DEBUG=True SECRET_KEY=dummy conda run --no-capture-output -n mgw ./manage.py collectstatic --no-input
 RUN mkdir -p /code/static /data /data-db /logs /var/spool/cron/crontabs && \
-    chown -R "${MGWATCH_UID}:${MGWATCH_GID}" /code /data /data-db /logs /var/spool/cron/crontabs
+    chown "${MGWATCH_UID}:${MGWATCH_GID}" /code /code/static /data /data-db /logs /var/spool/cron/crontabs
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     XDG_CACHE_HOME=/tmp/.cache \
+    PIXI_NO_PROGRESS=true \
     HOME=/home/mgwatch
 USER ${MGWATCH_UID}:${MGWATCH_GID}
+
+COPY --chown=${MGWATCH_UID}:${MGWATCH_GID} pixi.toml pixi.lock* .
+RUN pixi install --locked
+COPY --chown=${MGWATCH_UID}:${MGWATCH_GID} manage.py README.md .coveragerc .
+COPY --chown=${MGWATCH_UID}:${MGWATCH_GID} templates/ /code/templates
+COPY --chown=${MGWATCH_UID}:${MGWATCH_GID} mgw/ /code/mgw
+COPY --chown=${MGWATCH_UID}:${MGWATCH_GID} mgw_api/ /code/mgw_api
+RUN DEBUG=True SECRET_KEY=dummy pixi run --locked ./manage.py collectstatic --no-input
