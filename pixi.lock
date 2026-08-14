@@ -1,6 +1,11 @@
 version: 7
 platforms:
 - name: linux-64
+  virtual-packages:
+  - __unix=0=0
+  - __linux=4.18
+  - __glibc=2.28
+  - __archspec=0=x86_64
 environments:
   default:
     channels:
@@ -141,7 +146,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/scipy-1.18.0-py312h54fa4ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/snappy-1.2.2-h03e3b7b_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/sourmash-minimal-4.9.4-h0b5653c_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/sourmash_plugin_branchwater-0.9.14-py312hb842422_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/sourmash_plugin_branchwater-0.9.15-py312hb842422_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tibs-0.5.7-py312h121d7ae_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_hd70dff1_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/unicodedata2-17.0.1-py312h4c3975b_0.conda
@@ -2498,17 +2503,17 @@ packages:
   run_exports: {}
   size: 3816494
   timestamp: 1781897338077
-- conda: https://conda.anaconda.org/conda-forge/linux-64/sourmash_plugin_branchwater-0.9.14-py312hb842422_1.conda
-  sha256: 99ac1152f0c05f4eaede045cd136cb33c4a91acc229e4fc58a8dbaeb1ac7c521
-  md5: fe654e27e3445421a7a76b362f13f1e1
+- conda: https://conda.anaconda.org/conda-forge/linux-64/sourmash_plugin_branchwater-0.9.15-py312hb842422_0.conda
+  sha256: d8251456b233904610bfd090d5bb259f725682dc9d4dd5bb20b71857640b1bbd
+  md5: 63e1377a1c1c4aa6123625f93b41d634
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=14
+  - liblzma-devel
   - libstdcxx >=14
   - python >=3.12,<3.13.0a0
   - python_abi 3.12.* *_cp312
   - sourmash-minimal >=4.9.4,<5
-  - xz
   constrains:
   - __glibc >=2.17
   license: AGPL-3.0-only
@@ -2516,8 +2521,8 @@ packages:
   purls:
   - pkg:pypi/sourmash-plugin-branchwater?source=hash-mapping
   run_exports: {}
-  size: 4241821
-  timestamp: 1758805614069
+  size: 4322811
+  timestamp: 1777230187122
 - conda: https://conda.anaconda.org/conda-forge/linux-64/tibs-0.5.7-py312h121d7ae_1.conda
   sha256: f5d16326bbefb8d84530e82b9b6ffab1664da34cb04850157a4ad7ce6522916e
   md5: 3b9be0404c77479b72c1702191620800
