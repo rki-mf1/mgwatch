@@ -183,7 +183,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/cycler-0.12.1-pyhcf101f3_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/deprecation-2.1.0-pyh9f0ad1d_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.8.0-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/django-5.1-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-5.2.15-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-debug-toolbar-4.4.6-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-environ-0.11.2-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/dnspython-2.6.1-pyhd8ed1ab_0.conda
@@ -3030,11 +3030,11 @@ packages:
   run_exports: {}
   size: 40854
   timestamp: 1675116355989
-- conda: https://conda.anaconda.org/conda-forge/noarch/django-5.1-pyhd8ed1ab_0.conda
-  sha256: e6c23913c9c7c194338b19a20b14fd8bbb45b57aa2bdfecf497d1b9bca1c17d2
-  md5: 6b249ed894a6b9094e4a0073e315c423
+- conda: https://conda.anaconda.org/conda-forge/noarch/django-5.2.15-pyhd8ed1ab_0.conda
+  sha256: 1c372fea238c18e15c796a22fddb7733bb841614fb54bb5a8001e8ba989c911c
+  md5: 64ab235cf3a70e5e6379c3a33de6f3f5
   depends:
-  - asgiref >=3.8.1,<4
+  - asgiref >=3.8.1
   - python >=3.10
   - sqlparse >=0.3.1
   license: BSD-3-Clause
@@ -3042,8 +3042,8 @@ packages:
   purls:
   - pkg:pypi/django?source=hash-mapping
   run_exports: {}
-  size: 3821307
-  timestamp: 1723098592149
+  size: 3876866
+  timestamp: 1780757220228
 - conda: https://conda.anaconda.org/conda-forge/noarch/django-debug-toolbar-4.4.6-pyhd8ed1ab_1.conda
   sha256: 5be76288e2bb5f69e3b5a0e4b73d69ef7505a4af64fa49653df895ba9461642b
   md5: 4d6557be9291c7e5f392ab32c237a5a9
