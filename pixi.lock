@@ -220,7 +220,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/hpack-4.2.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/httpcore-1.0.9-pyh29332c3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/httpx-0.28.1-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/httpx-retries-0.4.6-pyhcf101f3_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/httpx-retries-0.6.0-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/hyperframe-6.1.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/idna-3.18-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jmespath-1.0.1-pyhd8ed1ab_1.conda
@@ -3667,11 +3667,11 @@ packages:
   run_exports: {}
   size: 63082
   timestamp: 1733663449209
-- conda: https://conda.anaconda.org/conda-forge/noarch/httpx-retries-0.4.6-pyhcf101f3_0.conda
-  sha256: 4036650df8c1c5b9a15682986b6b4a049bf88e7b9a40dbba71ceb3578a95318b
-  md5: b8c5a2b1bbc9a2103c5ad348f1edc30f
+- conda: https://conda.anaconda.org/conda-forge/noarch/httpx-retries-0.6.0-pyhc364b38_0.conda
+  sha256: 82e6bd564e79c7222684ba6f80ceb315daa5924b0da08317f7d18c5ef80306cf
+  md5: 3bd183d4d46caf7635173871408cdf87
   depends:
-  - python >=3.9
+  - python >=3.10
   - httpx >=0.20.0
   - python
   license: MIT
@@ -3679,8 +3679,8 @@ packages:
   purls:
   - pkg:pypi/httpx-retries?source=hash-mapping
   run_exports: {}
-  size: 16940
-  timestamp: 1771364561041
+  size: 19014
+  timestamp: 1783321674626
 - conda: https://conda.anaconda.org/conda-forge/noarch/hyperframe-6.1.0-pyhd8ed1ab_0.conda
   sha256: 77af6f5fe8b62ca07d09ac60127a30d9069fdc3c68d6b256754d0ffb1f7779f8
   md5: 8e6923fc12f1fe8f8c4e5c9f343256ac
