@@ -40,5 +40,15 @@ django-auth-ldap = ">=5,<6"
 django-axes = { version = ">=8.3,<9", extras = ["ipware"] }
 django-redis = ">=7,<8"
 
+[feature.security.dependencies]
+trivy = ">=0.74,<1"
+
+[feature.security.tasks]
+trivy-fs = "trivy fs --scanners vuln --severity HIGH,CRITICAL ."
+trivy-image = "trivy image --scanners vuln --severity HIGH,CRITICAL mgwatch:local"
+
+[environments]
+security = { features = ["security"], no-default-feature = true }
+
 [tasks]
 manage = "./manage.py"
