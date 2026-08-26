@@ -158,6 +158,11 @@ def drop_mongo_collection(collection):
 
 def import_parquet(parquet_dir, indexed_only=False):
     drop_mongo_collection("sradb_temp")
+    mongo = pm.MongoClient(settings.MONGO_URI)
+    db = mongo["sradb"]
+    db.create_collection("sradb_temp")
+    mongo.close()
+
     column_list, jattr_dtypes, allowed_librarysources = get_filter_data()
     indexed_ids = None
     if indexed_only:

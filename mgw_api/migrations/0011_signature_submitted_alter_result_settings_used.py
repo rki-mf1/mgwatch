@@ -3,6 +3,66 @@
 from django.db import migrations, models
 
 
+def convert_result_settings_used_to_json(apps, schema_editor):
+    table_name = "mgw_api_result"
+    old_column = "settings_used_id"
+    new_column = "settings_used"
+    connection = schema_editor.connection
+    quote_name = schema_editor.quote_name
+
+    with connection.cursor() as cursor:
+        if table_name not in connection.introspection.table_names(cursor):
+            return
+
+        columns = {
+            column.name
+            for column in connection.introspection.get_table_description(
+                cursor, table_name
+            )
+        }
+        if old_column in columns:
+            constraints = connection.introspection.get_constraints(cursor, table_name)
+            for name, constraint in constraints.items():
+                if old_column not in constraint.get("columns", []):
+                    continue
+                if constraint.get("foreign_key"):
+                    schema_editor.execute(
+                        f"ALTER TABLE {quote_name(table_name)} "
+                        f"DROP CONSTRAINT {quote_name(name)}"
+                    )
+                elif constraint.get("index"):
+                    schema_editor.execute(f"DROP INDEX IF EXISTS {quote_name(name)}")
+
+            if new_column not in columns:
+                schema_editor.execute(
+                    f"ALTER TABLE {quote_name(table_name)} "
+                    f"RENAME COLUMN {quote_name(old_column)} TO {quote_name(new_column)}"
+                )
+                columns.remove(old_column)
+                columns.add(new_column)
+
+        if new_column not in columns:
+            return
+
+        cursor.execute(
+            """
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = %s
+              AND column_name = %s
+            """,
+            [table_name, new_column],
+        )
+        row = cursor.fetchone()
+        if row and row[0] != "jsonb":
+            schema_editor.execute(
+                f"ALTER TABLE {quote_name(table_name)} "
+                f"ALTER COLUMN {quote_name(new_column)} TYPE jsonb "
+                f"USING to_jsonb({quote_name(new_column)})"
+            )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -15,9 +75,19 @@ class Migration(migrations.Migration):
             name='submitted',
             field=models.BooleanField(default=False),
         ),
-        migrations.AlterField(
-            model_name='result',
-            name='settings_used',
-            field=models.JSONField(),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(
+                    convert_result_settings_used_to_json,
+                    reverse_code=migrations.RunPython.noop,
+                ),
+            ],
+            state_operations=[
+                migrations.AlterField(
+                    model_name='result',
+                    name='settings_used',
+                    field=models.JSONField(),
+                ),
+            ],
         ),
     ]

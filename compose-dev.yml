@@ -10,7 +10,7 @@ services:
       - LOG_LEVEL=DEBUG
     ports: !override
       - "8100:8100"
-    command: ["pixi run --frozen ./manage.py runserver 0.0.0.0:8100"]
+    command: ["pixi run --frozen ./manage.py migrate --noinput && pixi run --frozen ./manage.py runserver 0.0.0.0:8100"]
     #    build: .
     #    develop:
     #      watch:
