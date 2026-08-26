@@ -2,7 +2,7 @@
 name = "mgwatch"
 channels = ["conda-forge"]
 platforms = ["linux-64"]
-requires-pixi = ">=0.76.2,<0.77"
+requires-pixi = ">=0.76.2"
 
 [dependencies]
 python = ">=3.13,<3.14"
