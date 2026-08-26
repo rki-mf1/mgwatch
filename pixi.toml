@@ -31,7 +31,7 @@ aiohttp = ">=3.11,<4"
 rich = ">=14,<15"
 whitenoise = ">=6.12,<7"
 celery = ">=5.5,<6"
-redis-py = ">=6.4,<7"
+redis-py = ">=8.1,<9"
 coverage = ">=7.6,<8"
 
 [pypi-dependencies]
