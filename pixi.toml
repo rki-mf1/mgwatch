@@ -44,8 +44,8 @@ django-redis = ">=7,<8"
 trivy = ">=0.74,<1"
 
 [feature.security.tasks]
-trivy-fs = "trivy fs --scanners vuln --severity HIGH,CRITICAL ."
-trivy-image = "trivy image --scanners vuln --severity HIGH,CRITICAL mgwatch:local"
+trivy-fs = "trivy fs --exit-code 1 --scanners vuln --severity HIGH,CRITICAL ."
+trivy-image = "trivy image --exit-code 1 --scanners vuln --severity HIGH,CRITICAL mgwatch:local"
 
 [environments]
 security = { features = ["security"], no-default-feature = true }
