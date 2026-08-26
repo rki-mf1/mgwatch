@@ -10,5 +10,5 @@ Start the stack with:
 docker compose -f compose.prod.yml up -d
 ```
 
-Only `mgwatch-proxy` publishes a host port. MongoDB and Redis are internal
-Compose services and should not be exposed in production.
+Only `mgwatch-proxy` publishes a host port. PostgreSQL, MongoDB, and Redis are
+internal Compose services and should not be exposed in production.

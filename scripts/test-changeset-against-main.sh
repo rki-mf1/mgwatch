@@ -167,28 +167,28 @@ compose_env_args() {
   printf '%s\0' \
     "COMPOSE_PROJECT_NAME=$project" \
     "EXTERNAL_DATA_DIR=$suite_dir/data" \
+    "POSTGRES_DATA_DIR=$suite_dir/postgres" \
     "MONGODB_DATA_DIR=$suite_dir/mongo" \
     "MONGODB_LOG_DIR=$suite_dir/mongo-logs" \
-    "SQLITE_DIR=$suite_dir/db" \
     "NGINX_DATA_DIR=$suite_dir/nginx" \
     "LOG_DIR=$suite_dir/django-logs"
 }
 
-compose_run_no_deps() {
+compose_run_quick() {
   local repo_dir=$1
   local label=$2
   local command=$3
   local suite_dir="$RUN_ROOT/$label"
   local project="mgwatch-${label//[^a-zA-Z0-9]/-}"
-  mkdir -p "$suite_dir"/{data/backend-data,db,django-logs,smoke}
-  chmod -R ugo+rwX "$suite_dir"/{data,db,django-logs}
+  mkdir -p "$suite_dir"/{data/backend-data,postgres,django-logs,smoke}
+  chmod -R ugo+rwX "$suite_dir"/{data,postgres,django-logs}
 
   mapfile -d '' env_args < <(compose_env_args "$suite_dir" "$project")
   (
     export "${env_args[@]}"
-    compose_cmd "$repo_dir" run --rm --no-deps \
+    compose_cmd "$repo_dir" up -d mgwatch-postgres >/dev/null
+    compose_cmd "$repo_dir" run --rm \
       -e DATA_DIR=/data \
-      -e DB_DIR=/data-db \
       -e LOG_DIR=/logs \
       -e DEBUG=True \
       -e LOG_LEVEL=DEBUG \
@@ -442,16 +442,16 @@ run_quick_suite() {
   fi
 
   run_logged "$label" "Django system check" \
-    compose_run_no_deps "$repo_dir" "$label" \
+    compose_run_quick "$repo_dir" "$label" \
       "pixi run --frozen ./manage.py check"
   run_logged "$label" "Django migration check" \
-    compose_run_no_deps "$repo_dir" "$label" \
+    compose_run_quick "$repo_dir" "$label" \
       "pixi run --frozen ./manage.py makemigrations --check --dry-run"
   if [[ "$SKIP_DJANGO_TESTS" == "1" ]]; then
     log "[$label] SKIP: Django unit tests"
   else
     run_logged "$label" "Django unit tests" \
-      compose_run_no_deps "$repo_dir" "$label" \
+      compose_run_quick "$repo_dir" "$label" \
         "pixi run --frozen ./manage.py test mgw_api --verbosity 2"
   fi
 
@@ -463,11 +463,11 @@ run_quick_suite() {
   fi
 
   run_logged "$label" "migrate quick smoke database" \
-    compose_run_no_deps "$repo_dir" "$label" \
+    compose_run_quick "$repo_dir" "$label" \
       "pixi run --frozen ./manage.py migrate --noinput"
   write_quick_smoke "$suite_dir/smoke/quick_smoke.py"
   run_logged "$label" "in-process task and UI smoke" \
-    compose_run_no_deps "$repo_dir" "$label" \
+    compose_run_quick "$repo_dir" "$label" \
       "pixi run --frozen ./manage.py shell < /smoke/quick_smoke.py"
   run_logged "$label" "cleanup quick compose resources" \
     compose_down_quick "$repo_dir" "$label"
@@ -624,9 +624,9 @@ run_full_suite() {
   local smoke_dir="$suite_dir/smoke"
   local username="full_smoke_${TIMESTAMP//[^0-9]/}"
   local sequence_name="full-smoke-${TIMESTAMP//[^0-9]/}"
-  mkdir -p "$suite_dir"/{data/backend-data,db,django-logs,mongo,mongo-logs,nginx} "$smoke_dir"
+  mkdir -p "$suite_dir"/{data/backend-data,postgres,django-logs,mongo,mongo-logs,nginx} "$smoke_dir"
 
-  if docker ps -a --format '{{.Names}}' | grep -Eq '^(mgwatch|mgwatch-mongodb|mgwatch-redis|mgwatch-celery-interactive|mgwatch-celery-maintenance|mgwatch-celery-beat)$'; then
+  if docker ps -a --format '{{.Names}}' | grep -Eq '^(mgwatch|mgwatch-postgres|mgwatch-mongodb|mgwatch-redis|mgwatch-celery-interactive|mgwatch-celery-maintenance|mgwatch-celery-beat)$'; then
     if [[ "$ALLOW_STACK_RECREATE" != "1" ]]; then
       die "--full needs to recreate fixed-name mgwatch containers. Stop the dev stack or rerun with ALLOW_STACK_RECREATE=1."
     fi
@@ -647,7 +647,7 @@ run_full_suite() {
   run_logged "$label" "stop prior smoke stack" \
     stack_compose "$repo_dir" "$suite_dir" down --remove-orphans
   run_logged "$label" "start database services" \
-    stack_compose "$repo_dir" "$suite_dir" up -d mgwatch-mongodb mgwatch-redis
+    stack_compose "$repo_dir" "$suite_dir" up -d mgwatch-postgres mgwatch-mongodb mgwatch-redis
   run_logged "$label" "run migrations" \
     stack_compose "$repo_dir" "$suite_dir" run --rm --no-deps mgwatch \
       "pixi run --frozen ./manage.py migrate --noinput"

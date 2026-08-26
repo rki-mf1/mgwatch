@@ -74,13 +74,14 @@ docker compose -f compose.prod.yml up -d
 docker compose -f compose.prod.yml run --rm mgwatch "pixi run --frozen ./manage.py migrate"
 ```
 
-For production, pin `DOCKER_MGWATCH_IMAGE`, `DOCKER_NGINX_IMAGE`, MongoDB, and
-Redis images by immutable digest. Keep the persistent data, SQLite, MongoDB,
+For production, pin `DOCKER_MGWATCH_IMAGE`, `DOCKER_NGINX_IMAGE`, PostgreSQL,
+MongoDB, and Redis images by immutable digest. Keep the persistent data,
+PostgreSQL, MongoDB,
 logs, and static-file paths on durable storage and make sure they are writable by
 the configured `MGWATCH_UID:MGWATCH_GID`.
 
-Only the reverse proxy service should publish a host port. MongoDB and Redis are
-internal Compose services and should not be exposed directly.
+Only the reverse proxy service should publish a host port. PostgreSQL, MongoDB,
+and Redis are internal Compose services and should not be exposed directly.
 
 See [Deploying MetagenomeWatch from published Docker images](docs/deployment-with-images.md)
 for the full image-based deployment workflow.
@@ -90,7 +91,7 @@ for the full image-based deployment workflow.
 Operators should plan for the following before running a shared instance:
 
 - Configure email if users should receive watch notifications.
-- Back up SQLite, MongoDB, uploaded media, signatures, indexes, manifests, logs,
+- Back up PostgreSQL, MongoDB, uploaded media, signatures, indexes, manifests, logs,
   and deployment configuration.
 - Review retention settings before enabling automatic cleanup.
 - Use the release checklist before image upgrades, migrations, or index rebuilds.

@@ -21,7 +21,6 @@ services:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      - ${SQLITE_DIR}:/data-db
       - ${LOG_DIR}:/logs
       - ${NGINX_DATA_DIR}/static:/code/static
     environment:
@@ -38,6 +37,8 @@ services:
       retries: 3
       start_period: 30s
     depends_on:
+      mgwatch-postgres:
+        condition: service_healthy
       mgwatch-mongodb:
         condition: service_healthy
       mgwatch-redis:
@@ -52,7 +53,6 @@ services:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      - ${SQLITE_DIR}:/data-db
       - ${LOG_DIR}:/logs
     environment:
       - TZ=${TZ}
@@ -80,7 +80,6 @@ services:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      - ${SQLITE_DIR}:/data-db
       - ${LOG_DIR}:/logs
     environment:
       - TZ=${TZ}
@@ -108,7 +107,6 @@ services:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      - ${SQLITE_DIR}:/data-db
       - ${LOG_DIR}:/logs
     environment:
       - TZ=${TZ}
@@ -126,6 +124,23 @@ services:
     depends_on:
       mgwatch:
         condition: service_healthy
+  mgwatch-postgres:
+    !!merge <<: *container-runtime
+    image: ${DOCKER_POSTGRES_IMAGE:?set DOCKER_POSTGRES_IMAGE in .env}
+    container_name: mgwatch-postgres
+    env_file:
+      - ./vars.env
+    environment:
+      - TZ=${TZ}
+    volumes:
+      - ${POSTGRES_DATA_DIR}:/var/lib/postgresql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --username \"$${POSTGRES_USER}\" --dbname \"$${POSTGRES_DB}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
   mgwatch-mongodb:
     !!merge <<: *container-runtime
     image: ${DOCKER_MONGODB_IMAGE:?set DOCKER_MONGODB_IMAGE in .env}

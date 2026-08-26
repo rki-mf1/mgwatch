@@ -36,8 +36,12 @@ env = environ.Env(
     CSRF_TRUSTED_ORIGINS=(str, ""),
     TIME_ZONE=(str, "Europe/Berlin"),
     DATA_DIR=(Path, BASE_DIR / ".." / "mgw-data"),
-    DB_DIR=(Path, "/data-db"),
     MONGO_URI=(str, None),
+    POSTGRES_DB=(str, "mgwatch"),
+    POSTGRES_USER=(str, "mgwatch"),
+    POSTGRES_PASSWORD=(str, "example1"),
+    POSTGRES_HOST=(str, "mgwatch-postgres"),
+    POSTGRES_PORT=(int, 5432),
     EMAIL_HOST=(str, None),
     EMAIL_PORT=(int, 1025),
     EMAIL_USE_TLS=(bool, True),
@@ -123,6 +127,7 @@ UNSAFE_SECRET_VALUES = {
     "test-secret",
     "CHANGE_ME_LONG_RANDOM_DJANGO_SECRET_KEY",
     "CHANGE_ME_LONG_RANDOM_MONGODB_PASSWORD",
+    "CHANGE_ME_LONG_RANDOM_POSTGRES_PASSWORD",
     "django-insecure-em&y0o^!@ha-kujz4qch11-a*qy8t3peg8@%+=(_+-bnwzr2%z",
 }
 
@@ -145,7 +150,7 @@ def _mongo_password_from_uri(uri):
         return None
 
 
-def unsafe_production_secret_reasons(secret_key, mongo_uri):
+def unsafe_production_secret_reasons(secret_key, mongo_uri, postgres_password):
     reasons = []
     if _is_unsafe_secret(secret_key):
         reasons.append("SECRET_KEY is unset or uses a known placeholder/default value")
@@ -154,6 +159,10 @@ def unsafe_production_secret_reasons(secret_key, mongo_uri):
     if _is_unsafe_secret(mongo_password):
         reasons.append(
             "MONGO_URI is unset or uses a known placeholder/default password"
+        )
+    if _is_unsafe_secret(postgres_password):
+        reasons.append(
+            "POSTGRES_PASSWORD is unset or uses a known placeholder/default password"
         )
     return reasons
 
@@ -176,6 +185,12 @@ SECRET_KEY = env("SECRET_KEY")
 # MongoDB used for SRA metadata
 MONGO_URI = env("MONGO_URI")
 
+POSTGRES_DB = env("POSTGRES_DB")
+POSTGRES_USER = env("POSTGRES_USER")
+POSTGRES_PASSWORD = env("POSTGRES_PASSWORD")
+POSTGRES_HOST = env("POSTGRES_HOST")
+POSTGRES_PORT = env("POSTGRES_PORT")
+
 # Wort updates
 INDEX_FROM_SCRATCH = env("INDEX_FROM_SCRATCH")
 # number of signatures in each index
@@ -197,7 +212,9 @@ MAX_DOWNLOADS = env("MAX_DOWNLOADS")
 DEBUG = env("DEBUG")
 
 if not DEBUG:
-    unsafe_secret_reasons = unsafe_production_secret_reasons(SECRET_KEY, MONGO_URI)
+    unsafe_secret_reasons = unsafe_production_secret_reasons(
+        SECRET_KEY, MONGO_URI, POSTGRES_PASSWORD
+    )
     if unsafe_secret_reasons:
         raise ImproperlyConfigured(
             "Unsafe production secrets are configured: "
@@ -314,13 +331,15 @@ DATA_DIR = env("DATA_DIR")
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
-DB_DIR = Path(env("DB_DIR"))
-DB_DIR.mkdir(parents=True, exist_ok=True)
-
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": DB_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": POSTGRES_DB,
+        "USER": POSTGRES_USER,
+        "PASSWORD": POSTGRES_PASSWORD,
+        "HOST": POSTGRES_HOST,
+        "PORT": POSTGRES_PORT,
+        "CONN_MAX_AGE": 60,
     }
 }
 

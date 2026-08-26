@@ -11,6 +11,7 @@ paths from .env by default. Override these inputs with:
   COMPOSE_FILE=compose.prod.yml
   MGWATCH_ENV_FILE=.env
   MGWATCH_VARS_FILE=vars.env
+  MGWATCH_SKIP_POSTGRES_BACKUP=True
   MGWATCH_SKIP_MONGO_BACKUP=True
 
 Run it from the deployment directory that contains the compose and env files.
@@ -29,7 +30,7 @@ vars_file=${MGWATCH_VARS_FILE:-vars.env}
 timestamp=$(date -u +"%Y%m%dT%H%M%SZ")
 backup_dir="${backup_parent%/}/mgwatch-${timestamp}"
 
-mkdir -p "$backup_dir"/{config,sqlite,archives}
+mkdir -p "$backup_dir"/{config,archives}
 
 if [[ -f "$env_file" ]]; then
     set -a
@@ -39,7 +40,6 @@ if [[ -f "$env_file" ]]; then
 fi
 
 : "${EXTERNAL_DATA_DIR:=./work/data}"
-: "${SQLITE_DIR:=./work/db}"
 : "${NGINX_DATA_DIR:=./work/nginx}"
 : "${LOG_DIR:=./work/django-logs}"
 
@@ -82,23 +82,28 @@ archive_dir_if_exists() {
 
 python_bin=$(command -v python3 || command -v python)
 
-sqlite_db="${SQLITE_DIR%/}/db.sqlite3"
-if [[ -f "$sqlite_db" ]]; then
-    "$python_bin" - "$sqlite_db" "$backup_dir/sqlite/db.sqlite3" <<'PY'
-import sqlite3
+read_env_value() {
+    local file=$1
+    local key=$2
+    [[ -f "$file" ]] || return 0
+    "$python_bin" - "$file" "$key" <<'PY'
+import shlex
 import sys
 
-source_path, backup_path = sys.argv[1:3]
-source = sqlite3.connect(source_path)
-backup = sqlite3.connect(backup_path)
-with backup:
-    source.backup(backup)
-source.close()
-backup.close()
+file_path, requested_key = sys.argv[1:3]
+for line in open(file_path, encoding="utf-8"):
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#") or "=" not in stripped:
+        continue
+    key, value = stripped.split("=", 1)
+    if key.strip() != requested_key:
+        continue
+    parts = shlex.split(value, comments=False)
+    if parts:
+        print(parts[0])
+    break
 PY
-else
-    printf 'WARN: SQLite database not found at %s\n' "$sqlite_db" >&2
-fi
+}
 
 copy_if_exists "$env_file" "$backup_dir/config/"
 copy_if_exists "$vars_file" "$backup_dir/config/"
@@ -109,6 +114,33 @@ copy_if_exists example-config/nginx-templates "$backup_dir/config/"
 archive_dir_if_exists "${EXTERNAL_DATA_DIR%/}/backend-data" "$backup_dir/archives/backend-data.tar.gz"
 archive_dir_if_exists "$LOG_DIR" "$backup_dir/archives/logs.tar.gz"
 archive_dir_if_exists "$NGINX_DATA_DIR" "$backup_dir/archives/nginx-data.tar.gz"
+
+postgres_db=${POSTGRES_DB:-}
+postgres_user=${POSTGRES_USER:-}
+if [[ -z "$postgres_db" ]]; then
+    postgres_db=$(read_env_value "$vars_file" POSTGRES_DB)
+fi
+if [[ -z "$postgres_user" ]]; then
+    postgres_user=$(read_env_value "$vars_file" POSTGRES_USER)
+fi
+postgres_db=${postgres_db:-mgwatch}
+postgres_user=${postgres_user:-mgwatch}
+
+if is_truthy "${MGWATCH_SKIP_POSTGRES_BACKUP:-}"; then
+    printf 'WARN: MGWATCH_SKIP_POSTGRES_BACKUP is set; skipped PostgreSQL dump\n' >&2
+elif docker_compose ps --status running --services | grep -qx mgwatch-postgres; then
+    docker_compose exec -T mgwatch-postgres pg_dump \
+        --format custom \
+        --clean \
+        --if-exists \
+        --no-owner \
+        --no-privileges \
+        --username "$postgres_user" \
+        --dbname "$postgres_db" \
+        > "$backup_dir/postgres.dump"
+else
+    printf 'WARN: mgwatch-postgres is not running; skipped PostgreSQL dump\n' >&2
+fi
 
 mongo_password=${MGWATCH_MONGO_ROOT_PASSWORD:-}
 if [[ -z "$mongo_password" && -f "$vars_file" ]]; then
@@ -151,7 +183,8 @@ fi
     printf 'compose_file=%s\n' "$compose_file"
     printf 'env_file=%s\n' "$env_file"
     printf 'vars_file=%s\n' "$vars_file"
-    printf 'sqlite_source=%s\n' "$sqlite_db"
+    printf 'postgres_service=mgwatch-postgres\n'
+    printf 'postgres_database=%s\n' "$postgres_db"
     printf 'backend_data_source=%s\n' "${EXTERNAL_DATA_DIR%/}/backend-data"
     printf 'log_source=%s\n' "$LOG_DIR"
     printf 'nginx_data_source=%s\n' "$NGINX_DATA_DIR"

@@ -12,6 +12,7 @@ missing. Override these inputs with:
   COMPOSE_FILE=compose.prod.yml
   MGWATCH_ENV_FILE=.env
   MGWATCH_VARS_FILE=vars.env
+  MGWATCH_SKIP_POSTGRES_RESTORE=True
   MGWATCH_SKIP_MONGO_RESTORE=True
 
 Run it from the deployment directory that contains the compose and env files.
@@ -79,7 +80,6 @@ if [[ -n "${source_env_file:-}" && -f "$source_env_file" ]]; then
 fi
 
 : "${EXTERNAL_DATA_DIR:=./work/data}"
-: "${SQLITE_DIR:=./work/db}"
 : "${NGINX_DATA_DIR:=./work/nginx}"
 : "${LOG_DIR:=./work/django-logs}"
 
@@ -140,20 +140,69 @@ restore_archive() {
     rm -rf "$extract_dir"
 }
 
-restore_sqlite() {
-    local source_db="$backup_dir/sqlite/db.sqlite3"
-    local target_db="${SQLITE_DIR%/}/db.sqlite3"
-    if [[ ! -f "$source_db" ]]; then
-        printf 'WARN: SQLite backup not found at %s; skipped SQLite restore\n' "$source_db" >&2
+python_bin=$(command -v python3 || command -v python)
+
+read_env_value() {
+    local file=$1
+    local key=$2
+    [[ -f "$file" ]] || return 0
+    "$python_bin" - "$file" "$key" <<'PY'
+import shlex
+import sys
+
+file_path, requested_key = sys.argv[1:3]
+for line in open(file_path, encoding="utf-8"):
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#") or "=" not in stripped:
+        continue
+    key, value = stripped.split("=", 1)
+    if key.strip() != requested_key:
+        continue
+    parts = shlex.split(value, comments=False)
+    if parts:
+        print(parts[0])
+    break
+PY
+}
+
+restore_postgres() {
+    local source_dump="$backup_dir/postgres.dump"
+    local postgres_db postgres_user
+    if [[ ! -f "$source_dump" ]]; then
+        printf 'WARN: PostgreSQL backup not found at %s; skipped PostgreSQL restore\n' "$source_dump" >&2
+        return 0
+    fi
+    if is_truthy "${MGWATCH_SKIP_POSTGRES_RESTORE:-}"; then
+        printf 'WARN: MGWATCH_SKIP_POSTGRES_RESTORE is set; skipped PostgreSQL restore\n' >&2
+        return 0
+    fi
+    if ! docker_compose ps --status running --services | grep -qx mgwatch-postgres; then
+        printf 'WARN: mgwatch-postgres is not running; skipped PostgreSQL restore\n' >&2
         return 0
     fi
 
-    mkdir -p "$(dirname "$target_db")"
-    cp -a "$source_db" "$target_db.tmp"
-    mv "$target_db.tmp" "$target_db"
+    postgres_db=${POSTGRES_DB:-}
+    postgres_user=${POSTGRES_USER:-}
+    if [[ -z "$postgres_db" ]]; then
+        postgres_db=$(read_env_value "$vars_file" POSTGRES_DB)
+    fi
+    if [[ -z "$postgres_user" ]]; then
+        postgres_user=$(read_env_value "$vars_file" POSTGRES_USER)
+    fi
+    postgres_db=${postgres_db:-mgwatch}
+    postgres_user=${postgres_user:-mgwatch}
+
+    docker_compose exec -T mgwatch-postgres pg_restore \
+        --clean \
+        --if-exists \
+        --no-owner \
+        --no-privileges \
+        --username "$postgres_user" \
+        --dbname "$postgres_db" \
+        < "$source_dump"
 }
 
-restore_sqlite
+restore_postgres
 restore_archive "$backup_dir/archives/backend-data.tar.gz" "${EXTERNAL_DATA_DIR%/}/backend-data"
 restore_archive "$backup_dir/archives/logs.tar.gz" "$LOG_DIR"
 restore_archive "$backup_dir/archives/nginx-data.tar.gz" "$NGINX_DATA_DIR"
@@ -169,7 +218,6 @@ fi
 
 mongo_password=${MGWATCH_MONGO_ROOT_PASSWORD:-}
 if [[ -z "$mongo_password" && -f "$vars_file" ]]; then
-    python_bin=$(command -v python3 || command -v python)
     mongo_password=$("$python_bin" - "$vars_file" <<'PY'
 import shlex
 import sys

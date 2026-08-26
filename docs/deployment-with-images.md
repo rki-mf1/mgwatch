@@ -41,7 +41,7 @@ Prefer digest pinning for reproducibility.
 
 ## Operational notes
 
-- Keep persistent paths (`EXTERNAL_DATA_DIR`, `SQLITE_DIR`, `MONGODB_DATA_DIR`, `LOG_DIR`) on durable storage.
+- Keep persistent paths (`EXTERNAL_DATA_DIR`, `POSTGRES_DATA_DIR`, `MONGODB_DATA_DIR`, `LOG_DIR`) on durable storage.
 - Use `vars.env` to manage Django secrets and environment-specific behavior.
 - Keep cron and backend services on the same image tag/digest.
 
