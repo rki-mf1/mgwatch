@@ -262,8 +262,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/08/bd/ccd7416fdb30f104ddf6cfd8ee9f699441c7d9880a26f9b3089438adee05/python_ipware-3.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/11/33/bf539925b102d68200da5b1d3eacb8aa5d5d9a065972e8b8724d0d53bb0d/django_ipware-7.0.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/f6/777a5df7d5698eeb23c7c496cc268c0181f0489dbc5b5f2b235b30e5d8dd/django_axes-8.3.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/7e/9f/09cdb9a1eebe8533b02a7694ca787acfc1e4d93b5b6175ff99366d4e6d64/django_redis-7.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a9/91/38ba24b9d76925ce166b2eebe1b4ea460063b8ba8cf91d39d97ee3bad517/django_auth_ldap-5.3.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/b7/f1/63caad7c9222c26a62082f4f777de26389233b7574629996098bf6d25a4d/django_redis-5.4.0-py3-none-any.whl
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   build_number: 20
@@ -4205,6 +4205,19 @@ packages:
   - asgiref>=3.6.0
   - django-ipware>=3 ; extra == 'ipware'
   requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/7e/9f/09cdb9a1eebe8533b02a7694ca787acfc1e4d93b5b6175ff99366d4e6d64/django_redis-7.0.0-py3-none-any.whl
+  name: django-redis
+  version: 7.0.0
+  sha256: 4b23aa6e0cd0937bb1242e9a463809e6004de3ca2150f34e986306bb6220d688
+  requires_dist:
+  - django>=5.2,<7.0
+  - redis>=4.0.2
+  - typing-extensions>=4.12 ; python_full_version < '3.13'
+  - redis[hiredis]>=4.0.2 ; extra == 'hiredis'
+  - lz4>=0.15 ; extra == 'lz4'
+  - msgpack>=0.6.0 ; extra == 'msgpack'
+  - pyzstd>=0.15 ; extra == 'pyzstd'
+  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/a9/91/38ba24b9d76925ce166b2eebe1b4ea460063b8ba8cf91d39d97ee3bad517/django_auth_ldap-5.3.0-py3-none-any.whl
   name: django-auth-ldap
   version: 5.3.0
@@ -4213,12 +4226,3 @@ packages:
   - django>=4.2
   - python-ldap>=3.1
   requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/b7/f1/63caad7c9222c26a62082f4f777de26389233b7574629996098bf6d25a4d/django_redis-5.4.0-py3-none-any.whl
-  name: django-redis
-  version: 5.4.0
-  sha256: ebc88df7da810732e2af9987f7f426c96204bf89319df4c6da6ca9a2942edd5b
-  requires_dist:
-  - django>=3.2
-  - redis>=3,!=4.0.0,!=4.0.1
-  - redis[hiredis]>=3,!=4.0.0,!=4.0.1 ; extra == 'hiredis'
-  requires_python: '>=3.6'
