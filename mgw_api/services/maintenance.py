@@ -15,6 +15,9 @@ import aiofiles
 import aiohttp
 import polars as pl
 import pymongo as pm
+from aiobotocore.session import get_session
+from botocore import UNSIGNED
+from botocore.config import Config
 from django.conf import settings
 from django.core.mail import send_mail
 from django.urls import reverse
@@ -26,6 +29,10 @@ from mgw_api.models import Signature
 
 from .processes import run_command
 from .searches import run_search
+
+SRA_METADATA_BUCKET = "sra-pub-metadata-us-east-1"
+SRA_METADATA_PREFIX = "sra/metadata/"
+SRA_METADATA_MAX_DOWNLOADS = 8
 
 
 def run_metadata(
@@ -41,16 +48,12 @@ def run_metadata(
         drop_mongo_collection("sradb_temp")
 
     if not no_download:
-        run_command(
-            [
-                "aws",
-                "s3",
-                "sync",
-                "s3://sra-pub-metadata-us-east-1/sra/metadata/",
-                str(metadata_dir),
-                "--no-sign-request",
-                "--delete",
-            ]
+        asyncio.run(
+            sync_public_s3_prefix(
+                SRA_METADATA_BUCKET,
+                SRA_METADATA_PREFIX,
+                metadata_dir,
+            )
         )
 
     if not no_process:
@@ -59,6 +62,73 @@ def run_metadata(
     init_flag = settings.DATA_DIR / "SRA" / "metadata" / "initial_setup.txt"
     init_flag.touch()
     return {"metadata_dir": str(metadata_dir)}
+
+
+async def sync_public_s3_prefix(
+    bucket,
+    prefix,
+    destination,
+    *,
+    max_simultaneous=SRA_METADATA_MAX_DOWNLOADS,
+):
+    destination = Path(destination)
+    destination.mkdir(parents=True, exist_ok=True)
+
+    session = get_session()
+    async with session.create_client(
+        "s3",
+        config=Config(signature_version=UNSIGNED),
+    ) as s3:
+        remote_objects = await list_public_s3_objects(s3, bucket, prefix)
+        pending_downloads = []
+        for key, size in remote_objects.items():
+            relative_path = Path(key).relative_to(prefix)
+            local_path = destination / relative_path
+            if local_path.exists() and local_path.stat().st_size == size:
+                continue
+            pending_downloads.append((key, local_path))
+
+        semaphore = asyncio.Semaphore(max_simultaneous)
+
+        async def download_with_limit(key, local_path):
+            async with semaphore:
+                await download_public_s3_object(s3, bucket, key, local_path)
+
+        await asyncio.gather(
+            *(
+                download_with_limit(key, local_path)
+                for key, local_path in pending_downloads
+            )
+        )
+
+    remote_relative_paths = {Path(key).relative_to(prefix) for key in remote_objects}
+    for local_file in destination.rglob("*"):
+        relative_file = local_file.relative_to(destination)
+        if local_file.is_file() and relative_file not in remote_relative_paths:
+            local_file.unlink()
+
+
+async def list_public_s3_objects(s3, bucket, prefix):
+    objects = {}
+    paginator = s3.get_paginator("list_objects_v2")
+    async for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for entry in page.get("Contents", []):
+            key = entry["Key"]
+            if key and not key.endswith("/"):
+                objects[key] = entry["Size"]
+    return objects
+
+
+async def download_public_s3_object(s3, bucket, key, local_path):
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    response = await s3.get_object(Bucket=bucket, Key=key)
+    async with response["Body"] as stream:
+        async with aiofiles.open(local_path, "wb") as handle:
+            while True:
+                chunk = await stream.read(1024 * 1024)
+                if not chunk:
+                    break
+                await handle.write(chunk)
 
 
 def get_filter_data():
