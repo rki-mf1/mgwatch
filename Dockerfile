@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM ghcr.io/prefix-dev/pixi:0.76.2 AS pixi
+FROM ghcr.io/prefix-dev/pixi:0.77.1 AS pixi
 FROM debian:bookworm-slim
 ARG DEBIAN_FRONTEND=noninteractive
 ARG MGWATCH_UID=1000
