@@ -1,6 +1,7 @@
 # mgw_api/views.py
 
 import json
+import logging
 import os
 import re
 from types import SimpleNamespace
@@ -41,6 +42,8 @@ from .models import Settings
 from .models import Signature
 from .tasks import submit_search_job
 from .tasks import submit_signature_pipeline_job
+
+logger = logging.getLogger(__name__)
 
 ################################################################
 ## account management
@@ -126,11 +129,15 @@ def upload_fasta(request):
                                 ),
                             }
                         )
-                except Exception as e:
+                except Exception:
+                    logger.exception(
+                        "FASTA upload submission failed for user_id=%s",
+                        request.user.id,
+                    )
                     return JsonResponse(
                         {
                             "success": False,
-                            "error": f"Error: file submission failed. '{e}'",
+                            "error": "Error: file submission failed. Please try again later.",
                         }
                     )
             else:
@@ -232,8 +239,16 @@ def process_signature(request, pk):
                 request,
                 "Signature submission successful. Processing will happen in the background.",
             )
-        except Exception as e:
-            messages.error(request, f"Error signature submission failed. '{e}'")
+        except Exception:
+            logger.exception(
+                "Signature submission failed for signature_id=%s user_id=%s",
+                pk,
+                request.user.id,
+            )
+            messages.error(
+                request,
+                "Error signature submission failed. Please try again later.",
+            )
     return redirect("mgw_api:list_signature")
 
 
@@ -311,11 +326,16 @@ def list_result(request):
                         "fasta_id": fasta.id,
                     }
                 )
-            except Exception as e:
+            except Exception:
+                logger.exception(
+                    "Signature search submission failed for signature_id=%s user_id=%s",
+                    signature_id,
+                    request.user.id,
+                )
                 return JsonResponse(
                     {
                         "success": False,
-                        "error": f"Error: file submission failed. '{e}'",
+                        "error": "Error: file submission failed. Please try again later.",
                     }
                 )
     signatures = (
