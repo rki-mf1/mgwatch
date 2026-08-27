@@ -32,6 +32,7 @@ SKIP_DJANGO_TESTS=${SKIP_DJANGO_TESTS:-0}
 SKIP_QUICK_SMOKE=${SKIP_QUICK_SMOKE:-0}
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 RUN_ROOT="$REPO_ROOT/work/changeset-test/$TIMESTAMP"
+ARTIFACT_ROOT="$REPO_ROOT/work/changeset-test-logs/$TIMESTAMP"
 SUMMARY="$RUN_ROOT/summary.log"
 
 while [[ $# -gt 0 ]]; do
@@ -66,7 +67,35 @@ if [[ "$RUN_QUICK" -eq 0 && "$RUN_FULL" -eq 0 ]]; then
   RUN_QUICK=1
 fi
 
-mkdir -p "$RUN_ROOT"
+mkdir -p "$RUN_ROOT" "$ARTIFACT_ROOT"
+
+sync_log_artifacts() {
+  mkdir -p "$ARTIFACT_ROOT"
+  if [[ -f "$SUMMARY" ]]; then
+    cp "$SUMMARY" "$ARTIFACT_ROOT/summary.log" 2>/dev/null || true
+  fi
+
+  while IFS= read -r -d '' file; do
+    local relative_path=$file
+    relative_path=${relative_path#"$RUN_ROOT"/}
+    mkdir -p "$ARTIFACT_ROOT/$(dirname "$relative_path")"
+    cp "$file" "$ARTIFACT_ROOT/$relative_path" 2>/dev/null || true
+  done < <(
+    find "$RUN_ROOT" \
+      -path '*/postgres' -prune -o \
+      -path '*/mongo' -prune -o \
+      -path '*/data' -prune -o \
+      -path '*/nginx' -prune -o \
+      -type f \( \
+        -path '*/logs/*' -o \
+        -path '*/django-logs/*' -o \
+        -path '*/mongo-logs/*' -o \
+        -path '*/smoke/*' \
+      \) -print0 2>/dev/null
+  )
+}
+
+trap sync_log_artifacts EXIT
 
 if [[ "$RUN_BASELINE" -eq 1 && "$SKIP_BUILD" -eq 1 ]]; then
   echo "--baseline cannot be combined with --skip-build because it must test two different code images." >&2
@@ -630,6 +659,7 @@ run_full_suite() {
   fi
 
   cleanup_stack() {
+    sync_log_artifacts
     if [[ "$KEEP_STACK" != "1" ]]; then
       stack_compose "$repo_dir" "$suite_dir" down --remove-orphans >/dev/null 2>&1 || true
     fi
@@ -681,7 +711,7 @@ run_full_suite() {
     stack_shell_script "$repo_dir" "$suite_dir" "$smoke_dir/full_verify_watch.py"
 
   cleanup_stack
-  trap - EXIT
+  trap sync_log_artifacts EXIT
 }
 
 log "Writing logs under $RUN_ROOT"
