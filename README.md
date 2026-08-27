@@ -109,6 +109,11 @@ Useful references:
 Development commands and conventions are documented in [AGENTS.md](AGENTS.md) and
 [CONTRIBUTING.md](CONTRIBUTING.md). The main test entry point is:
 
+The dev fixture loader creates local-only users for manual development:
+
+- `root` / `root` for admin access.
+- `user` / `user` for normal user access.
+
 ```bash
 ./scripts/run-tests.sh
 ```
