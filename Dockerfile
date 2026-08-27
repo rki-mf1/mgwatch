@@ -19,8 +19,8 @@ RUN if ! getent group "${MGWATCH_GID}" >/dev/null; then \
     fi
 
 WORKDIR /code
-RUN mkdir -p /code/static /data /data-db /logs /var/spool/cron/crontabs && \
-    chown "${MGWATCH_UID}:${MGWATCH_GID}" /code /code/static /data /data-db /logs /var/spool/cron/crontabs
+RUN mkdir -p /code/static /data /logs /var/spool/cron/crontabs && \
+    chown "${MGWATCH_UID}:${MGWATCH_GID}" /code /code/static /data /logs /var/spool/cron/crontabs
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     XDG_CACHE_HOME=/tmp/.cache \

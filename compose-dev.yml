@@ -10,7 +10,7 @@ services:
       - LOG_LEVEL=DEBUG
     ports: !override
       - "8100:8100"
-    command: ["pixi run --frozen ./manage.py runserver 0.0.0.0:8100"]
+    command: ["pixi run --frozen ./manage.py migrate --noinput && pixi run --frozen ./manage.py runserver 0.0.0.0:8100"]
     #    build: .
     #    develop:
     #      watch:
@@ -35,6 +35,9 @@ services:
   mgwatch-mongodb:
     ports: !override
       - "27018:27017"
+  mgwatch-postgres:
+    ports: !override
+      - "5433:5432"
   mgwatch-redis:
     ports: !override
       - "6379:6379"

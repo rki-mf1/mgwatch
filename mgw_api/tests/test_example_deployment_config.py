@@ -16,6 +16,7 @@ class ExampleDeploymentConfigTests(TestCase):
             "- ${PUBLIC_BIND_ADDRESS}:${PUBLIC_HTTP_PORT}:8000",
             compose_text,
         )
+        self.assertNotIn("5432:5432", compose_text)
         self.assertNotIn("27017:27017", compose_text)
         self.assertNotIn("6379:6379", compose_text)
 
@@ -28,6 +29,7 @@ class ExampleDeploymentConfigTests(TestCase):
 
         self.assertIn("CHANGE_ME_LONG_RANDOM_DJANGO_SECRET_KEY", combined)
         self.assertIn("CHANGE_ME_LONG_RANDOM_MONGODB_PASSWORD", combined)
+        self.assertIn("CHANGE_ME_LONG_RANDOM_POSTGRES_PASSWORD", combined)
         self.assertIn("DEBUG=False", vars_text)
         self.assertNotIn("django-insecure-", combined)
         self.assertNotIn("ALLOWED_HOSTS='*'", combined)
@@ -46,7 +48,7 @@ class ExampleDeploymentConfigTests(TestCase):
         self.assertIn("no-new-privileges:true", compose_text)
         self.assertIn("cap_drop:", compose_text)
         self.assertIn("read_only: true", compose_text)
-        self.assertEqual(compose_text.count("healthcheck:"), 7)
+        self.assertEqual(compose_text.count("healthcheck:"), 8)
 
     def test_production_nginx_template_rate_limits_login(self):
         nginx_text = (

@@ -34,6 +34,7 @@ redis-py = ">=8.1,<9"
 coverage = ">=7.6,<8"
 aiobotocore = ">=3.9.0,<4"
 urllib3 = ">=2.7,<3"
+psycopg = ">=3.2,<4"
 
 [pypi-dependencies]
 django-auth-ldap = ">=5,<6"

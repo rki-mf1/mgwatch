@@ -12,14 +12,12 @@ services:
   mgwatch:
     !!merge <<: *mgwatch-runtime
     image: mgwatch:local
-    container_name: mgwatch
     volumes:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
       # Persist mgwatch cron jobs
       - ${EXTERNAL_DATA_DIR}/backend-crontabs:/var/spool/cron/crontabs
-      - ${SQLITE_DIR}:/data-db
       - ${LOG_DIR}:/logs
     environment:
       - TZ=$TZ
@@ -36,6 +34,8 @@ services:
     ports:
       - "127.0.0.1:8100:8100"
     depends_on:
+      mgwatch-postgres:
+        condition: service_healthy
       mgwatch-mongodb:
         condition: service_healthy
       mgwatch-redis:
@@ -43,12 +43,10 @@ services:
   mgwatch-celery-interactive:
     !!merge <<: *mgwatch-runtime
     image: mgwatch:local
-    container_name: mgwatch-celery-interactive
     volumes:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      - ${SQLITE_DIR}:/data-db
       - ${LOG_DIR}:/logs
     environment:
       - TZ=$TZ
@@ -68,12 +66,10 @@ services:
   mgwatch-celery-maintenance:
     !!merge <<: *mgwatch-runtime
     image: mgwatch:local
-    container_name: mgwatch-celery-maintenance
     volumes:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      - ${SQLITE_DIR}:/data-db
       - ${LOG_DIR}:/logs
     environment:
       - TZ=$TZ
@@ -93,12 +89,10 @@ services:
   mgwatch-celery-beat:
     !!merge <<: *mgwatch-runtime
     image: mgwatch:local
-    container_name: mgwatch-celery-beat
     volumes:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      - ${SQLITE_DIR}:/data-db
       - ${LOG_DIR}:/logs
     environment:
       - TZ=$TZ
@@ -115,10 +109,25 @@ services:
     depends_on:
       mgwatch:
         condition: service_healthy
+  mgwatch-postgres:
+    !!merge <<: *container-runtime
+    image: $DOCKER_POSTGRES_IMAGE
+    env_file:
+      - ./vars.env
+    environment:
+      - TZ=$TZ
+    volumes:
+      - ${POSTGRES_DATA_DIR}:/var/lib/postgresql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --username \"$${POSTGRES_USER}\" --dbname \"$${POSTGRES_DB}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
   mgwatch-mongodb:
     !!merge <<: *container-runtime
     image: $DOCKER_MONGODB_IMAGE
-    container_name: mgwatch-mongodb
     environment:
       - TZ=$TZ
       - MONGO_INITDB_ROOT_USERNAME=root
@@ -137,7 +146,6 @@ services:
   mgwatch-redis:
     !!merge <<: *container-runtime
     image: redis:8-alpine
-    container_name: mgwatch-redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

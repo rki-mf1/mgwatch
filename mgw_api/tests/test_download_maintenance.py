@@ -10,6 +10,7 @@ from django.test.utils import override_settings
 from mgw_api.services.maintenance import download_from_wort
 from mgw_api.services.maintenance import fetch_signature
 from mgw_api.services.maintenance import get_update_accessions
+from mgw_api.services.maintenance import import_parquet
 from mgw_api.services.maintenance import list_public_s3_objects
 from mgw_api.services.maintenance import prepare_download_targets
 from mgw_api.services.maintenance import run_download_index
@@ -104,6 +105,63 @@ class FakeS3Session:
         return FakeS3ClientContext(self.client)
 
 
+class FakeMongoCollection:
+    def __init__(self, db, name):
+        self.db = db
+        self.name = name
+
+    def drop(self):
+        self.db.dropped.append(self.name)
+        self.db.collections.discard(self.name)
+
+    def insert_many(self, documents):
+        self.db.collections.add(self.name)
+        self.db.inserted.extend(documents)
+
+    def rename(self, name):
+        self.db.renamed.append((self.name, name))
+        self.db.collections.discard(self.name)
+        self.db.collections.add(name)
+
+
+class FakeMongoDb:
+    def __init__(self):
+        self.collections = set()
+        self.created = []
+        self.dropped = []
+        self.inserted = []
+        self.renamed = []
+
+    def __getitem__(self, name):
+        return FakeMongoCollection(self, name)
+
+    def list_collection_names(self):
+        return list(self.collections)
+
+    def create_collection(self, name):
+        self.created.append(name)
+        self.collections.add(name)
+
+
+class FakeMongoClient:
+    db = FakeMongoDb()
+    close_count = 0
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __getitem__(self, name):
+        return self.db
+
+    def close(self):
+        type(self).close_count += 1
+
+    @classmethod
+    def reset(cls):
+        cls.db = FakeMongoDb()
+        cls.close_count = 0
+
+
 class DownloadMaintenanceTests(SimpleTestCase):
     def test_list_public_s3_objects_uses_aiobotocore_paginator(self):
         s3 = FakeS3Client(
@@ -182,6 +240,17 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 s3.get_object_calls,
                 [("example-bucket", "sra/metadata/current.parquet")],
             )
+
+    def test_import_parquet_creates_empty_metadata_collection(self):
+        FakeMongoClient.reset()
+
+        with TemporaryDirectory() as tmp_dir:
+            with patch("mgw_api.services.maintenance.pm.MongoClient", FakeMongoClient):
+                import_parquet(Path(tmp_dir))
+
+        self.assertEqual(FakeMongoClient.db.created, ["sradb_temp"])
+        self.assertEqual(FakeMongoClient.db.renamed, [("sradb_temp", "sradb_list")])
+        self.assertEqual(FakeMongoClient.db.collections, {"sradb_list"})
 
     @override_settings(
         DATA_DIR=Path("/tmp/mgwatch-test-data"),

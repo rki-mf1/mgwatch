@@ -85,7 +85,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: quick-release-gate-logs
-          path: work/changeset-test
+          path: work/changeset-test-logs
           if-no-files-found: warn
   build-and-push:
     runs-on: ubuntu-latest

@@ -46,18 +46,18 @@ test_root=$(mktemp -d "${TMPDIR:-/tmp}/mgwatch-tests.XXXXXX")
 test_project_suffix=$(basename "$test_root" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9_-' '-')
 export COMPOSE_PROJECT_NAME="mgwatch-tests-${test_project_suffix}"
 export EXTERNAL_DATA_DIR="$test_root/data"
+export POSTGRES_DATA_DIR="$test_root/postgres"
 export MONGODB_DATA_DIR="$test_root/mongo"
 export MONGODB_LOG_DIR="$test_root/mongo-logs"
-export SQLITE_DIR="$test_root/db"
 export NGINX_DATA_DIR="$test_root/nginx"
 export LOG_DIR="$test_root/django-logs"
 
 mkdir -p \
     "$EXTERNAL_DATA_DIR/backend-data" \
     "$EXTERNAL_DATA_DIR/backend-crontabs" \
+    "$POSTGRES_DATA_DIR" \
     "$MONGODB_DATA_DIR" \
     "$MONGODB_LOG_DIR" \
-    "$SQLITE_DIR" \
     "$NGINX_DATA_DIR" \
     "$LOG_DIR"
 chmod -R ugo+rwX "$test_root"
@@ -84,7 +84,7 @@ if [[ -d example-config ]]; then
     test_volumes+=(--volume "$repo_root/example-config:/code/example-config:ro")
 fi
 
-docker compose -f compose.yml up -d mgwatch-mongodb
+docker compose -f compose.yml up -d mgwatch-postgres mgwatch-mongodb
 
 if [[ "$coverage_enabled" == "1" ]]; then
     docker compose -f compose.yml run --rm --entrypoint /bin/sh \

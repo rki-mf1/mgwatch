@@ -40,5 +40,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: full-smoke-logs
-          path: work/changeset-test
+          path: work/changeset-test-logs
           if-no-files-found: warn

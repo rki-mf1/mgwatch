@@ -56,13 +56,13 @@ Use:
 ```bash
 ./scripts/test-changeset-against-main.sh --quick
 ./scripts/test-changeset-against-main.sh --baseline --quick
-ALLOW_STACK_RECREATE=1 ./scripts/test-changeset-against-main.sh --full
+./scripts/test-changeset-against-main.sh --full
 ```
 
 The quick suite is safe for normal development. The full suite uses isolated
-host-side data directories under `work/changeset-test/`, but the Compose files
-use fixed container names and ports, so it must be allowed to recreate the local
-`mgwatch` containers.
+host-side data directories under `work/changeset-test/`. It still publishes the
+application port, so stop any local stack that is already bound to that port
+before running it.
 
 The regular `./scripts/run-tests.sh` command writes an XML coverage report to
 `work/coverage/coverage.xml`. The default full-suite coverage floor is 50%.
@@ -75,7 +75,7 @@ Before merging the changeset, the minimum recommended gate is:
 
 ```bash
 ./scripts/test-changeset-against-main.sh --baseline --quick
-ALLOW_STACK_RECREATE=1 ./scripts/test-changeset-against-main.sh --full
+./scripts/test-changeset-against-main.sh --full
 ```
 
 The run passes only if the quick suite passes on `main`, the quick suite passes
