@@ -12,7 +12,6 @@ services:
   mgwatch:
     !!merge <<: *mgwatch-runtime
     image: mgwatch:local
-    container_name: mgwatch
     volumes:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
@@ -44,7 +43,6 @@ services:
   mgwatch-celery-interactive:
     !!merge <<: *mgwatch-runtime
     image: mgwatch:local
-    container_name: mgwatch-celery-interactive
     volumes:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
@@ -68,7 +66,6 @@ services:
   mgwatch-celery-maintenance:
     !!merge <<: *mgwatch-runtime
     image: mgwatch:local
-    container_name: mgwatch-celery-maintenance
     volumes:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
@@ -92,7 +89,6 @@ services:
   mgwatch-celery-beat:
     !!merge <<: *mgwatch-runtime
     image: mgwatch:local
-    container_name: mgwatch-celery-beat
     volumes:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
@@ -116,7 +112,6 @@ services:
   mgwatch-postgres:
     !!merge <<: *container-runtime
     image: $DOCKER_POSTGRES_IMAGE
-    container_name: mgwatch-postgres
     env_file:
       - ./vars.env
     environment:
@@ -133,7 +128,6 @@ services:
   mgwatch-mongodb:
     !!merge <<: *container-runtime
     image: $DOCKER_MONGODB_IMAGE
-    container_name: mgwatch-mongodb
     environment:
       - TZ=$TZ
       - MONGO_INITDB_ROOT_USERNAME=root
@@ -152,7 +146,6 @@ services:
   mgwatch-redis:
     !!merge <<: *container-runtime
     image: redis:8-alpine
-    container_name: mgwatch-redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

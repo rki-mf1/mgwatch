@@ -15,7 +15,6 @@ Options:
 
 Environment:
   BASE_REF=main             Git ref to compare against.
-  ALLOW_STACK_RECREATE=1    Required for --full because compose uses fixed names.
   KEEP_STACK=1              Leave the full smoke compose stack running.
   SKIP_DJANGO_TESTS=1       Skip Django unit tests when an earlier CI step already ran them.
   SKIP_QUICK_SMOKE=1        Skip in-process quick smoke checks.
@@ -29,7 +28,6 @@ RUN_FULL=0
 RUN_BASELINE=0
 SKIP_BUILD=0
 KEEP_STACK=${KEEP_STACK:-0}
-ALLOW_STACK_RECREATE=${ALLOW_STACK_RECREATE:-0}
 SKIP_DJANGO_TESTS=${SKIP_DJANGO_TESTS:-0}
 SKIP_QUICK_SMOKE=${SKIP_QUICK_SMOKE:-0}
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
@@ -625,12 +623,6 @@ run_full_suite() {
   local username="full_smoke_${TIMESTAMP//[^0-9]/}"
   local sequence_name="full-smoke-${TIMESTAMP//[^0-9]/}"
   mkdir -p "$suite_dir"/{data/backend-data,postgres,django-logs,mongo,mongo-logs,nginx} "$smoke_dir"
-
-  if docker ps -a --format '{{.Names}}' | grep -Eq '^(mgwatch|mgwatch-postgres|mgwatch-mongodb|mgwatch-redis|mgwatch-celery-interactive|mgwatch-celery-maintenance|mgwatch-celery-beat)$'; then
-    if [[ "$ALLOW_STACK_RECREATE" != "1" ]]; then
-      die "--full needs to recreate fixed-name mgwatch containers. Stop the dev stack or rerun with ALLOW_STACK_RECREATE=1."
-    fi
-  fi
 
   if [[ "$SKIP_BUILD" -eq 0 ]]; then
     run_logged "$label" "docker build" \

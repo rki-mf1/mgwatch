@@ -125,6 +125,67 @@ class JobStatusViewTests(TestCase):
             reverse("mgw_api:search_result", kwargs={"fasta_id": fasta.pk}),
         )
 
+    def test_upload_failure_does_not_expose_exception_details(self):
+        upload = SimpleUploadedFile(
+            "query.fasta",
+            b">query\nACGTACGT\n",
+            content_type="text/plain",
+        )
+
+        with (
+            patch(
+                "mgw_api.views.submit_signature_pipeline_job",
+                side_effect=RuntimeError("internal /srv/app/path failed"),
+            ),
+            self.assertLogs("mgw_api.views", level="ERROR") as logs,
+        ):
+            response = self.client.post(
+                reverse("mgw_api:upload_fasta"),
+                {"name": "query", "file": upload},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["success"])
+        self.assertEqual(
+            payload["error"],
+            "Error: file submission failed. Please try again later.",
+        )
+        self.assertNotIn("/srv/app/path", payload["error"])
+        self.assertIn("/srv/app/path", "\n".join(logs.output))
+
+    def test_signature_submission_failure_does_not_expose_exception_details(self):
+        signature = Signature.objects.create(
+            user=self.user,
+            name="example",
+            fasta=self.fasta,
+            file="user_1/example.sig",
+        )
+
+        with (
+            patch(
+                "mgw_api.views.submit_search_job",
+                side_effect=RuntimeError("SQL select from private_table failed"),
+            ),
+            self.assertLogs("mgw_api.views", level="ERROR") as logs,
+        ):
+            response = self.client.post(
+                reverse("mgw_api:list_result"),
+                {"signature_id": signature.pk},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["success"])
+        self.assertEqual(
+            payload["error"],
+            "Error: file submission failed. Please try again later.",
+        )
+        self.assertNotIn("private_table", payload["error"])
+        self.assertIn("private_table", "\n".join(logs.output))
+
     def test_search_result_page_shows_active_job_progress_at_stable_url(self):
         Job.objects.create(
             job_type=Job.JobType.SIGNATURE_PIPELINE,

@@ -40,7 +40,7 @@ If no staging instance is operated for this release, run the manual
 `release-smoke` GitHub Actions workflow or:
 
 ```bash
-ALLOW_STACK_RECREATE=1 ./scripts/test-changeset-against-main.sh --full
+./scripts/test-changeset-against-main.sh --full
 ```
 
 Record the result in the release notes before production rollout.

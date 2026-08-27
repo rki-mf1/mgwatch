@@ -14,7 +14,6 @@ services:
   mgwatch:
     !!merge <<: *mgwatch-runtime
     image: ${DOCKER_MGWATCH_IMAGE:?set DOCKER_MGWATCH_IMAGE in .env}
-    container_name: mgwatch
     env_file:
       - ./vars.env
     volumes:
@@ -46,7 +45,6 @@ services:
   mgwatch-celery-interactive:
     !!merge <<: *mgwatch-runtime
     image: ${DOCKER_MGWATCH_IMAGE:?set DOCKER_MGWATCH_IMAGE in .env}
-    container_name: mgwatch-celery-interactive
     env_file:
       - ./vars.env
     volumes:
@@ -73,7 +71,6 @@ services:
   mgwatch-celery-maintenance:
     !!merge <<: *mgwatch-runtime
     image: ${DOCKER_MGWATCH_IMAGE:?set DOCKER_MGWATCH_IMAGE in .env}
-    container_name: mgwatch-celery-maintenance
     env_file:
       - ./vars.env
     volumes:
@@ -100,7 +97,6 @@ services:
   mgwatch-celery-beat:
     !!merge <<: *mgwatch-runtime
     image: ${DOCKER_MGWATCH_IMAGE:?set DOCKER_MGWATCH_IMAGE in .env}
-    container_name: mgwatch-celery-beat
     env_file:
       - ./vars.env
     volumes:
@@ -127,7 +123,6 @@ services:
   mgwatch-postgres:
     !!merge <<: *container-runtime
     image: ${DOCKER_POSTGRES_IMAGE:?set DOCKER_POSTGRES_IMAGE in .env}
-    container_name: mgwatch-postgres
     env_file:
       - ./vars.env
     environment:
@@ -144,7 +139,6 @@ services:
   mgwatch-mongodb:
     !!merge <<: *container-runtime
     image: ${DOCKER_MONGODB_IMAGE:?set DOCKER_MONGODB_IMAGE in .env}
-    container_name: mgwatch-mongodb
     environment:
       - TZ=${TZ}
       - MONGO_INITDB_ROOT_USERNAME=root
@@ -163,7 +157,6 @@ services:
   mgwatch-redis:
     !!merge <<: *container-runtime
     image: ${DOCKER_REDIS_IMAGE:?set DOCKER_REDIS_IMAGE in .env}
-    container_name: mgwatch-redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -174,7 +167,6 @@ services:
   mgwatch-proxy:
     !!merge <<: *container-runtime
     image: ${DOCKER_NGINX_IMAGE:?set DOCKER_NGINX_IMAGE in .env}
-    container_name: mgwatch-proxy
     volumes:
       - ./nginx-templates:/etc/nginx/templates:ro
       - ${NGINX_DATA_DIR}/static:/static:ro
