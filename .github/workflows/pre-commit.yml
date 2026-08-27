@@ -9,7 +9,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
         with:
-          ref: ${{ github.head_ref }}
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/checkout@v7
+        if: github.event_name != 'pull_request'
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v7
       - uses: pre-commit/action@v3.0.1
