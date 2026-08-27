@@ -185,7 +185,7 @@ compose_run_quick() {
   (
     export "${env_args[@]}"
     compose_cmd "$repo_dir" up -d mgwatch-postgres >/dev/null
-    compose_cmd "$repo_dir" run --rm \
+    compose_cmd "$repo_dir" run --rm --no-deps \
       -e DATA_DIR=/data \
       -e LOG_DIR=/logs \
       -e DEBUG=True \
