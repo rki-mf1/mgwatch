@@ -1,8 +1,12 @@
 <div class="settings-section">
     <h2>Settings</h2>
-    <form method="post" enctype="multipart/form-data" id="settings-form">
+    {% if settings_form_owns_form %}
+        <form method="post" enctype="multipart/form-data" id="settings-form">
+    {% endif %}
         <div class="grid">
-            {% csrf_token %}
+            {% if settings_form_owns_form %}
+                {% csrf_token %}
+            {% endif %}
             <div class="form-group">
                 <label for="id_kmer">Select k-mers:</label>
                 <div class="options">{{ settings_form.kmer }}</div>
@@ -28,7 +32,9 @@
                 </ul>
             {% endif %}
         </div>
-    </form>
+    {% if settings_form_owns_form %}
+        </form>
+    {% endif %}
 </div>
 <script>
     function validateForm(event) {
@@ -52,12 +58,15 @@
         return true;
     }
 
-    document.getElementById('settings-form').addEventListener('submit', validateForm);
+    const settingsForm = document.getElementById('settings-form');
+    if (settingsForm) {
+        settingsForm.addEventListener('submit', validateForm);
+    }
 
     document.querySelectorAll('#id_kmer, #id_database, #id_containment').forEach(function(element) {
         element.addEventListener('change', function() {
-            if (validateForm()) {
-                document.getElementById('settings-form').submit();
+            if (settingsForm && validateForm()) {
+                settingsForm.submit();
             }
         });
     });

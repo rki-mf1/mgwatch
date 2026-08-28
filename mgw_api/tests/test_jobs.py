@@ -14,6 +14,7 @@ from mgw_api.models import Fasta
 from mgw_api.models import FilterSetting
 from mgw_api.models import Job
 from mgw_api.models import Result
+from mgw_api.models import Settings
 from mgw_api.models import Signature
 from mgw_api.services.exceptions import JobConflictError
 from mgw_api.services.jobs import create_signature_pipeline_job
@@ -127,6 +128,33 @@ class JobStatusViewTests(TestCase):
             reverse("mgw_api:search_result", kwargs={"fasta_id": fasta.pk}),
         )
 
+    def test_upload_saves_submitted_settings(self):
+        upload = SimpleUploadedFile(
+            "query.fasta",
+            b">query\nACGTACGT\n",
+            content_type="text/plain",
+        )
+
+        with patch("mgw_api.views.submit_signature_pipeline_job"):
+            response = self.client.post(
+                reverse("mgw_api:upload_fasta"),
+                {
+                    "name": "query",
+                    "file": upload,
+                    "kmer": ["31"],
+                    "database": ["SRA"],
+                    "containment": "0.25",
+                },
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["success"])
+        settings = Settings.objects.get(user=self.user)
+        self.assertEqual(settings.kmer, ["31"])
+        self.assertEqual(settings.database, ["SRA"])
+        self.assertEqual(settings.containment, 0.25)
+
     def test_upload_page_includes_compact_advanced_filters(self):
         response = self.client.get(reverse("mgw_api:upload_fasta"))
 
@@ -134,6 +162,14 @@ class JobStatusViewTests(TestCase):
         self.assertContains(response, "Advanced filters")
         self.assertContains(response, "Choose metadata field")
         self.assertContains(response, 'data-operator="date"')
+        self.assertLess(
+            response.content.index(b"Upload Genome"),
+            response.content.index(b"Settings"),
+        )
+        self.assertLess(
+            response.content.index(b"Settings"),
+            response.content.index(b"Advanced filters"),
+        )
 
     def test_upload_saves_initial_advanced_filter_spec(self):
         upload = SimpleUploadedFile(
