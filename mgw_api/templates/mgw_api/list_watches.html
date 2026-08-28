@@ -26,34 +26,34 @@
                 <tbody>
                     {% for watch in watches %}
                         {% with result=watch.result %}
-                        <tr>
-                            <td>
-                                <a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.name }}</a>
-                            </td>
-                            <td>{{ result.date }} {{ result.time|date:"H:i:s" }}</td>
-                            <td>{{ result.kmer }}</td>
-                            <td>{{ result.database }}</td>
-                            <td>{{ result.containment }}</td>
-                            <td>{{ result.num_results }}</td>
-                            <td>
-                                {% if watch.active_filter_labels %}
-                                    {% for label in watch.active_filter_labels %}<span class="filter-chip">{{ label }}</span>{% endfor %}
-                                {% else %}
-                                    <span>-</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <form id="watch-form-{{ result.pk }}"
-                                      method="post"
-                                      action="{% url 'mgw_api:toggle_watch' result.pk %}">
-                                    {% csrf_token %}
-                                    <input type="checkbox"
-                                           name="is_watched"
-                                           {% if result.is_watched %}checked{% endif %}
-                                           onchange="submitWatchForm({{ result.pk }})">
-                                </form>
-                            </td>
-                        </tr>
+                            <tr>
+                                <td>
+                                    <a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.name }}</a>
+                                </td>
+                                <td>{{ result.date }} {{ result.time|date:"H:i:s" }}</td>
+                                <td>{{ result.kmer }}</td>
+                                <td>{{ result.database }}</td>
+                                <td>{{ result.containment }}</td>
+                                <td>{{ result.num_results }}</td>
+                                <td>
+                                    {% if watch.active_filter_labels %}
+                                        {% for label in watch.active_filter_labels %}<span class="filter-chip">{{ label }}</span>{% endfor %}
+                                    {% else %}
+                                        <span>-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form id="watch-form-{{ result.pk }}"
+                                          method="post"
+                                          action="{% url 'mgw_api:toggle_watch' result.pk %}">
+                                        {% csrf_token %}
+                                        <input type="checkbox"
+                                               name="is_watched"
+                                               {% if result.is_watched %}checked{% endif %}
+                                               onchange="submitWatchForm({{ result.pk }})">
+                                    </form>
+                                </td>
+                            </tr>
                         {% endwith %}
                     {% endfor %}
                 </tbody>

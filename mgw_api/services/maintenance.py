@@ -190,7 +190,9 @@ def import_parquet(parquet_dir, indexed_only=False):
         ]
         sra_lf = df
         if "librarysource" in available_columns:
-            sra_lf = sra_lf.filter(pl.col("librarysource").is_in(allowed_librarysources))
+            sra_lf = sra_lf.filter(
+                pl.col("librarysource").is_in(allowed_librarysources)
+            )
         if "jattr" in available_columns:
             sra_lf = sra_lf.select(selected_columns + ["jattr"])
         else:

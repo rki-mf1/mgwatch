@@ -3,7 +3,6 @@ from dataclasses import dataclass
 import pandas as pd
 from django.http import QueryDict
 
-
 FILTER_SPEC_VERSION = 1
 MAX_CATEGORICAL_OPTIONS = 50
 MISSING_TEXT_VALUES = {
@@ -166,13 +165,15 @@ def apply_filter_spec(df, filter_spec):
         operator = rule["operator"]
         if operator == "contains":
             value = str(rule["value"])
-            match_mask = series.fillna("").astype(str).str.contains(
-                value, case=False, regex=False
+            match_mask = (
+                series.fillna("")
+                .astype(str)
+                .str.contains(value, case=False, regex=False)
             )
         elif operator == "in":
             allowed = {str(item).strip().lower() for item in rule["value"]}
-            match_mask = series.fillna("").astype(str).str.strip().str.lower().isin(
-                allowed
+            match_mask = (
+                series.fillna("").astype(str).str.strip().str.lower().isin(allowed)
             )
         elif operator == "range":
             match_mask = range_match_mask(
@@ -368,9 +369,7 @@ def build_filter_control(df, filter_spec, selected_field):
             if selected_field in CATEGORICAL_FIELDS
             else []
         ),
-        value=rule.get(
-            "value", [] if selected_field in CATEGORICAL_FIELDS else ""
-        ),
+        value=rule.get("value", [] if selected_field in CATEGORICAL_FIELDS else ""),
         min_value=rule.get("min", ""),
         max_value=rule.get("max", ""),
         include_missing=bool(rule.get("include_missing", False)),

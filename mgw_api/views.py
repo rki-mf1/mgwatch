@@ -35,8 +35,8 @@ from .models import Job
 from .models import Result
 from .models import Settings
 from .models import Signature
-from .services.filters import active_filter_labels
 from .services.filters import active_filter_chips
+from .services.filters import active_filter_labels
 from .services.filters import apply_filter_spec
 from .services.filters import build_addable_filter_fields
 from .services.filters import build_filter_control

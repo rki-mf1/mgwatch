@@ -34,7 +34,7 @@
                     {% for chip in active_filter_chips %}
                         <span class="filter-chip {% if chip.unavailable %}unavailable-filter{% endif %}">
                             <a href="?filter_field={{ chip.field }}">{{ chip.description }}</a>
-                            {% if chip.unavailable %}<small> unavailable</small>{% endif %}
+                            {% if chip.unavailable %}<small>unavailable</small>{% endif %}
                             <form method="post"
                                   action="{% url 'mgw_api:update_filters' result.pk %}"
                                   class="remove-filter-form">
@@ -67,7 +67,8 @@
                     {% for field in addable_filter_fields %}
                         <option value="{{ field.field }}"
                                 {% if field.field == selected_filter_field %}selected{% endif %}>
-                            {{ field.label }}{% if field.is_active %} (editing){% endif %}
+                            {{ field.label }}
+                            {% if field.is_active %}(editing){% endif %}
                         </option>
                     {% endfor %}
                 </select>
@@ -107,12 +108,12 @@
                                        value="{{ selected_filter_control.value }}">
                             {% endif %}
                         {% elif selected_filter_control.operator == "in" %}
-                            <select name="in__{{ selected_filter_control.field }}"
-                                    multiple
-                                    size="4">
+                            <select name="in__{{ selected_filter_control.field }}" multiple size="4">
                                 {% for option in selected_filter_control.options %}
                                     <option value="{{ option }}"
-                                            {% if option in selected_filter_control.value %}selected{% endif %}>{{ option }}</option>
+                                            {% if option in selected_filter_control.value %}selected{% endif %}>
+                                        {{ option }}
+                                    </option>
                                 {% endfor %}
                             </select>
                         {% elif selected_filter_control.operator == "range" %}
