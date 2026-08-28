@@ -302,6 +302,46 @@ class JobStatusViewTests(TestCase):
         self.assertNotIn("/srv/app/path", payload["error"])
         self.assertIn("/srv/app/path", "\n".join(logs.output))
 
+    def test_combined_upload_submission_failure_rolls_back_settings_and_fasta(self):
+        Settings.objects.create(
+            user=self.user,
+            kmer=["21"],
+            database=["SRA"],
+            containment=0.10,
+        )
+        upload = SimpleUploadedFile(
+            "query.fasta",
+            b">query\nACGTACGT\n",
+            content_type="text/plain",
+        )
+
+        with (
+            patch(
+                "mgw_api.views.submit_signature_pipeline_job",
+                side_effect=RuntimeError("queue unavailable"),
+            ),
+            self.assertLogs("mgw_api.views", level="ERROR"),
+        ):
+            response = self.client.post(
+                reverse("mgw_api:upload_fasta"),
+                {
+                    "name": "query",
+                    "file": upload,
+                    "kmer": ["31"],
+                    "database": ["SRA"],
+                    "containment": "0.25",
+                },
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["success"])
+        self.assertFalse(Fasta.objects.filter(user=self.user, name="query").exists())
+        settings = Settings.objects.get(user=self.user)
+        self.assertEqual(settings.kmer, ["21"])
+        self.assertEqual(settings.database, ["SRA"])
+        self.assertEqual(settings.containment, 0.10)
+
     def test_signature_submission_failure_does_not_expose_exception_details(self):
         signature = Signature.objects.create(
             user=self.user,

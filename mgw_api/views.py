@@ -89,16 +89,17 @@ def upload_fasta(request):
         is_upload_request = (
             "name" in request.POST or "file" in request.POST or "file" in request.FILES
         )
-        ## handle settings
-        if (
+        has_settings_fields = (
             "kmer" in request.POST
             or "database" in request.POST
             or "containment" in request.POST
-        ):
+        )
+        ## handle settings
+        if has_settings_fields:
             settings_form = SettingsForm(request.POST, instance=sourmash_settings)
             if settings_form.is_valid():
-                settings_form.save()
                 if not is_upload_request:
+                    settings_form.save()
                     return redirect(reverse("mgw_api:upload_fasta"))
             else:
                 messages.error(request, "Please correct the errors below.")
@@ -126,6 +127,8 @@ def upload_fasta(request):
                         )
                     else:
                         with transaction.atomic():
+                            if has_settings_fields:
+                                settings_form.save()
                             uploaded_file_instance = fasta_form.save(commit=False)
                             uploaded_file_instance.user = request.user
                             uploaded_file_instance.name = name
