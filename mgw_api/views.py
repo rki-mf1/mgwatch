@@ -25,21 +25,27 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .forms import FastaForm
-from .forms import FilterSettingForm
 from .forms import LoginForm
 from .forms import SettingsForm
 from .forms import WatchForm
-from .functions import apply_compare
-from .functions import apply_regex
-from .functions import get_numeric_columns_pandas
 from .functions import get_results_with_metadata
-from .functions import is_float
 from .models import Fasta
 from .models import FilterSetting
 from .models import Job
 from .models import Result
 from .models import Settings
 from .models import Signature
+from .services.filters import active_filter_labels
+from .services.filters import active_filter_chips
+from .services.filters import apply_filter_spec
+from .services.filters import build_addable_filter_fields
+from .services.filters import build_filter_control
+from .services.filters import build_filter_spec_from_post
+from .services.filters import display_label
+from .services.filters import has_active_filters
+from .services.filters import merge_filter_spec_from_post
+from .services.filters import normalize_filter_spec
+from .services.filters import remove_filter_from_spec
 from .tasks import submit_search_job
 from .tasks import submit_signature_pipeline_job
 
@@ -77,6 +83,7 @@ def user_logout(request):
 def upload_fasta(request):
     sourmash_settings, created = Settings.objects.get_or_create(user=request.user)
     settings_form = SettingsForm(instance=sourmash_settings)
+    initial_filter_spec = build_filter_spec_from_post(request.POST)
     if request.method == "POST":
         ## handle settings
         if (
@@ -116,6 +123,9 @@ def upload_fasta(request):
                             uploaded_file_instance.size = uploaded_file.size
                             uploaded_file_instance.processed = False
                             uploaded_file_instance.status = "Queued"
+                            uploaded_file_instance.initial_filter_spec = (
+                                initial_filter_spec
+                            )
                             uploaded_file_instance.save()
                             submit_signature_pipeline_job(fasta=uploaded_file_instance)
                         return JsonResponse(
@@ -148,8 +158,44 @@ def upload_fasta(request):
     return render(
         request,
         "mgw_api/upload_fasta.html",
-        {"fasta_form": fasta_form, "settings_form": settings_form},
+        {
+            "fasta_form": fasta_form,
+            "settings_form": settings_form,
+            "addable_filter_fields": build_upload_filter_fields(),
+        },
     )
+
+
+def build_upload_filter_fields():
+    return [
+        {
+            "field": "geo_loc_name_country_calc",
+            "label": "Country",
+            "operator": "category",
+        },
+        {"field": "assay_type", "label": "Assay type", "operator": "category"},
+        {
+            "field": "librarysource",
+            "label": "Library source",
+            "operator": "category",
+        },
+        {"field": "organism", "label": "Organism", "operator": "text"},
+        {"field": "sample_name", "label": "Sample name", "operator": "text"},
+        {"field": "sample_title", "label": "Sample title", "operator": "text"},
+        {"field": "experiment_title", "label": "Experiment title", "operator": "text"},
+        {"field": "study_title", "label": "Study title", "operator": "text"},
+        {"field": "description", "label": "Description", "operator": "text"},
+        {"field": "host", "label": "Host", "operator": "text"},
+        {"field": "isolation_source", "label": "Isolation source", "operator": "text"},
+        {"field": "releasedate", "label": "Release date", "operator": "date"},
+        {
+            "field": "collection_date_sam",
+            "label": "Collection date",
+            "operator": "date",
+        },
+        {"field": "containment", "label": "Containment", "operator": "range"},
+        {"field": "query_containment_ani", "label": "ANI", "operator": "range"},
+    ]
 
 
 @login_required
@@ -281,10 +327,26 @@ def list_watches(request):
     watches = Result.objects.filter(user=request.user, is_watched=True).order_by(
         "-date", "-time"
     )
+    filter_settings = {
+        filter_setting.result_id: filter_setting
+        for filter_setting in FilterSetting.objects.filter(
+            user=request.user, result__in=watches
+        )
+    }
+    watch_entries = []
+    for result in watches:
+        filter_setting = filter_settings.get(result.pk)
+        filter_spec = filter_setting.filter_spec if filter_setting else {}
+        watch_entries.append(
+            SimpleNamespace(
+                result=result,
+                active_filter_labels=active_filter_labels(filter_spec),
+            )
+        )
     return render(
         request,
         "mgw_api/list_watches.html",
-        {"watches": watches},
+        {"watches": watch_entries},
     )
 
 
@@ -406,6 +468,19 @@ def list_result(request):
         ),
         reverse=True,
     )
+    listed_results = [
+        result for entry in sequence_entries for result in entry.sorted_results
+    ]
+    filter_settings = {
+        filter_setting.result_id: filter_setting
+        for filter_setting in FilterSetting.objects.filter(
+            user=request.user, result__in=listed_results
+        )
+    }
+    for result in listed_results:
+        filter_setting = filter_settings.get(result.pk)
+        filter_spec = filter_setting.filter_spec if filter_setting else {}
+        result.active_filter_labels = active_filter_labels(filter_spec)
     return render(
         request,
         "mgw_api/list_result.html",
@@ -471,35 +546,35 @@ def build_result_table_context(request, *, result, settings_form):
     filter_settings, created = FilterSetting.objects.get_or_create(
         result=result, user=request.user
     )
-    sort_column = filter_settings.sort_column
-    sort_reverse = filter_settings.sort_reverse
-    numeric_columns = get_numeric_columns_pandas(results_with_metadata)
+    filter_spec = normalize_filter_spec(filter_settings.filter_spec)
+    filtered_results = apply_filter_spec(results_with_metadata, filter_spec)
 
     # Convert from DataFrame to lists for serialization
     headers = results_with_metadata.columns.tolist()
-    rows = results_with_metadata.values.tolist()
-
-    # FIXME: adapt filtering to pandas DataFrame
-    for column, value in filter_settings.filters.items():
-        rows = apply_regex(rows, column, value)
-    for column, range_values in filter_settings.range_filters.items():
-        for m, value in zip([1, -1], range_values):
-            if value == "":
-                value = None
-            if is_float(value):
-                rows = [row for row in rows if apply_compare(m, row, column, value)]
-            elif value is not None:
-                rows = apply_regex(rows, column, value)
-
-    filter_form = FilterSettingForm(instance=filter_settings)
+    rows = filtered_results.values.tolist()
+    default_sort_column = (
+        headers.index("containment") if "containment" in headers else 0
+    )
     context.update(
         {
             "headers": headers,
+            "header_labels": [display_label(header) for header in headers],
             "rows": rows,
-            "filter_form": filter_form,
-            "numeric_columns": numeric_columns,
-            "sort_column": sort_column,
-            "sort_reverse": sort_reverse,
+            "active_filter_chips": active_filter_chips(filter_spec, headers),
+            "addable_filter_fields": build_addable_filter_fields(
+                results_with_metadata, filter_spec
+            ),
+            "selected_filter_field": request.GET.get("filter_field", ""),
+            "selected_filter_control": build_filter_control(
+                results_with_metadata,
+                filter_spec,
+                request.GET.get("filter_field", ""),
+            ),
+            "active_filter_labels": active_filter_labels(filter_spec),
+            "has_active_filters": has_active_filters(filter_spec),
+            "filtered_count": len(filtered_results),
+            "unfiltered_count": len(results_with_metadata),
+            "default_sort_column": default_sort_column,
         }
     )
     return context
@@ -510,9 +585,9 @@ def result_table_json_response(context):
     rows = context.get("rows", [])
     geo_loc_data = []
     lat_lon_data = []
-    if headers and "geo loc name country calc" in headers and "lat lon" in headers:
-        geo_loc_name_country_calc_index = headers.index("geo loc name country calc")
-        lat_lon_index = headers.index("lat lon")
+    if headers and "geo_loc_name_country_calc" in headers and "lat_lon" in headers:
+        geo_loc_name_country_calc_index = headers.index("geo_loc_name_country_calc")
+        lat_lon_index = headers.index("lat_lon")
         geo_loc_data = [row[geo_loc_name_country_calc_index] for row in rows]
         lat_lon_data = [row[lat_lon_index] for row in rows]
     return JsonResponse(
@@ -564,21 +639,26 @@ def update_filters(request, pk):
     filter_settings, created = FilterSetting.objects.get_or_create(
         result=result, user=request.user
     )
-    data = json.loads(request.body)
-    column = data.get("column")
-    min_value = data.get("min_value")
-    max_value = data.get("max_value")
-    value = data.get("value")
-    if min_value is not None or max_value is not None:
-        range_filters = filter_settings.range_filters
-        range_filters[column] = [min_value, max_value]
-        filter_settings.range_filters = range_filters
-    elif value is not None:
-        filters = filter_settings.filters
-        filters[column] = value
-        filter_settings.filters = filters
-    filter_settings.save()
-    return JsonResponse({"status": "success"})
+    if request.content_type == "application/json":
+        data = json.loads(request.body)
+        filter_settings.filter_spec = normalize_filter_spec(
+            data.get("filter_spec", data)
+        )
+        filter_settings.save(update_fields=["filter_spec"])
+        return JsonResponse({"status": "success"})
+
+    if request.POST.get("clear_filters"):
+        filter_settings.filter_spec = {}
+    elif request.POST.get("remove_filter"):
+        filter_settings.filter_spec = remove_filter_from_spec(
+            filter_settings.filter_spec, request.POST.get("remove_filter")
+        )
+    else:
+        filter_settings.filter_spec = merge_filter_spec_from_post(
+            filter_settings.filter_spec, request.POST
+        )
+    filter_settings.save(update_fields=["filter_spec"])
+    return redirect(reverse("mgw_api:result_table", kwargs={"pk": result.pk}))
 
 
 @login_required
@@ -648,43 +728,18 @@ def download_full_table(request, pk):
     return response
 
 
-# Temporarily disabled
-# @login_required
-# def download_filtered_table(request, pk):
-#     result = get_object_or_404(Result, pk=pk, user=request.user)
-#
-#     results_with_metadata = get_results_with_metadata(result)
-#     headers = results_with_metadata.columns.tolist()
-#     rows = results_with_metadata.values.tolist()
-#
-#     filter_settings = get_object_or_404(FilterSetting, result=result, user=request.user)
-#     for column, value in filter_settings.filters.items():
-#         rows = apply_regex(rows, column, value)
-#     for column, range_values in filter_settings.range_filters.items():
-#         for m, value in zip([1, -1], range_values):
-#             if value == "":
-#                 value = None
-#             if is_float(value):
-#                 rows = [row for row in rows if apply_compare(m, row, column, value)]
-#             elif value is not None:
-#                 rows = apply_regex(rows, column, value)
-#     sort_column = filter_settings.sort_column
-#     sort_reverse = filter_settings.sort_reverse
-#     if sort_column is not None:
-#         # Check if the sort column index is invalid, and if so reset it to 0
-#         if int(sort_column) >= len(rows):
-#             sort_column = 0
-#         rows = sorted(
-#             rows,
-#             key=lambda x: human_sort_key(x[int(sort_column)]),
-#             reverse=sort_reverse,
-#         )
-#     safe_name = re.sub("[^A-Za-z0-9]", "-", result.name)
-#     filename = f"{safe_name}-mgwatch-filtered.tsv"
-#     response = HttpResponse(content_type="text/tab-separated-values")
-#     response["Content-Disposition"] = f'attachment; filename="{filename}"'
-#     writer = csv.writer(response, delimiter="\t")
-#     writer.writerow(headers)
-#     for row in rows:
-#         writer.writerow(row)
-#     return response
+@login_required
+def download_filtered_table(request, pk):
+    result = get_object_or_404(Result, pk=pk, user=request.user)
+    results_with_metadata = get_results_with_metadata(result)
+    filter_setting = FilterSetting.objects.filter(
+        result=result, user=request.user
+    ).first()
+    filter_spec = filter_setting.filter_spec if filter_setting else {}
+    filtered_results = apply_filter_spec(results_with_metadata, filter_spec)
+    safe_name = re.sub("[^A-Za-z0-9]", "-", result.name)
+    filename = f"{safe_name}-mgwatch-filtered.tsv"
+    response = HttpResponse(content_type="text/tab-separated-values")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    filtered_results.to_csv(response, sep="\t", index=False)
+    return response

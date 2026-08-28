@@ -11,11 +11,13 @@ from django.urls import reverse
 from django.utils import timezone
 
 from mgw_api.models import Fasta
+from mgw_api.models import FilterSetting
 from mgw_api.models import Job
 from mgw_api.models import Result
 from mgw_api.models import Signature
 from mgw_api.services.exceptions import JobConflictError
 from mgw_api.services.jobs import create_signature_pipeline_job
+from mgw_api.tasks import run_signature_pipeline
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
 
@@ -124,6 +126,115 @@ class JobStatusViewTests(TestCase):
             payload["result_url"],
             reverse("mgw_api:search_result", kwargs={"fasta_id": fasta.pk}),
         )
+
+    def test_upload_page_includes_compact_advanced_filters(self):
+        response = self.client.get(reverse("mgw_api:upload_fasta"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Advanced filters")
+        self.assertContains(response, "Choose metadata field")
+        self.assertContains(response, 'data-operator="date"')
+
+    def test_upload_saves_initial_advanced_filter_spec(self):
+        upload = SimpleUploadedFile(
+            "query.fasta",
+            b">query\nACGTACGT\n",
+            content_type="text/plain",
+        )
+
+        with patch("mgw_api.views.submit_signature_pipeline_job"):
+            response = self.client.post(
+                reverse("mgw_api:upload_fasta"),
+                {
+                    "name": "query",
+                    "file": upload,
+                    "in__geo_loc_name_country_calc": "Canada",
+                    "min__releasedate": "2024-01-01",
+                    "max__releasedate": "2024-12-31",
+                },
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        fasta = Fasta.objects.get(user=self.user, name="query")
+        self.assertEqual(
+            fasta.initial_filter_spec,
+            {
+                "version": 1,
+                "rules": [
+                    {
+                        "field": "geo_loc_name_country_calc",
+                        "operator": "in",
+                        "include_missing": False,
+                        "value": ["Canada"],
+                    },
+                    {
+                        "field": "releasedate",
+                        "operator": "range",
+                        "include_missing": False,
+                        "min": "2024-01-01",
+                        "max": "2024-12-31",
+                    },
+                ],
+            },
+        )
+
+    def test_signature_pipeline_copies_initial_filters_to_result(self):
+        self.fasta.initial_filter_spec = {
+            "version": 1,
+            "rules": [
+                {
+                    "field": "geo_loc_name_country_calc",
+                    "operator": "contains",
+                    "include_missing": False,
+                    "value": "Canada",
+                }
+            ],
+        }
+        self.fasta.save(update_fields=["initial_filter_spec"])
+        signature = Signature.objects.create(
+            user=self.user,
+            name="example",
+            fasta=self.fasta,
+            file="user_1/example.sig",
+        )
+        job = Job.objects.create(
+            job_type=Job.JobType.SIGNATURE_PIPELINE,
+            state=Job.State.QUEUED,
+            status_message="Queued",
+            user=self.user,
+            fasta=self.fasta,
+            queue="interactive",
+        )
+
+        def fake_run_search(**_kwargs):
+            result = Result.objects.create(
+                user=self.user,
+                name="example",
+                signature=signature,
+                file="",
+                num_results=0,
+                kmer=[21],
+                database=["SRA"],
+                containment=0.1,
+            )
+            return {"result_pk": result.pk}
+
+        with (
+            patch("mgw_api.tasks.create_signature"),
+            patch("mgw_api.tasks.run_search", side_effect=fake_run_search),
+        ):
+            run_signature_pipeline.apply(
+                kwargs={
+                    "job_id": job.pk,
+                    "user_id": self.user.pk,
+                    "name": "example",
+                }
+            ).get()
+
+        result = Result.objects.get(signature=signature)
+        filter_setting = FilterSetting.objects.get(user=self.user, result=result)
+        self.assertEqual(filter_setting.filter_spec, self.fasta.initial_filter_spec)
 
     def test_upload_failure_does_not_expose_exception_details(self):
         upload = SimpleUploadedFile(
@@ -344,6 +455,42 @@ class JobStatusViewTests(TestCase):
         self.assertContains(response, "Sequence name: example", count=1)
         self.assertContains(response, "<td>7</td>", html=True)
         self.assertContains(response, "<td>9</td>", html=True)
+
+    def test_results_page_shows_saved_filter_labels(self):
+        signature = Signature.objects.create(
+            user=self.user,
+            name="example",
+            fasta=self.fasta,
+            file="user_1/example.sig",
+        )
+        result = Result.objects.create(
+            user=self.user,
+            name="example",
+            signature=signature,
+            file="user_1/example.csv",
+            num_results=7,
+            kmer=[21],
+            database=["SRA"],
+            containment=0.1,
+        )
+        FilterSetting.objects.create(
+            user=self.user,
+            result=result,
+            filter_spec={
+                "rules": [
+                    {
+                        "field": "geo_loc_name_country_calc",
+                        "operator": "in",
+                        "value": ["Canada"],
+                    }
+                ]
+            },
+        )
+
+        response = self.client.get(reverse("mgw_api:list_result"))
+
+        self.assertContains(response, "<th>Filters</th>", html=True)
+        self.assertContains(response, "Country: Canada")
 
     def test_results_page_shows_active_signature_pipeline_without_completed_results(
         self,

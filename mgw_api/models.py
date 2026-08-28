@@ -118,6 +118,7 @@ class Fasta(models.Model):
     processed = models.BooleanField(default=False)
     status = models.CharField(max_length=255, default="Pending")
     result_pk = models.IntegerField(null=True, blank=True)
+    initial_filter_spec = models.JSONField(default=dict)
 
     def __str__(self):
         return self.name or self.file.name
@@ -205,10 +206,11 @@ class DateField(models.DateTimeField):
 class FilterSetting(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     result = models.ForeignKey(Result, on_delete=models.CASCADE)
-    filters = models.JSONField(default=dict)  # {column_index: filter_value}
+    filter_spec = models.JSONField(default=dict)
+    filters = models.JSONField(default=dict)  # Legacy {column_index: filter_value}
     range_filters = models.JSONField(
         default=dict
-    )  # {column_index: [min_value, max_value]}
+    )  # Legacy {column_index: [min_value, max_value]}
     sort_column = models.IntegerField(null=True, blank=True)
     sort_reverse = models.BooleanField(default=False)
 

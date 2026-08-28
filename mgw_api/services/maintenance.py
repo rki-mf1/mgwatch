@@ -24,8 +24,11 @@ from django.urls import reverse
 
 from mgw.settings import LOGGER
 from mgw.settings import MGW_URL
+from mgw_api.functions import get_results_with_metadata
+from mgw_api.models import FilterSetting
 from mgw_api.models import Result
 from mgw_api.models import Signature
+from mgw_api.services.filters import apply_filter_spec
 
 from .processes import run_command
 from .searches import run_search
@@ -139,9 +142,17 @@ def get_filter_data():
         "biosample",
         "collection_date_sam",
         "geo_loc_name_country_calc",
+        "geo_loc_name",
         "organism",
         "releasedate",
         "librarysource",
+        "sample_name",
+        "sample_title",
+        "experiment_title",
+        "study_title",
+        "description",
+        "host",
+        "isolation_source",
     ]
     jattr_dtypes = pl.Struct([pl.Field("lat_lon", dtype=pl.String)])
     allowed_librarysources = ["METAGENOMIC", "GENOMIC", "METATRANSCRIPTOMIC"]
@@ -173,28 +184,36 @@ def import_parquet(parquet_dir, indexed_only=False):
 
     for parquet_file in parquet_dir.glob("*"):
         df = pl.scan_parquet(parquet_file)
-        sra_lf = df.filter(
-            pl.col("librarysource").is_in(allowed_librarysources)
-        ).select(column_list + ["jattr"])
+        available_columns = set(df.collect_schema().names())
+        selected_columns = [
+            column for column in column_list if column in available_columns
+        ]
+        sra_lf = df
+        if "librarysource" in available_columns:
+            sra_lf = sra_lf.filter(pl.col("librarysource").is_in(allowed_librarysources))
+        if "jattr" in available_columns:
+            sra_lf = sra_lf.select(selected_columns + ["jattr"])
+        else:
+            sra_lf = sra_lf.select(selected_columns)
         if indexed_ids:
             sra_lf = sra_lf.filter(pl.col("acc").is_in(indexed_ids))
-        sra_df = (
-            sra_lf.collect()
-            .with_columns(pl.col(pl.Date).cast(pl.Datetime))
-            .with_columns(
-                pl.col("jattr").str.json_decode(jattr_dtypes).alias("jattr_decoded")
+        sra_df = sra_lf.collect().with_columns(pl.col(pl.Date).cast(pl.Datetime))
+        if "jattr" in sra_df.columns:
+            sra_df = (
+                sra_df.with_columns(
+                    pl.col("jattr").str.json_decode(jattr_dtypes).alias("jattr_decoded")
+                )
+                .drop("jattr")
+                .unnest("jattr_decoded")
             )
-            .drop("jattr")
-            .unnest("jattr_decoded")
-            .with_columns(
-                [
-                    pl.col("acc").alias("_id"),
-                    pl.col("acc").alias("sra_accession"),
-                    pl.col("biosample").alias("sra_biosample"),
-                    pl.col("bioproject").alias("sra_bioproject"),
-                ]
-            )
-        )
+        alias_expressions = [pl.col("acc").alias("_id")]
+        if "acc" in sra_df.columns:
+            alias_expressions.append(pl.col("acc").alias("sra_accession"))
+        if "biosample" in sra_df.columns:
+            alias_expressions.append(pl.col("biosample").alias("sra_biosample"))
+        if "bioproject" in sra_df.columns:
+            alias_expressions.append(pl.col("bioproject").alias("sra_bioproject"))
+        sra_df = sra_df.with_columns(alias_expressions)
         if sra_df.height > 0:
             mongo = pm.MongoClient(settings.MONGO_URI)
             db = mongo["sradb"]
@@ -723,6 +742,7 @@ def run_watch():
             signature.submitted = True
             signature.save(update_fields=["submitted"])
             new_result = search_watch(signature.name, signature.user.id, result.pk)
+            copy_watch_filters(result, new_result)
             if compare_results(result, new_result):
                 # Watch searches are expected to create a fresh result row. If an
                 # existing watched result is returned instead, avoid deleting it.
@@ -751,10 +771,45 @@ def search_watch(name, user_id, watch_pk):
     return Result.objects.get(pk=search_result["result_pk"], user_id=user_id)
 
 
+def copy_watch_filters(result, new_result):
+    filter_setting = FilterSetting.objects.filter(
+        user=result.user, result=result
+    ).first()
+    if not filter_setting:
+        return
+    FilterSetting.objects.update_or_create(
+        user=new_result.user,
+        result=new_result,
+        defaults={"filter_spec": filter_setting.filter_spec},
+    )
+
+
 def compare_results(result, new_result):
-    df1 = pl.read_csv(result.file.path)
-    df2 = pl.read_csv(new_result.file.path)
-    return df1.equals(df2)
+    filter_setting = FilterSetting.objects.filter(
+        user=result.user, result=result
+    ).first()
+    filter_spec = filter_setting.filter_spec if filter_setting else {}
+    return filtered_result_records(result, filter_spec) == filtered_result_records(
+        new_result, filter_spec
+    )
+
+
+def filtered_result_records(result, filter_spec):
+    if not result.file:
+        return []
+    df = get_results_with_metadata(result)
+    filtered = apply_filter_spec(df, filter_spec)
+    if filtered.empty:
+        return []
+    normalized = filtered.fillna("").astype(str)
+    sort_columns = [
+        column
+        for column in ["sra_accession", "containment", "query_containment_ani"]
+        if column in normalized.columns
+    ]
+    if sort_columns:
+        normalized = normalized.sort_values(by=sort_columns)
+    return normalized.to_dict("records")
 
 
 def send_watch_notification(user, result, new_result):

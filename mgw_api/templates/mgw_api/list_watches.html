@@ -19,11 +19,13 @@
                         <th>Databases</th>
                         <th>Containment</th>
                         <th># results</th>
+                        <th>Filters</th>
                         <th>Watched</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for result in watches %}
+                    {% for watch in watches %}
+                        {% with result=watch.result %}
                         <tr>
                             <td>
                                 <a href="{% url 'mgw_api:result_table' result.pk %}">{{ result.name }}</a>
@@ -33,6 +35,13 @@
                             <td>{{ result.database }}</td>
                             <td>{{ result.containment }}</td>
                             <td>{{ result.num_results }}</td>
+                            <td>
+                                {% if watch.active_filter_labels %}
+                                    {% for label in watch.active_filter_labels %}<span class="filter-chip">{{ label }}</span>{% endfor %}
+                                {% else %}
+                                    <span>-</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 <form id="watch-form-{{ result.pk }}"
                                       method="post"
@@ -45,6 +54,7 @@
                                 </form>
                             </td>
                         </tr>
+                        {% endwith %}
                     {% endfor %}
                 </tbody>
             </table>

@@ -2,6 +2,12 @@
 <div class="result-navigation">
     <h2>Name: {{ result.name }}</h2>
     <p>Containment threshold: {{ result.containment }}</p>
+    {% if result.file %}
+        <p>
+            Results shown: {{ filtered_count }} of {{ unfiltered_count }}
+            {% if result.is_watched and has_active_filters %}(watch filters active){% endif %}
+        </p>
+    {% endif %}
     <form id="watch-form"
           method="post"
           action="{% url 'mgw_api:toggle_watch' result.pk %}">
@@ -20,12 +26,138 @@
         <mark>This search found zero results. Try redoing the search with a lower containment threshold.</mark>
     </div>
 {% else %}
+    <section class="filter-panel">
+        <div class="filter-bar">
+            <strong>Filters</strong>
+            {% if active_filter_chips %}
+                <div class="filter-chips">
+                    {% for chip in active_filter_chips %}
+                        <span class="filter-chip {% if chip.unavailable %}unavailable-filter{% endif %}">
+                            <a href="?filter_field={{ chip.field }}">{{ chip.description }}</a>
+                            {% if chip.unavailable %}<small> unavailable</small>{% endif %}
+                            <form method="post"
+                                  action="{% url 'mgw_api:update_filters' result.pk %}"
+                                  class="remove-filter-form">
+                                {% csrf_token %}
+                                <button type="submit"
+                                        name="remove_filter"
+                                        value="{{ chip.field }}"
+                                        aria-label="Remove {{ chip.label }} filter">x</button>
+                            </form>
+                        </span>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <span class="no-filters">None</span>
+            {% endif %}
+            {% if has_active_filters %}
+                <form method="post"
+                      action="{% url 'mgw_api:update_filters' result.pk %}"
+                      class="clear-filter-form">
+                    {% csrf_token %}
+                    <button type="submit" name="clear_filters" value="1">Clear all</button>
+                </form>
+            {% endif %}
+        </div>
+        <div class="filter-editor">
+            <form method="get" class="filter-field-form">
+                <label for="filter-field">Add filter</label>
+                <select id="filter-field" name="filter_field" onchange="this.form.submit()">
+                    <option value="">Choose metadata field</option>
+                    {% for field in addable_filter_fields %}
+                        <option value="{{ field.field }}"
+                                {% if field.field == selected_filter_field %}selected{% endif %}>
+                            {{ field.label }}{% if field.is_active %} (editing){% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+            </form>
+            {% if selected_filter_control %}
+                <form method="post"
+                      action="{% url 'mgw_api:update_filters' result.pk %}"
+                      class="filter-form">
+                    {% csrf_token %}
+                    <input type="hidden"
+                           name="filter_field"
+                           value="{{ selected_filter_control.field }}">
+                    <div class="compact-filter-control {% if selected_filter_control.unavailable %}unavailable-filter{% endif %}">
+                        <label>{{ selected_filter_control.label }}</label>
+                        {% if selected_filter_control.unavailable %}
+                            <small>This saved filter field is not available in this result set.</small>
+                            {% if selected_filter_control.operator == "in" %}
+                                {% for value in selected_filter_control.value %}
+                                    <input type="hidden"
+                                           name="in__{{ selected_filter_control.field }}"
+                                           value="{{ value }}">
+                                {% endfor %}
+                            {% elif selected_filter_control.operator == "range" %}
+                                <input type="hidden"
+                                       name="min__{{ selected_filter_control.field }}"
+                                       value="{{ selected_filter_control.min_value }}">
+                                <input type="hidden"
+                                       name="max__{{ selected_filter_control.field }}"
+                                       value="{{ selected_filter_control.max_value }}">
+                            {% elif selected_filter_control.operator == "missing" %}
+                                <input type="hidden"
+                                       name="missing__{{ selected_filter_control.field }}"
+                                       value="on">
+                            {% else %}
+                                <input type="hidden"
+                                       name="contains__{{ selected_filter_control.field }}"
+                                       value="{{ selected_filter_control.value }}">
+                            {% endif %}
+                        {% elif selected_filter_control.operator == "in" %}
+                            <select name="in__{{ selected_filter_control.field }}"
+                                    multiple
+                                    size="4">
+                                {% for option in selected_filter_control.options %}
+                                    <option value="{{ option }}"
+                                            {% if option in selected_filter_control.value %}selected{% endif %}>{{ option }}</option>
+                                {% endfor %}
+                            </select>
+                        {% elif selected_filter_control.operator == "range" %}
+                            <div class="range-filter">
+                                <input type="text"
+                                       name="min__{{ selected_filter_control.field }}"
+                                       value="{{ selected_filter_control.min_value }}"
+                                       placeholder="Min"
+                                       {% if selected_filter_control.field == "releasedate" or selected_filter_control.field == "collection_date_sam" %}class="date-filter-input"{% endif %}>
+                                <input type="text"
+                                       name="max__{{ selected_filter_control.field }}"
+                                       value="{{ selected_filter_control.max_value }}"
+                                       placeholder="Max"
+                                       {% if selected_filter_control.field == "releasedate" or selected_filter_control.field == "collection_date_sam" %}class="date-filter-input"{% endif %}>
+                            </div>
+                        {% else %}
+                            <input type="text"
+                                   name="contains__{{ selected_filter_control.field }}"
+                                   value="{{ selected_filter_control.value }}"
+                                   placeholder="Contains">
+                        {% endif %}
+                        <label class="include-missing">
+                            <input type="checkbox"
+                                   name="include_missing__{{ selected_filter_control.field }}"
+                                   {% if selected_filter_control.include_missing %}checked{% endif %}>
+                            Include missing values
+                        </label>
+                        <button type="submit">
+                            {% if result.is_watched %}
+                                Update watch filter
+                            {% else %}
+                                Apply filter
+                            {% endif %}
+                        </button>
+                    </div>
+                </form>
+            {% endif %}
+        </div>
+    </section>
     <div class="result-table">
         <div class="table-wrapper">
             <table id="results" class="display">
                 <thead id="table-head">
                     <tr>
-                        {% for header in headers %}<th>{{ header }}</th>{% endfor %}
+                        {% for header, label in headers|zip_lists:header_labels %}<th>{{ label }}</th>{% endfor %}
                     </tr>
                 </thead>
                 <tbody id="table-body">
@@ -33,17 +165,17 @@
                         <tr>
                             {% for cell, header in row|zip_lists:headers %}
                                 <td>
-                                    {% if header == "containment" or header == "query containment ani" %}
+                                    {% if header == "containment" or header == "query_containment_ani" %}
                                         {{ cell|floatformat:4 }}
-                                    {% elif header == "lat lon" %}
+                                    {% elif header == "lat_lon" %}
                                         {% if cell is not None %}
                                             <a href="https://www.openstreetmap.org/#map=12/{{ cell|lat_lon_for_osm }}">view map</a>
                                         {% endif %}
-                                    {% elif header == "sra accession" and cell is not None %}
+                                    {% elif header == "sra_accession" and cell is not None %}
                                         <a href="https://www.ncbi.nlm.nih.gov/sra/{{ cell|escape }}">{{ cell }}</a>
-                                    {% elif header == "sra biosample" and cell is not None %}
+                                    {% elif header == "sra_biosample" and cell is not None %}
                                         <a href="https://www.ncbi.nlm.nih.gov/biosample/{{ cell|escape }}">{{ cell }}</a>
-                                    {% elif header == "sra bioproject" and cell is not None %}
+                                    {% elif header == "sra_bioproject" and cell is not None %}
                                         <a href="https://www.ncbi.nlm.nih.gov/bioproject/{{ cell|escape }}">{{ cell }}</a>
                                     {% elif header == "releasedate" and cell is not None %}
                                         {{ cell|date:"Y-m-d" }}
@@ -60,7 +192,9 @@
         </div>
     </div>
     <div>
-        Download: <a href="{% url 'mgw_api:download_full_table' result.pk %}">full unfiltered results (.tsv format)</a>
+        Download: <a href="{% url 'mgw_api:download_filtered_table' result.pk %}">filtered results (.tsv format)</a>
+        |
+        <a href="{% url 'mgw_api:download_full_table' result.pk %}">full unfiltered results (.tsv format)</a>
         <br>
         <a href="{% url 'mgw_api:delete_result' result.pk %}?next={{ request.path }}">Delete this Result</a>
     </div>
@@ -74,8 +208,15 @@ DataTable.defaults.layout = {
     bottomEnd: null
 };
 $(document).ready( function () {
+    if (typeof DateTime !== 'undefined') {
+        document.querySelectorAll('.date-filter-input').forEach((element) => {
+            new DateTime(element, {
+                format: 'YYYY-MM-DD'
+            });
+        });
+    }
     $('#results').DataTable( {
-        order: [[6, 'desc']],
+        order: [[{{ default_sort_column }}, 'desc']],
         layout: {
             topStart: 'info',
             topEnd: 'search',

@@ -133,6 +133,14 @@ def add_sra_metadata(branchwater_results):
         "organism",
         "releasedate",
         "librarysource",
+        "sample_name",
+        "sample_title",
+        "experiment_title",
+        "study_title",
+        "description",
+        "geo_loc_name",
+        "host",
+        "isolation_source",
     ]
     sra_accessions = branchwater_results.index.to_list()
     sra_metadata = get_sra_fields(sra_accessions, sra_columns)
@@ -161,6 +169,14 @@ def reorder_result_columns_sra(df):
         "organism",
         "releasedate",
         "librarysource",
+        "sample_name",
+        "sample_title",
+        "experiment_title",
+        "study_title",
+        "description",
+        "geo_loc_name",
+        "host",
+        "isolation_source",
     ]
     return df[output_ordering]
 
@@ -216,5 +232,4 @@ def get_results_with_metadata(result, max_results=None):
     branchwater_results = get_branchwater_table(result, max_rows=max_results)
     results_with_metadata = add_sra_metadata(branchwater_results)
     results_with_metadata = reorder_result_columns_sra(results_with_metadata)
-    results_with_metadata = prettify_column_names(results_with_metadata)
     return results_with_metadata
