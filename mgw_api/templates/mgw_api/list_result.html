@@ -38,6 +38,7 @@
                             <th>Databases</th>
                             <th>Containment</th>
                             <th># results</th>
+                            <th>Filters</th>
                             <th>Current search</th>
                             <th>Is watched?</th>
                             <th>Delete</th>
@@ -53,6 +54,13 @@
                                 <td>{{ result.database }}</td>
                                 <td>{{ result.containment }}</td>
                                 <td>{{ result.num_results }}</td>
+                                <td>
+                                    {% if result.active_filter_labels %}
+                                        {% for label in result.active_filter_labels %}<span class="filter-chip">{{ label }}</span>{% endfor %}
+                                    {% else %}
+                                        <span>-</span>
+                                    {% endif %}
+                                </td>
                                 {% if forloop.first %}
                                     <td {% if signature.sorted_results|length > 1 %}rowspan="{{ signature.sorted_results|length }}"{% endif %}>
                                         {% if signature.active_job %}

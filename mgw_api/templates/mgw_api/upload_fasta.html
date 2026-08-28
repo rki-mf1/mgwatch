@@ -13,6 +13,30 @@
             {% csrf_token %}
             <div>{{ fasta_form.name }}</div>
             <div>{{ fasta_form.file }}</div>
+            <details class="pre-search-filters">
+                <summary>Advanced filters</summary>
+                <div class="filter-bar">
+                    <strong>Filters</strong>
+                    <div class="filter-chips" id="pre-search-filter-chips">
+                        <span class="no-filters" id="pre-search-no-filters">None</span>
+                    </div>
+                </div>
+                <div class="filter-editor">
+                    <div class="filter-field-form">
+                        <label for="pre-search-filter-field">Add filter</label>
+                        <select id="pre-search-filter-field">
+                            <option value="">Choose metadata field</option>
+                            {% for field in addable_filter_fields %}
+                                <option value="{{ field.field }}"
+                                        data-label="{{ field.label }}"
+                                        data-operator="{{ field.operator }}">{{ field.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="filter-form" id="pre-search-filter-editor"></div>
+                </div>
+                <div id="pre-search-filter-inputs"></div>
+            </details>
             <input type="submit" value="Search">
             <small id="upload-helper">The maximum sequence file size you can upload is 100 megabytes.</small>
         </form>
@@ -21,6 +45,11 @@
     document.addEventListener('DOMContentLoaded', function () {
         const fileInput = document.querySelector('input[type="file"]');
         const nameInput = document.querySelector('input[name="name"]');
+        const filterField = document.getElementById('pre-search-filter-field');
+        const filterEditor = document.getElementById('pre-search-filter-editor');
+        const filterChips = document.getElementById('pre-search-filter-chips');
+        const noFilters = document.getElementById('pre-search-no-filters');
+        const filterInputs = document.getElementById('pre-search-filter-inputs');
 
         fileInput.addEventListener('change', function() {
             if (fileInput.files.length > 0) {
@@ -47,6 +76,111 @@
                 nameInput.value = files[0].name;
             }
         });
+
+        function updateNoFiltersState() {
+            noFilters.style.display = filterChips.querySelector('.filter-chip') ? 'none' : 'inline';
+        }
+
+        function removePreSearchFilter(field) {
+            filterInputs.querySelectorAll(`[data-filter-field="${field}"]`).forEach((element) => element.remove());
+            const chip = filterChips.querySelector(`[data-filter-field="${field}"]`);
+            if (chip) {
+                chip.remove();
+            }
+            updateNoFiltersState();
+        }
+
+        function addHiddenFilterInput(name, value, field) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            input.dataset.filterField = field;
+            filterInputs.appendChild(input);
+        }
+
+        function addPreSearchFilter(field, label, operator, values) {
+            removePreSearchFilter(field);
+            let description = '';
+            if (operator === 'date' || operator === 'range') {
+                if (!values.min && !values.max) {
+                    return;
+                }
+                addHiddenFilterInput(`min__${field}`, values.min, field);
+                addHiddenFilterInput(`max__${field}`, values.max, field);
+                description = `${label}: ${values.min || 'any'} to ${values.max || 'any'}`;
+            } else if (operator === 'category') {
+                if (!values.value) {
+                    return;
+                }
+                addHiddenFilterInput(`in__${field}`, values.value, field);
+                description = `${label}: ${values.value}`;
+            } else {
+                if (!values.value) {
+                    return;
+                }
+                addHiddenFilterInput(`contains__${field}`, values.value, field);
+                description = `${label} contains ${values.value}`;
+            }
+            const chip = document.createElement('span');
+            chip.className = 'filter-chip';
+            chip.dataset.filterField = field;
+            const chipText = document.createElement('span');
+            chipText.textContent = description;
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.setAttribute('aria-label', `Remove ${label} filter`);
+            removeButton.textContent = 'x';
+            removeButton.addEventListener('click', function () {
+                removePreSearchFilter(field);
+            });
+            chip.appendChild(chipText);
+            chip.appendChild(removeButton);
+            filterChips.appendChild(chip);
+            updateNoFiltersState();
+        }
+
+        function renderPreSearchFilterEditor() {
+            const option = filterField.selectedOptions[0];
+            const field = option.value;
+            const label = option.dataset.label;
+            const operator = option.dataset.operator;
+            filterEditor.innerHTML = '';
+            if (!field) {
+                return;
+            }
+            const wrapper = document.createElement('div');
+            wrapper.className = 'compact-filter-control pre-search-filter-control';
+            if (operator === 'date' || operator === 'range') {
+                const inputType = operator === 'date' ? 'date' : 'text';
+                wrapper.innerHTML = `
+                    <label>${label}</label>
+                    <div class="range-filter">
+                        <input type="${inputType}" data-role="min" placeholder="Min">
+                        <input type="${inputType}" data-role="max" placeholder="Max">
+                    </div>
+                    <button type="button">Add filter</button>
+                `;
+            } else {
+                wrapper.innerHTML = `
+                    <label>${label}</label>
+                    <input type="text" data-role="value" placeholder="Contains">
+                    <button type="button">Add filter</button>
+                `;
+            }
+            wrapper.querySelector('button').addEventListener('click', function () {
+                const values = {
+                    value: wrapper.querySelector('[data-role="value"]')?.value.trim() || '',
+                    min: wrapper.querySelector('[data-role="min"]')?.value.trim() || '',
+                    max: wrapper.querySelector('[data-role="max"]')?.value.trim() || '',
+                };
+                addPreSearchFilter(field, label, operator, values);
+            });
+            filterEditor.appendChild(wrapper);
+        }
+
+        filterField.addEventListener('change', renderPreSearchFilterEditor);
+        updateNoFiltersState();
     });
     
     function handleError(message) {

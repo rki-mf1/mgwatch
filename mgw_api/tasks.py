@@ -3,6 +3,7 @@ from django.conf import settings
 from django.db import transaction
 
 from mgw_api.locking import acquire_lock
+from mgw_api.models import FilterSetting
 from mgw_api.models import Job
 from mgw_api.models import Signature
 from mgw_api.services.exceptions import JobConflictError
@@ -146,6 +147,12 @@ def run_signature_pipeline(self, *, job_id, user_id, name):
         )
         signature = Signature.objects.get(user_id=user_id, name=name)
         result_obj = signature.result_set.latest("time")
+        if job.fasta and job.fasta.initial_filter_spec:
+            FilterSetting.objects.update_or_create(
+                user=job.fasta.user,
+                result=result_obj,
+                defaults={"filter_spec": job.fasta.initial_filter_spec},
+            )
         mark_job_completed(job, message="Complete", result=result_obj)
         return result
     except Exception as exc:
