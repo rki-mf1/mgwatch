@@ -1,8 +1,6 @@
 <div class="settings-section">
     <h2>Settings</h2>
-    {% if settings_form_owns_form %}
-        <form method="post" enctype="multipart/form-data" id="settings-form">
-    {% endif %}
+    {% if settings_form_owns_form %}<form method="post" enctype="multipart/form-data" id="settings-form">{% endif %}
         <div class="grid">
             {% if settings_form_owns_form %}
                 {% csrf_token %}
@@ -32,9 +30,7 @@
                 </ul>
             {% endif %}
         </div>
-    {% if settings_form_owns_form %}
-        </form>
-    {% endif %}
+        {% if settings_form_owns_form %}</form>{% endif %}
 </div>
 <script>
     function validateForm(event) {
