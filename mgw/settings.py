@@ -24,6 +24,8 @@ from celery.schedules import crontab
 from django.core.exceptions import ImproperlyConfigured
 from django_auth_ldap.config import LDAPSearch
 
+from mgw.redis_config import disabled_maint_notifications_config
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -278,6 +280,9 @@ LOGGING = {
             "level": LOG_LEVEL,
             "handlers": ["console", "app_log_file"],
         },
+        "celery.utils.functional": {
+            "level": "INFO",
+        },
     },
 }
 
@@ -391,7 +396,7 @@ MEDIA_URL = "/media/"
 REDIS_URL = env("REDIS_URL")
 
 CELERY_BROKER_URL = REDIS_URL
-CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_RESULT_BACKEND = f"mgw.celery_backends:RedisBackend+{REDIS_URL}"
 CELERY_TASK_ALWAYS_EAGER = env("CELERY_TASK_ALWAYS_EAGER")
 CELERY_TASK_EAGER_PROPAGATES = env("CELERY_TASK_EAGER_PROPAGATES")
 CELERY_TASK_TRACK_STARTED = True
@@ -456,6 +461,9 @@ else:
             "LOCATION": REDIS_URL,
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "CONNECTION_POOL_KWARGS": {
+                    "maint_notifications_config": disabled_maint_notifications_config(),
+                },
             },
         }
     }
