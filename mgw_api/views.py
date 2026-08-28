@@ -83,22 +83,32 @@ def user_logout(request):
 def upload_fasta(request):
     sourmash_settings, created = Settings.objects.get_or_create(user=request.user)
     settings_form = SettingsForm(instance=sourmash_settings)
+    fasta_form = FastaForm()
     initial_filter_spec = build_filter_spec_from_post(request.POST)
     if request.method == "POST":
-        ## handle settings
-        if (
+        is_upload_request = (
+            "name" in request.POST or "file" in request.POST or "file" in request.FILES
+        )
+        has_settings_fields = (
             "kmer" in request.POST
             or "database" in request.POST
             or "containment" in request.POST
-        ):
+        )
+        ## handle settings
+        if has_settings_fields:
             settings_form = SettingsForm(request.POST, instance=sourmash_settings)
             if settings_form.is_valid():
-                settings_form.save()
-                return redirect(reverse("mgw_api:upload_fasta"))
+                if not is_upload_request:
+                    settings_form.save()
+                    return redirect(reverse("mgw_api:upload_fasta"))
             else:
                 messages.error(request, "Please correct the errors below.")
+                if is_upload_request:
+                    return JsonResponse(
+                        {"success": False, "error": settings_form.errors.as_json()}
+                    )
         ## handle upload
-        if "name" in request.POST or "file" in request.POST:
+        if is_upload_request:
             ## handle upload fasta
             fasta_form = FastaForm(request.POST, request.FILES)
             if fasta_form.is_valid():
@@ -117,6 +127,8 @@ def upload_fasta(request):
                         )
                     else:
                         with transaction.atomic():
+                            if has_settings_fields:
+                                settings_form.save()
                             uploaded_file_instance = fasta_form.save(commit=False)
                             uploaded_file_instance.user = request.user
                             uploaded_file_instance.name = name
@@ -153,8 +165,6 @@ def upload_fasta(request):
             else:
                 errors = fasta_form.errors.as_json()
                 return JsonResponse({"success": False, "error": errors})
-    else:
-        fasta_form = FastaForm()
     return render(
         request,
         "mgw_api/upload_fasta.html",
@@ -319,7 +329,11 @@ def sourmash_settings(request):
             else 0.10,
         }
         settings_form = SettingsForm(instance=sourmash_settings, initial=initial_data)
-    return render(request, "mgw_api/settings.html", {"settings_form": settings_form})
+    return render(
+        request,
+        "mgw_api/settings.html",
+        {"settings_form": settings_form, "settings_form_owns_form": True},
+    )
 
 
 @login_required

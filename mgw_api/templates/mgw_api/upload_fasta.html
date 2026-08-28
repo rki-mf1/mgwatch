@@ -6,13 +6,13 @@
             Welcome to MetagenomeWatch. To get started, simply upload a FASTA file with your favourite genomic sequence. The search will run in the background and you will be sent to a result page that updates while the search is running. You can bookmark that page, leave it open until the results appear, or start another search in a new tab.
         </p>
     </div>
-    {% include "mgw_api/settings.html" %}
     <div class="upload-section" id="upload-section">
         <h2>Upload Genome</h2>
         <form id="upload-form" method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <div>{{ fasta_form.name }}</div>
             <div>{{ fasta_form.file }}</div>
+            {% include "mgw_api/settings.html" with settings_form_owns_form=False %}
             <details class="pre-search-filters">
                 <summary>Advanced filters</summary>
                 <div class="filter-bar">
@@ -224,6 +224,9 @@
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('upload-form');
         form.addEventListener('submit', function (event) {
+            if (typeof validateForm === 'function' && !validateForm(event)) {
+                return;
+            }
             const headers = { 'X-Requested-With': 'XMLHttpRequest' };
             handleFormSubmission(event, headers);
         });
