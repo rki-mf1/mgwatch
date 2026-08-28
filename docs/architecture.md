@@ -30,7 +30,7 @@ An update can be done manually with:
 ./scripts/dev-manage.sh create_daily
 ```
 
-If enabled the automated cron job will run this script every day at 1AM.
+Celery Beat runs this pipeline every day at 1 AM.
 
 ## Update commands
 

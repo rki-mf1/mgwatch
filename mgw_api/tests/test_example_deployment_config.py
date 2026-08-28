@@ -50,6 +50,16 @@ class ExampleDeploymentConfigTests(TestCase):
         self.assertIn("read_only: true", compose_text)
         self.assertEqual(compose_text.count("healthcheck:"), 8)
 
+    def test_production_compose_runs_celery_beat_for_recurring_work(self):
+        compose_text = (EXAMPLE_CONFIG_DIR / "compose.prod.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("mgwatch-celery-beat:", compose_text)
+        self.assertIn("celery -A mgw beat --loglevel INFO", compose_text)
+        self.assertIn("--queues maintenance,indexing,watches", compose_text)
+        self.assertNotIn("/var/spool/cron", compose_text)
+
     def test_production_nginx_template_rate_limits_login(self):
         nginx_text = (
             EXAMPLE_CONFIG_DIR / "nginx-templates" / "mgwatch.conf.template"

@@ -16,8 +16,6 @@ services:
       - ./vars.env:/code/vars.env:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
-      # Persist mgwatch cron jobs
-      - ${EXTERNAL_DATA_DIR}/backend-crontabs:/var/spool/cron/crontabs
       - ${LOG_DIR}:/logs
     environment:
       - TZ=$TZ
