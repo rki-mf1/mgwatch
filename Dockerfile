@@ -7,7 +7,7 @@ ARG MGWATCH_GID=1000
 
 COPY --from=pixi /usr/local/bin/pixi /usr/local/bin/pixi
 
-RUN apt update --allow-releaseinfo-change && apt install -y ca-certificates procps wget gzip pigz bc cron && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+RUN apt update --allow-releaseinfo-change && apt install -y ca-certificates procps wget gzip pigz bc && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 RUN if ! getent group "${MGWATCH_GID}" >/dev/null; then \
         groupadd --gid "${MGWATCH_GID}" mgwatch; \
     fi && \
@@ -19,8 +19,8 @@ RUN if ! getent group "${MGWATCH_GID}" >/dev/null; then \
     fi
 
 WORKDIR /code
-RUN mkdir -p /code/static /data /logs /var/spool/cron/crontabs && \
-    chown "${MGWATCH_UID}:${MGWATCH_GID}" /code /code/static /data /logs /var/spool/cron/crontabs
+RUN mkdir -p /code/static /data /logs && \
+    chown "${MGWATCH_UID}:${MGWATCH_GID}" /code /code/static /data /logs
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     XDG_CACHE_HOME=/tmp/.cache \

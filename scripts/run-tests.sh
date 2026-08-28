@@ -54,7 +54,6 @@ export LOG_DIR="$test_root/django-logs"
 
 mkdir -p \
     "$EXTERNAL_DATA_DIR/backend-data" \
-    "$EXTERNAL_DATA_DIR/backend-crontabs" \
     "$POSTGRES_DATA_DIR" \
     "$MONGODB_DATA_DIR" \
     "$MONGODB_LOG_DIR" \

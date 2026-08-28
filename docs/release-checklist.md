@@ -95,7 +95,7 @@ Record the result in the release notes before production rollout.
   ```
 
 - [ ] Verify service health endpoints / core user flows.
-- [ ] Verify worker/cron behavior and scheduled task logs.
+- [ ] Verify worker/Celery Beat behavior and scheduled task logs.
 
 ## 6) Rollback procedure (if needed)
 

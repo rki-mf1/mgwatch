@@ -43,7 +43,7 @@ Prefer digest pinning for reproducibility.
 
 - Keep persistent paths (`EXTERNAL_DATA_DIR`, `POSTGRES_DATA_DIR`, `MONGODB_DATA_DIR`, `LOG_DIR`) on durable storage.
 - Use `vars.env` to manage Django secrets and environment-specific behavior.
-- Keep cron and backend services on the same image tag/digest.
+- Keep backend, Celery worker, and Celery Beat services on the same image tag/digest.
 
 ## Related documentation
 

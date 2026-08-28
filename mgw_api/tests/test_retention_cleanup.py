@@ -267,3 +267,12 @@ class RetentionCleanupTests(TestCase):
 
         self.assertEqual(schedule["task"], "mgw_api.tasks.run_retention_cleanup_task")
         self.assertEqual(schedule["options"], {"queue": "maintenance"})
+
+    def test_daily_pipeline_is_scheduled_by_celery_beat(self):
+        schedule = settings.CELERY_BEAT_SCHEDULE["daily-maintenance-pipeline"]
+
+        self.assertEqual(settings.CELERY_TIMEZONE, settings.TIME_ZONE)
+        self.assertEqual(schedule["task"], "mgw_api.tasks.run_daily_pipeline_task")
+        self.assertEqual(schedule["options"], {"queue": "maintenance"})
+        self.assertEqual(schedule["schedule"]._orig_minute, 0)
+        self.assertEqual(schedule["schedule"]._orig_hour, 1)
