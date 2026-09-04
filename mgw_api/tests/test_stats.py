@@ -427,3 +427,43 @@ class StatsViewTests(TestCase):
         self.client.login(username="staff", password="testpass123")
         response = self.client.get(reverse("mgw_api:upload_fasta"))
         self.assertContains(response, reverse("mgw_api:stats"))
+
+    def test_stats_nav_link_is_shown_to_staff_on_result_table(self):
+        result = self.create_result_for_user(self.staff)
+
+        self.client.login(username="staff", password="testpass123")
+        response = self.client.get(reverse("mgw_api:result_table", args=[result.pk]))
+
+        self.assertContains(response, reverse("mgw_api:stats"))
+
+    def test_stats_nav_link_is_hidden_from_non_staff_on_result_table(self):
+        result = self.create_result_for_user(self.user)
+
+        self.client.login(username="user", password="testpass123")
+        response = self.client.get(reverse("mgw_api:result_table", args=[result.pk]))
+
+        self.assertNotContains(response, reverse("mgw_api:stats"))
+
+    def create_result_for_user(self, user):
+        fasta = Fasta.objects.create(
+            user=user,
+            name="query",
+            size=1,
+            file=f"user_{user.pk}/query.fa",
+        )
+        signature = Signature.objects.create(
+            user=user,
+            name="query",
+            fasta=fasta,
+            file=f"user_{user.pk}/query.sig",
+        )
+        return Result.objects.create(
+            user=user,
+            name="query",
+            signature=signature,
+            file="",
+            num_results=0,
+            kmer=[21],
+            database=["SRA"],
+            containment=0.1,
+        )
