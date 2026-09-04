@@ -241,6 +241,58 @@ class UserDeprovisionState(models.Model):
         return f"{self.user.username}:{self.source}"
 
 
+class SystemStatistic(models.Model):
+    class Metric(models.TextChoices):
+        INDEX_SAMPLE_COUNT = "index_sample_count", "Index samples"
+        METADATA_SAMPLE_COUNT = "metadata_sample_count", "Metadata samples"
+        AVERAGE_SEARCH_RATE_SEQUENCES_PER_SECOND = (
+            "average_search_rate_sequences_per_second",
+            "Average search rate",
+        )
+        METADATA_UPDATE_RUNTIME_SECONDS = (
+            "metadata_update_runtime_seconds",
+            "Metadata update runtime",
+        )
+        INDEX_UPDATE_RUNTIME_SECONDS = (
+            "index_update_runtime_seconds",
+            "Index update runtime",
+        )
+        DOWNLOAD_INDEX_RUNTIME_SECONDS = (
+            "download_index_runtime_seconds",
+            "Sample download/index runtime",
+        )
+
+    metric = models.CharField(max_length=64, choices=Metric.choices, unique=True)
+    value = models.FloatField(default=0)
+    observation_count = models.PositiveIntegerField(default=0)
+    details = models.JSONField(default=dict, blank=True)
+    recorded_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["metric"]
+
+    def __str__(self):
+        return self.get_metric_display()
+
+
+class SystemStatisticSnapshot(models.Model):
+    metric = models.CharField(max_length=64, choices=SystemStatistic.Metric.choices)
+    value = models.FloatField(default=0)
+    observation_count = models.PositiveIntegerField(default=0)
+    details = models.JSONField(default=dict, blank=True)
+    recorded_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-recorded_at", "-pk"]
+        indexes = [
+            models.Index(fields=["metric", "-recorded_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_metric_display()} at {self.recorded_at}"
+
+
 class Job(models.Model):
     class JobType(models.TextChoices):
         SIGNATURE_PIPELINE = "signature_pipeline", "Signature pipeline"

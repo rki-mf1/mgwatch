@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from itertools import product
 from pathlib import Path
+from time import monotonic
 
 import pandas as pd
 from django.conf import settings
@@ -14,6 +15,7 @@ from mgw.settings import MGW_URL
 from mgw_api.models import Result
 from mgw_api.models import Settings
 from mgw_api.models import Signature
+from mgw_api.services.stats import try_record_search_rate
 
 from .processes import run_command
 
@@ -149,6 +151,7 @@ def send_notification(result):
 
 
 def run_search(*, user_id, name, watch, progress_callback=None, state_callback=None):
+    started_at = monotonic()
     signature, search_set, plan = build_search_plan(
         user_id=user_id, name=name, watch=watch
     )
@@ -182,6 +185,12 @@ def run_search(*, user_id, name, watch, progress_callback=None, state_callback=N
         search_set=search_set,
         combined_file=combined_file,
         num_results=num_results,
+    )
+    try_record_search_rate(
+        duration_seconds=monotonic() - started_at,
+        databases=search_set.database,
+        result=result_model,
+        total_indexes=total,
     )
     send_notification(result_model)
     LOGGER.info("Search finished with result_pk = %s.", result_model.pk)

@@ -10,6 +10,7 @@ from datetime import datetime
 from datetime import timedelta
 from itertools import batched
 from pathlib import Path
+from time import monotonic
 
 import aiofiles
 import aiohttp
@@ -29,6 +30,11 @@ from mgw_api.models import FilterSetting
 from mgw_api.models import Result
 from mgw_api.models import Signature
 from mgw_api.services.filters import apply_filter_spec
+from mgw_api.services.stats import try_record_download_index_runtime
+from mgw_api.services.stats import try_record_index_stats
+from mgw_api.services.stats import try_record_index_update_runtime
+from mgw_api.services.stats import try_record_metadata_stats
+from mgw_api.services.stats import try_record_metadata_update_runtime
 
 from .processes import run_command
 from .searches import run_search
@@ -41,10 +47,12 @@ SRA_METADATA_MAX_DOWNLOADS = 8
 def run_metadata(
     *, no_download=False, no_process=False, drop_first=False, indexed_only=False
 ):
+    started_at = monotonic()
     LOGGER.info("Starting metadata update")
     database = "SRA"
     metadata_dir = settings.DATA_DIR / database / "metadata" / "parquet"
     metadata_dir.mkdir(parents=True, exist_ok=True)
+    metadata_stat = None
 
     if drop_first:
         drop_mongo_collection("sradb_list")
@@ -61,9 +69,15 @@ def run_metadata(
 
     if not no_process:
         import_parquet(metadata_dir, indexed_only=indexed_only)
+        metadata_stat = try_record_metadata_stats()
 
     init_flag = settings.DATA_DIR / "SRA" / "metadata" / "initial_setup.txt"
     init_flag.touch()
+    if not no_process:
+        try_record_metadata_update_runtime(
+            duration_seconds=monotonic() - started_at,
+            metadata_sample_count=metadata_stat.value if metadata_stat else None,
+        )
     return {"metadata_dir": str(metadata_dir)}
 
 
@@ -464,6 +478,7 @@ def run_index_batches(
     max_batches=None,
     delete_indexed_sigs=False,
 ):
+    started_at = monotonic()
     kmers = [21, 31, 51]
     database = "SRA"
     metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
@@ -486,7 +501,10 @@ def run_index_batches(
         batch_specs = batch_specs[:max_batches]
     if not batch_specs:
         return {"indexes_updated": 0, "batches_processed": 0}
+    update_sig_files = set(glob.glob(os.path.join(dir_paths["updates"], "*.sig")))
     indexing_ever_failed = False
+    indexing_ever_succeeded = False
+    samples_added = 0
     for index_number, new_files in batch_specs:
         indexing_succeeded, mani_list = process_index_batch(
             work_dir,
@@ -501,6 +519,20 @@ def run_index_batches(
             delete_indexed_sigs,
         )
         indexing_ever_failed = indexing_ever_failed or not indexing_succeeded
+        indexing_ever_succeeded = indexing_ever_succeeded or indexing_succeeded
+        if indexing_succeeded:
+            samples_added += sum(
+                1 for sig_file in new_files if sig_file in update_sig_files
+            )
+    if indexing_ever_succeeded:
+        index_stat = try_record_index_stats(database=database)
+        try_record_index_update_runtime(
+            duration_seconds=monotonic() - started_at,
+            samples_added=samples_added,
+            sketches_added=samples_added * len(kmers),
+            database=database,
+            total_index_sample_count=index_stat.value if index_stat else None,
+        )
     return {
         "indexes_updated": 1,
         "batches_processed": len(batch_specs),
@@ -575,6 +607,7 @@ def run_download_index(
     retry_failed=False,
     index_max_signatures=None,
 ):
+    started_at = monotonic()
     test_url = "https://wort.sourmash.bio/v1/view/sra/SRR15461028"
     run_command(["curl", "-sLf", "-r", "0-10", test_url, "-o", "/dev/null"])
     dir_paths, man_fail, remaining_ids = prepare_download_targets(ids=ids)
@@ -646,6 +679,11 @@ def run_download_index(
         if index_result["indexes_updated"] == 0:
             break
 
+    try_record_download_index_runtime(
+        duration_seconds=monotonic() - started_at,
+        downloaded=total_downloaded,
+        indexes_updated=total_batches,
+    )
     return {"downloaded": total_downloaded, "indexes_updated": total_batches}
 
 

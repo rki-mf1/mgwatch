@@ -46,6 +46,11 @@
                             <li>
                                 <a href="{% url 'mgw_api:list_watches' %}">Watches</a>
                             </li>
+                            {% if request.user.is_staff %}
+                                <li>
+                                    <a href="{% url 'mgw_api:stats' %}">Stats</a>
+                                </li>
+                            {% endif %}
                             <li>|</li>
                         {% endif %}
                         {% if request.user.is_authenticated %}
