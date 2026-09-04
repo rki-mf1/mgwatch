@@ -13,6 +13,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth import login
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.http import FileResponse
 from django.http import Http404
@@ -35,6 +36,8 @@ from .models import Job
 from .models import Result
 from .models import Settings
 from .models import Signature
+from .models import SystemStatistic
+from .models import SystemStatisticSnapshot
 from .services.filters import active_filter_chips
 from .services.filters import active_filter_labels
 from .services.filters import apply_filter_spec
@@ -206,6 +209,137 @@ def build_upload_filter_fields():
         {"field": "containment", "label": "Containment", "operator": "range"},
         {"field": "query_containment_ani", "label": "ANI", "operator": "range"},
     ]
+
+
+def _format_stat_value(metric, value):
+    if metric == SystemStatistic.Metric.AVERAGE_SEARCH_RATE_SEQUENCES_PER_SECOND:
+        return f"{value:,.2f} seq/s"
+    if metric in (
+        SystemStatistic.Metric.METADATA_UPDATE_RUNTIME_SECONDS,
+        SystemStatistic.Metric.INDEX_UPDATE_RUNTIME_SECONDS,
+        SystemStatistic.Metric.DOWNLOAD_INDEX_RUNTIME_SECONDS,
+    ):
+        return f"{value:,.2f} s"
+    return f"{int(value):,}"
+
+
+def _format_searches_in_average(metric, observation_count):
+    if metric == SystemStatistic.Metric.AVERAGE_SEARCH_RATE_SEQUENCES_PER_SECOND:
+        return str(observation_count)
+    return "N/A"
+
+
+def _format_stat_details(metric, details):
+    details = details or {}
+    if metric == SystemStatistic.Metric.DOWNLOAD_INDEX_RUNTIME_SECONDS:
+        return (
+            f"{details.get('downloaded', 0):,} samples downloaded, "
+            f"{details.get('indexes_updated', 0):,} index batches"
+        )
+    if metric == SystemStatistic.Metric.INDEX_UPDATE_RUNTIME_SECONDS:
+        return (
+            f"{details.get('samples_added', 0):,} samples added, "
+            f"{details.get('sketches_added', 0):,} sketches added"
+        )
+    if metric == SystemStatistic.Metric.METADATA_UPDATE_RUNTIME_SECONDS:
+        sample_count = details.get("metadata_sample_count")
+        if sample_count is not None:
+            return f"{sample_count:,} metadata samples"
+    return ""
+
+
+def _format_runtime(metric, value, details):
+    details = details or {}
+    runtime = details.get("last_runtime_seconds")
+    if runtime is None and metric in (
+        SystemStatistic.Metric.METADATA_UPDATE_RUNTIME_SECONDS,
+        SystemStatistic.Metric.INDEX_UPDATE_RUNTIME_SECONDS,
+        SystemStatistic.Metric.DOWNLOAD_INDEX_RUNTIME_SECONDS,
+    ):
+        runtime = value
+    if runtime is None:
+        return "N/A"
+    return f"{float(runtime):,.2f} s"
+
+
+@login_required
+def stats(request):
+    if not request.user.is_staff:
+        raise PermissionDenied
+    current_stats = {
+        statistic.metric: statistic
+        for statistic in SystemStatistic.objects.filter(
+            metric__in=[
+                SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+                SystemStatistic.Metric.AVERAGE_SEARCH_RATE_SEQUENCES_PER_SECOND,
+                SystemStatistic.Metric.METADATA_UPDATE_RUNTIME_SECONDS,
+                SystemStatistic.Metric.INDEX_UPDATE_RUNTIME_SECONDS,
+                SystemStatistic.Metric.DOWNLOAD_INDEX_RUNTIME_SECONDS,
+            ]
+        )
+    }
+    metric_labels = dict(SystemStatistic.Metric.choices)
+    metrics = []
+    for metric in [
+        SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+        SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+        SystemStatistic.Metric.AVERAGE_SEARCH_RATE_SEQUENCES_PER_SECOND,
+        SystemStatistic.Metric.METADATA_UPDATE_RUNTIME_SECONDS,
+        SystemStatistic.Metric.INDEX_UPDATE_RUNTIME_SECONDS,
+        SystemStatistic.Metric.DOWNLOAD_INDEX_RUNTIME_SECONDS,
+    ]:
+        statistic = current_stats.get(metric)
+        metrics.append(
+            {
+                "metric": metric,
+                "label": metric_labels[metric],
+                "value": _format_stat_value(metric, statistic.value)
+                if statistic
+                else "Not recorded",
+                "recorded_at": statistic.recorded_at if statistic else None,
+                "observation_count": statistic.observation_count if statistic else 0,
+                "searches_in_average": _format_searches_in_average(
+                    metric,
+                    statistic.observation_count if statistic else 0,
+                ),
+                "details": _format_stat_details(
+                    metric,
+                    statistic.details if statistic else {},
+                ),
+                "runtime": _format_runtime(
+                    metric,
+                    statistic.value if statistic else None,
+                    statistic.details if statistic else {},
+                ),
+            }
+        )
+    recent_snapshots = [
+        {
+            "label": snapshot.get_metric_display(),
+            "value": _format_stat_value(snapshot.metric, snapshot.value),
+            "recorded_at": snapshot.recorded_at,
+            "observation_count": snapshot.observation_count,
+            "searches_in_average": _format_searches_in_average(
+                snapshot.metric,
+                snapshot.observation_count,
+            ),
+            "details": _format_stat_details(snapshot.metric, snapshot.details),
+            "runtime": _format_runtime(
+                snapshot.metric,
+                snapshot.value,
+                snapshot.details,
+            ),
+        }
+        for snapshot in SystemStatisticSnapshot.objects.order_by("-recorded_at", "-pk")[
+            :25
+        ]
+    ]
+    return render(
+        request,
+        "mgw_api/stats.html",
+        {"metrics": metrics, "recent_snapshots": recent_snapshots},
+    )
 
 
 @login_required

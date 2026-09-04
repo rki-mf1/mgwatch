@@ -248,6 +248,34 @@ div.dt-length > select {
   font-size: 0.875rem;
 }
 
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.stats-card {
+  margin: 0;
+  padding: 0.9rem;
+}
+
+.stats-card h3 {
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.stats-card strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+
+.stats-card p {
+  margin-bottom: 0.25rem;
+}
+
 .unavailable-filter {
   border-style: dashed;
 }

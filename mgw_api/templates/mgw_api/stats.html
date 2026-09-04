@@ -1,0 +1,50 @@
+{% extends "mgw_api/base.html" %}
+{% block content %}
+    <div class="stats-page">
+        <h2>Stats</h2>
+        <div class="stats-grid">
+            {% for metric in metrics %}
+                <article class="stats-card">
+                    <h3>{{ metric.label }}</h3>
+                    <strong>{{ metric.value }}</strong>
+                    {% if metric.recorded_at %}
+                        <p>Updated {{ metric.recorded_at|date:"Y-m-d H:i:s" }}</p>
+                        {% if metric.searches_in_average != "N/A" %}<p>{{ metric.searches_in_average }} searches recorded</p>{% endif %}
+                        {% if metric.details %}<p>{{ metric.details }}</p>{% endif %}
+                    {% else %}
+                        <p>Waiting for the next update.</p>
+                    {% endif %}
+                </article>
+            {% endfor %}
+        </div>
+        <h3>Recent activity</h3>
+        {% if recent_snapshots %}
+            <table class="result-list">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                        <th>Runtime</th>
+                        <th>Recorded at</th>
+                        <th>Searches in average</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for snapshot in recent_snapshots %}
+                        <tr>
+                            <td>{{ snapshot.label }}</td>
+                            <td>{{ snapshot.value }}</td>
+                            <td>{{ snapshot.runtime }}</td>
+                            <td>{{ snapshot.recorded_at|date:"Y-m-d H:i:s" }}</td>
+                            <td>{{ snapshot.searches_in_average }}</td>
+                            <td>{{ snapshot.details|default:"-" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <mark>No snapshots recorded yet.</mark>
+        {% endif %}
+    </div>
+{% endblock content %}

@@ -96,6 +96,8 @@ Operators should plan for the following before running a shared instance:
 - Review retention settings before enabling automatic cleanup.
 - Use the release checklist before image upgrades, migrations, or index rebuilds.
 - Configure LDAP only when a tested break-glass administrative path exists.
+- After directly modifying on-disk indexes or manifests, refresh the cached
+  Stats index count with `./scripts/dev-manage.sh update_stats --index-only`.
 
 Useful references:
 

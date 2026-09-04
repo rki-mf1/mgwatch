@@ -58,6 +58,23 @@ There are several further settings that can be changed for the download.
 - `WORT_ATTEMPTS` number of download attempts if a download fails
 - `MAX_DOWNLOADS` maximum number of downloads that run with one call of the command
 
+## Refreshing cached statistics
+
+MetagenomeWatch stores cached index and metadata counts for the admin Stats page
+and for search-rate calculations. Searches do not read `manifest.pickle` because
+the production manifest can be large.
+
+After directly modifying on-disk index or manifest files, refresh the cached
+index sample count from the current `data/SRA/metagenomes/manifest.pickle`:
+
+```bash
+./scripts/dev-manage.sh update_stats --index-only
+```
+
+Use `--database <name>` if the manifest is under a database directory other than
+`SRA`. Running `update_stats` without `--index-only` refreshes both the index
+count and the metadata count; use `--metadata-only` to refresh only metadata.
+
 ### 3. Creating index
 
 The script will check the current manifest ID inside the `data/SRA/metagenomes/manifests/` directory. This will be currently set to `38` for `wort-sra-kmer-db38.pickle`. There is also a settings parameter (`INDEX_MIN_ITERATOR`) that sets the current minimum index number to `38` as a precaution.
