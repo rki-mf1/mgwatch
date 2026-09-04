@@ -286,7 +286,10 @@ class SystemStatisticSnapshot(models.Model):
     class Meta:
         ordering = ["-recorded_at", "-pk"]
         indexes = [
-            models.Index(fields=["metric", "-recorded_at"]),
+            models.Index(
+                fields=["metric", "-recorded_at"],
+                name="mgw_api_sys_metric_2da4d7_idx",
+            ),
         ]
 
     def __str__(self):
