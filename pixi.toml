@@ -7,7 +7,7 @@ requires-pixi = ">=0.76.2"
 [dependencies]
 python = ">=3.13,<3.14"
 django = ">=6.1,<7"
-django-debug-toolbar = ">=7.1,<8"
+django-debug-toolbar = ">=8,<9"
 django-environ = ">=0.11,<1"
 pillow = ">=10.4,<13"
 pandas = ">=3,<4"
