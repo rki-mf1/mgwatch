@@ -8,7 +8,9 @@ from mgw_api.services.stats import record_metadata_stats
 class Command(BaseCommand):
     help = (
         "Refresh cached index and metadata statistics from the current local "
-        "index manifest and metadata collection."
+        "index manifest and metadata collection. Use --index-only to force "
+        "the cached index sample count to match the manifest on disk after "
+        "manual index changes."
     )
 
     def add_arguments(self, parser):
@@ -20,7 +22,10 @@ class Command(BaseCommand):
         parser.add_argument(
             "--index-only",
             action="store_true",
-            help="Only refresh the cached index sample count.",
+            help=(
+                "Only refresh the cached index sample count from the on-disk "
+                "manifest."
+            ),
         )
         parser.add_argument(
             "--metadata-only",

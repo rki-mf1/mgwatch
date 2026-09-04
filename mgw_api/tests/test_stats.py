@@ -117,26 +117,44 @@ class StatsServiceTests(TestCase):
             2,
         )
 
-    def test_try_record_search_rate_reads_current_index_sample_count(self):
+    def test_try_record_search_rate_uses_cached_index_sample_count(self):
         user, result = self.create_result()
-        with TemporaryDirectory() as tmp_dir:
-            data_dir = Path(tmp_dir)
-            manifest = data_dir / "SRA" / "metagenomes" / "manifest.pickle"
-            manifest.parent.mkdir(parents=True)
-            with open(manifest, "wb") as handle:
-                pickle.dump(["SRR1", "SRR2", "SRR3"], handle, protocol=4)
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            value=3,
+            details={"database": "SRA"},
+            recorded_at=timezone.now(),
+        )
 
-            with override_settings(DATA_DIR=data_dir):
-                statistic = try_record_search_rate(
-                    duration_seconds=6,
-                    databases=["SRA"],
-                    result=result,
-                    total_indexes=3,
-                )
+        with patch("mgw_api.services.stats.count_index_samples") as count_index:
+            statistic = try_record_search_rate(
+                duration_seconds=6,
+                databases=["SRA"],
+                result=result,
+                total_indexes=3,
+            )
 
         self.assertEqual(statistic.value, 0.5)
         self.assertEqual(statistic.details["last_runtime_seconds"], 6)
         self.assertEqual(statistic.details["last_index_sample_count"], 3)
+        count_index.assert_not_called()
+
+    def test_try_record_search_rate_skips_when_index_count_is_not_cached(self):
+        user, result = self.create_result()
+
+        statistic = try_record_search_rate(
+            duration_seconds=6,
+            databases=["SRA"],
+            result=result,
+            total_indexes=3,
+        )
+
+        self.assertIsNone(statistic)
+        self.assertFalse(
+            SystemStatistic.objects.filter(
+                metric=(SystemStatistic.Metric.AVERAGE_SEARCH_RATE_SEQUENCES_PER_SECOND)
+            ).exists()
+        )
 
     def test_run_metadata_records_update_runtime(self):
         with TemporaryDirectory() as tmp_dir:
@@ -305,6 +323,36 @@ class UpdateStatsCommandTests(TestCase):
             42,
         )
         self.assertEqual(SystemStatisticSnapshot.objects.count(), 2)
+
+    def test_update_stats_index_only_refreshes_stale_cached_index_count(self):
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            value=1,
+            details={"database": "SRA"},
+            recorded_at=timezone.now(),
+        )
+        with TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir)
+            manifest = data_dir / "SRA" / "metagenomes" / "manifest.pickle"
+            manifest.parent.mkdir(parents=True)
+            with open(manifest, "wb") as handle:
+                pickle.dump(["SRR1", "SRR2", "SRR3"], handle, protocol=4)
+
+            stdout = StringIO()
+            with (
+                override_settings(DATA_DIR=data_dir),
+                patch("mgw_api.services.stats.pm.MongoClient") as mongo_client,
+            ):
+                call_command("update_stats", "--index-only", stdout=stdout)
+
+        mongo_client.assert_not_called()
+        self.assertIn("Index samples: 3", stdout.getvalue())
+        statistic = SystemStatistic.objects.get(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT
+        )
+        self.assertEqual(statistic.value, 3)
+        self.assertEqual(statistic.details["database"], "SRA")
+        self.assertEqual(SystemStatisticSnapshot.objects.count(), 1)
 
     def test_update_stats_rejects_conflicting_scope_options(self):
         with self.assertRaisesMessage(

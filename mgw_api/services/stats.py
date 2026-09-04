@@ -18,10 +18,23 @@ def count_index_samples(database="SRA"):
         return len(pickle.load(handle))
 
 
-def count_index_samples_for_databases(databases):
+def get_cached_index_sample_count_for_databases(databases):
     if isinstance(databases, str):
         databases = [databases]
-    return sum(count_index_samples(database=database) for database in set(databases))
+    databases = set(databases)
+    statistic = SystemStatistic.objects.filter(
+        metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT
+    ).first()
+    if statistic is None:
+        return None
+    statistic_database = statistic.details.get("database", "SRA")
+    if databases != {statistic_database}:
+        LOGGER.debug(
+            "Skipped cached index sample count for unsupported database selection: %s",
+            sorted(databases),
+        )
+        return None
+    return int(statistic.value)
 
 
 def count_metadata_samples():
@@ -327,7 +340,13 @@ def try_record_search_rate(
     total_indexes=None,
 ):
     try:
-        index_sample_count = count_index_samples_for_databases(databases)
+        index_sample_count = get_cached_index_sample_count_for_databases(databases)
+        if index_sample_count is None:
+            LOGGER.debug(
+                "Skipped search rate statistics recording because index sample "
+                "count has not been cached"
+            )
+            return None
         return record_search_rate(
             duration_seconds=duration_seconds,
             index_sample_count=index_sample_count,
