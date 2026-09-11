@@ -8,7 +8,7 @@ databases:
       include:
         librarysource: METAGENOMIC
       exclude:
-        any_field_contains:
+        descriptive_fields_contain:
           - amplicon
     wort_manifest_url: https://s3.bi.denbi.de/wort-sra/SOURMASH-MANIFEST.parquet
     wort_signature_endpoint: https://wort.sourmash.bio/v1/view/sra

@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
@@ -53,3 +54,29 @@ class MigrateDatabaseStorageTests(SimpleTestCase):
                     (legacy_index_dir / "51mers-db38.rocksdb").exists(),
                     "Disabled k=51 index should be preserved in the new layout.",
                 )
+
+    def test_refuses_existing_target_directory_instead_of_nesting_legacy_directory(
+        self,
+    ):
+        with TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            legacy_root = data_dir / "SRA" / "metagenomes"
+            (legacy_root / "updates").mkdir(parents=True)
+            target = (
+                data_dir
+                / "search-databases"
+                / DEFAULT_DATABASE_ID
+                / "signatures"
+                / "pending"
+            )
+            target.mkdir(parents=True)
+
+            with override_settings(DATA_DIR=data_dir):
+                with self.assertRaisesMessage(
+                    CommandError,
+                    "Refusing to overwrite existing target",
+                ):
+                    call_command("migrate_database_storage")
+
+            self.assertTrue((legacy_root / "updates").exists())
+            self.assertFalse((target / "updates").exists())

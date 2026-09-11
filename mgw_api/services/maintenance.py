@@ -261,7 +261,7 @@ def import_parquet(parquet_dir, indexed_only=False, database=DEFAULT_DATABASE_ID
             alias_expressions.append(pl.col("bioproject").alias("sra_bioproject"))
         sra_df = sra_df.with_columns(alias_expressions)
         excluded_terms = database_config.metadata_filter.get("exclude", {}).get(
-            "any_field_contains",
+            "descriptive_fields_contain",
             [],
         )
         if excluded_terms and sra_df.height > 0:
@@ -310,13 +310,17 @@ def import_parquet(parquet_dir, indexed_only=False, database=DEFAULT_DATABASE_ID
 def run_downloads(
     *,
     max_downloads=None,
-    max_simultaneous=100,
-    timeout=60,
+    max_simultaneous=None,
+    timeout=None,
     ids=None,
     retry_failed=False,
     database=DEFAULT_DATABASE_ID,
 ):
     database_config = get_database_config(database)
+    if max_simultaneous is None:
+        max_simultaneous = database_config.download.get("max_simultaneous", 100)
+    if timeout is None:
+        timeout = database_config.download.get("timeout_seconds", 60)
     test_url = f"{database_config.wort_signature_endpoint}/SRR15461028"
     run_command(["curl", "-sLf", "-r", "0-10", test_url, "-o", "/dev/null"])
     dir_paths, man_fail, sra_ids = prepare_download_targets(
@@ -330,13 +334,16 @@ def run_downloads(
         retry_failed=retry_failed
         or database_config.download.get("retry_failed", False),
         max_downloads=max_downloads,
+        database=database_config.id,
     )
     results = asyncio.run(
         download_from_wort(
             dir_paths,
             selected_ids,
             man_fail,
-            timeout or database_config.download.get("timeout_seconds", 60),
+            timeout,
+            endpoint=database_config.wort_signature_endpoint,
+            database=database_config.id,
             retry_failed=True,
             max_downloads=len(selected_ids),
             max_simultaneous=max_simultaneous,
@@ -387,21 +394,31 @@ def get_download_date_range(database_config=None):
 
 
 def select_download_ids(
-    sra_ids, dir_paths, man_fail, *, retry_failed=False, max_downloads=None
+    sra_ids,
+    dir_paths,
+    man_fail,
+    *,
+    retry_failed=False,
+    max_downloads=None,
+    database=DEFAULT_DATABASE_ID,
 ):
     selected_ids = set(sra_ids) - get_update_accessions(dir_paths["updates"])
     ids_fail = load_failed_downloads(man_fail)
     if not retry_failed:
         selected_ids -= ids_fail
     selected_ids = sorted(selected_ids)
-    if max_downloads is None and settings.MAX_DOWNLOADS:
-        max_downloads = get_database_config().download.get(
-            "max_downloads",
-            settings.MAX_DOWNLOADS,
-        )
+    if max_downloads is None:
+        max_downloads = get_configured_max_downloads(get_database_config(database))
     if max_downloads and max_downloads < len(selected_ids):
         selected_ids = selected_ids[:max_downloads]
     return selected_ids
+
+
+def get_configured_max_downloads(database_config):
+    max_downloads = database_config.download.get(
+        "max_downloads", settings.MAX_DOWNLOADS
+    )
+    return max_downloads or None
 
 
 def handle_dirs(database=DEFAULT_DATABASE_ID):
@@ -459,11 +476,13 @@ async def download_from_wort(
     timeout_seconds,
     *,
     endpoint=None,
+    database=DEFAULT_DATABASE_ID,
     retry_failed=False,
     max_downloads=None,
     max_simultaneous=100,
 ):
-    endpoint = (endpoint or get_database_config().wort_signature_endpoint).rstrip("/")
+    database_config = get_database_config(database)
+    endpoint = (endpoint or database_config.wort_signature_endpoint).rstrip("/")
     ids_fail = load_failed_downloads(man_fail)
     sra_ids = select_download_ids(
         sra_ids,
@@ -471,6 +490,7 @@ async def download_from_wort(
         man_fail,
         retry_failed=retry_failed,
         max_downloads=max_downloads,
+        database=database_config.id,
     )
     target_dir = dir_paths["updates"]
     urls = [f"{endpoint}/{id_}" for id_ in sra_ids]
@@ -735,8 +755,8 @@ def process_index_batch(
 def run_download_index(
     *,
     max_downloads=None,
-    max_simultaneous=100,
-    timeout=60,
+    max_simultaneous=None,
+    timeout=None,
     ids=None,
     retry_failed=False,
     index_max_signatures=None,
@@ -744,6 +764,10 @@ def run_download_index(
 ):
     started_at = monotonic()
     database_config = get_database_config(database)
+    if max_simultaneous is None:
+        max_simultaneous = database_config.download.get("max_simultaneous", 100)
+    if timeout is None:
+        timeout = database_config.download.get("timeout_seconds", 60)
     test_url = f"{database_config.wort_signature_endpoint}/SRR15461028"
     run_command(["curl", "-sLf", "-r", "0-10", test_url, "-o", "/dev/null"])
     dir_paths, man_fail, remaining_ids = prepare_download_targets(
@@ -757,7 +781,11 @@ def run_download_index(
     retry_failed = retry_failed or database_config.download.get("retry_failed", False)
     total_downloaded = 0
     total_batches = 0
-    remaining_download_budget = max_downloads
+    remaining_download_budget = (
+        max_downloads
+        if max_downloads is not None
+        else get_configured_max_downloads(database_config)
+    )
 
     while True:
         updates_count = len(get_update_accessions(dir_paths["updates"]))
@@ -776,6 +804,7 @@ def run_download_index(
                 max_downloads=min(remaining_download_budget, batch_capacity)
                 if remaining_download_budget is not None
                 else batch_capacity,
+                database=database_config.id,
             )
             if selected_ids:
                 results = asyncio.run(
@@ -784,6 +813,8 @@ def run_download_index(
                         selected_ids,
                         man_fail,
                         timeout,
+                        endpoint=database_config.wort_signature_endpoint,
+                        database=database_config.id,
                         retry_failed=True,
                         max_downloads=len(selected_ids),
                         max_simultaneous=max_simultaneous,

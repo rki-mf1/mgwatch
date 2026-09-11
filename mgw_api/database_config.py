@@ -91,7 +91,7 @@ def _load_database(database_id, raw_database):
     include = metadata_filter.get("include", {})
     exclude = metadata_filter.get("exclude", {})
     unsupported_include = set(include) - {"librarysource"}
-    unsupported_exclude = set(exclude) - {"any_field_contains"}
+    unsupported_exclude = set(exclude) - {"descriptive_fields_contain"}
     if unsupported_include or unsupported_exclude:
         raise ImproperlyConfigured(
             f"Unsupported metadata filter for {database_id}: "

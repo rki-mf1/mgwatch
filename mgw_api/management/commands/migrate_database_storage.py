@@ -29,8 +29,8 @@ def _load_pickle(path):
 def _move_path(source, target, *, dry_run):
     if not source.exists():
         return False
-    if target.exists() and any(target.iterdir() if target.is_dir() else [target]):
-        raise CommandError(f"Refusing to overwrite non-empty target: {target}")
+    if target.exists():
+        raise CommandError(f"Refusing to overwrite existing target: {target}")
     if dry_run:
         return True
     target.parent.mkdir(parents=True, exist_ok=True)
