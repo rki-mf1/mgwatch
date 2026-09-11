@@ -9,6 +9,9 @@ from django.db.models import Count
 from django.utils import timezone
 
 from mgw.settings import LOGGER
+from mgw_api.database_config import database_root
+from mgw_api.database_config import enabled_databases
+from mgw_api.database_config import signature_dirs
 from mgw_api.models import Fasta
 from mgw_api.models import Job
 from mgw_api.models import Result
@@ -280,7 +283,7 @@ def _cleanup_files(now, *, dry_run, summary):
 
     for root in (
         data_dir / "tmp",
-        data_dir / "SRA" / "metagenomes" / "tmp",
+        *(database_root(database.id) / "tmp" for database in enabled_databases()),
     ):
         summary["temp_files"] += _delete_old_files(
             root,
@@ -289,13 +292,27 @@ def _cleanup_files(now, *, dry_run, summary):
         )
         summary["empty_dirs"] += _remove_empty_dirs(root, dry_run=dry_run)
 
-    failed_index_root = data_dir / "SRA" / "metagenomes" / "indexing-failed"
+    for database in enabled_databases():
+        failed_index_root = signature_dirs(database.id)["failed-indexing"]
+        summary["failed_index_files"] += _delete_old_files(
+            failed_index_root,
+            cutoff=failed_index_cutoff,
+            dry_run=dry_run,
+        )
+        summary["empty_dirs"] += _remove_empty_dirs(
+            failed_index_root,
+            dry_run=dry_run,
+        )
+    legacy_failed_index_root = data_dir / "SRA" / "metagenomes" / "indexing-failed"
     summary["failed_index_files"] += _delete_old_files(
-        failed_index_root,
+        legacy_failed_index_root,
         cutoff=failed_index_cutoff,
         dry_run=dry_run,
     )
-    summary["empty_dirs"] += _remove_empty_dirs(failed_index_root, dry_run=dry_run)
+    summary["empty_dirs"] += _remove_empty_dirs(
+        legacy_failed_index_root,
+        dry_run=dry_run,
+    )
 
     summary["log_files"] += _delete_old_files(
         log_dir,

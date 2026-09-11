@@ -7,6 +7,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
+from mgw_api.database_config import DEFAULT_DATABASE_ID
 from mgw_api.services.maintenance import download_from_wort
 from mgw_api.services.maintenance import fetch_signature
 from mgw_api.services.maintenance import get_update_accessions
@@ -248,9 +249,12 @@ class DownloadMaintenanceTests(SimpleTestCase):
             with patch("mgw_api.services.maintenance.pm.MongoClient", FakeMongoClient):
                 import_parquet(Path(tmp_dir))
 
-        self.assertEqual(FakeMongoClient.db.created, ["sradb_temp"])
-        self.assertEqual(FakeMongoClient.db.renamed, [("sradb_temp", "sradb_list")])
-        self.assertEqual(FakeMongoClient.db.collections, {"sradb_list"})
+        self.assertEqual(FakeMongoClient.db.created, ["sra_metagenomes_metadata_temp"])
+        self.assertEqual(
+            FakeMongoClient.db.renamed,
+            [("sra_metagenomes_metadata_temp", "sra_metagenomes_metadata")],
+        )
+        self.assertEqual(FakeMongoClient.db.collections, {"sra_metagenomes_metadata"})
 
     @override_settings(
         DATA_DIR=Path("/tmp/mgwatch-test-data"),
@@ -261,7 +265,7 @@ class DownloadMaintenanceTests(SimpleTestCase):
             with override_settings(DATA_DIR=Path(tmp_dir)):
                 with self.assertRaisesMessage(
                     RuntimeError,
-                    "manifest.pickle is missing and INDEX_FROM_SCRATCH is disabled",
+                    "profile manifest is missing and INDEX_FROM_SCRATCH is disabled",
                 ):
                     prepare_download_targets()
 
@@ -384,21 +388,12 @@ class DownloadMaintenanceTests(SimpleTestCase):
     def test_run_index_does_not_touch_download_successful_pickle(self):
         with TemporaryDirectory() as tmp_dir:
             data_dir = Path(tmp_dir)
-            database_dir = data_dir / "SRA" / "metagenomes"
-            for name in [
-                "updates",
-                "index",
-                "signatures",
-                "indexing-failed",
-                "manifests",
-            ]:
-                (database_dir / name).mkdir(parents=True, exist_ok=True)
-            (database_dir / "updates" / "SRR1.sig").write_text("sig", encoding="ascii")
+            database_dir = data_dir / "search-databases" / DEFAULT_DATABASE_ID
+            pending_dir = database_dir / "signatures" / "pending"
+            pending_dir.mkdir(parents=True, exist_ok=True)
+            (pending_dir / "SRR1.sig").write_text("sig", encoding="ascii")
             success_pickle = database_dir / "download_successful.pickle"
             success_pickle.write_bytes(b"sentinel")
-            manifest = database_dir / "manifest.pickle"
-            with open(manifest, "wb") as handle:
-                pickle.dump([], handle, protocol=4)
 
             with (
                 override_settings(DATA_DIR=data_dir),
@@ -445,6 +440,7 @@ class DownloadMaintenanceTests(SimpleTestCase):
             def fake_run_index_batches(
                 work_dir,
                 *,
+                database=None,
                 index_max_signatures=None,
                 max_batches=None,
                 delete_indexed_sigs=False,
@@ -452,6 +448,7 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 run_index_calls.append(
                     {
                         "updates": sorted(current_updates),
+                        "database": database,
                         "index_max_signatures": index_max_signatures,
                         "max_batches": max_batches,
                         "delete_indexed_sigs": delete_indexed_sigs,
@@ -496,12 +493,14 @@ class DownloadMaintenanceTests(SimpleTestCase):
             [
                 {
                     "updates": ["SRR1", "SRR2"],
+                    "database": DEFAULT_DATABASE_ID,
                     "index_max_signatures": 2,
                     "max_batches": 1,
                     "delete_indexed_sigs": True,
                 },
                 {
                     "updates": ["SRR3"],
+                    "database": DEFAULT_DATABASE_ID,
                     "index_max_signatures": 2,
                     "max_batches": 1,
                     "delete_indexed_sigs": True,
@@ -546,6 +545,7 @@ class DownloadMaintenanceTests(SimpleTestCase):
             def fake_run_index_batches(
                 work_dir,
                 *,
+                database=None,
                 index_max_signatures=None,
                 max_batches=None,
                 delete_indexed_sigs=False,

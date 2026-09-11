@@ -2,10 +2,21 @@
 
 from django import forms
 
+from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import LEGACY_DATABASE_ID
+from mgw_api.database_config import enabled_databases
+from mgw_api.database_config import normalize_database_list
 from mgw_api.models import Fasta
 from mgw_api.models import FilterSetting
 from mgw_api.models import Result
 from mgw_api.models import Settings
+
+
+class DatabaseMultipleChoiceField(forms.MultipleChoiceField):
+    def valid_value(self, value):
+        if value == LEGACY_DATABASE_ID:
+            return True
+        return super().valid_value(value)
 
 
 class FastaForm(forms.ModelForm):
@@ -36,17 +47,10 @@ class LoginForm(forms.Form):
 
 
 class SettingsForm(forms.ModelForm):
-    kmer = forms.MultipleChoiceField(
-        choices=[(21, "21-mers"), (31, "31-mers"), (51, "51-mers")],
+    kmer = forms.MultipleChoiceField(widget=forms.CheckboxSelectMultiple, initial=[21])
+    database = DatabaseMultipleChoiceField(
         widget=forms.CheckboxSelectMultiple,
-        initial=[21],
-    )
-    database = forms.MultipleChoiceField(
-        choices=[("SRA", "SRA database")],
-        # We don't yet index any database other than SRA. Disable this for now.
-        # choices=[("SRA", "SRA database"), ("RKI", "RKI database")],
-        widget=forms.CheckboxSelectMultiple,
-        initial=["SRA"],
+        initial=[DEFAULT_DATABASE_ID],
     )
     containment = forms.FloatField(
         widget=forms.NumberInput(attrs={"min": 0, "max": 1, "step": 0.01}), initial=0.10
@@ -55,6 +59,28 @@ class SettingsForm(forms.ModelForm):
     class Meta:
         model = Settings
         fields = ["kmer", "database", "containment"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        databases = enabled_databases()
+        self.fields["database"].choices = [
+            (database.id, database.label) for database in databases
+        ]
+        kmers = sorted(
+            {
+                profile.kmer
+                for database in databases
+                for profile in database.enabled_profiles
+            }
+        )
+        self.fields["kmer"].choices = [(kmer, f"{kmer}-mers") for kmer in kmers]
+        self.single_kmer_label = None
+        if len(kmers) == 1:
+            self.fields["kmer"].initial = [kmers[0]]
+            self.single_kmer_label = str(kmers[0])
+
+    def clean_database(self):
+        return normalize_database_list(self.cleaned_data["database"])
 
 
 class WatchForm(forms.ModelForm):

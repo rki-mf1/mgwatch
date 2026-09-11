@@ -1,7 +1,6 @@
 # mgw_api/management/commands/runserver.py
 
 import os
-from pathlib import Path
 
 from django.conf import settings
 from django.contrib.staticfiles.management.commands.runserver import (
@@ -9,16 +8,18 @@ from django.contrib.staticfiles.management.commands.runserver import (
 )
 
 from mgw.settings import LOGGER
+from mgw_api.database_config import metadata_init_flag
 
 
 class Command(StaticRunServerCommand):
     def run(self, **options):
         if os.environ.get("RUN_MAIN") != "true":
             # Create initial metadata
-            init_flag = (
-                Path(settings.DATA_DIR) / "SRA" / "metadata" / "initial_setup.txt"
+            init_flag = metadata_init_flag()
+            legacy_init_flag = (
+                settings.DATA_DIR / "SRA" / "metadata" / "initial_setup.txt"
             )
-            if not init_flag.exists():
+            if not init_flag.exists() and not legacy_init_flag.exists():
                 LOGGER.info("Creating initial metadata.")
                 from mgw_api.services.maintenance import run_metadata
 

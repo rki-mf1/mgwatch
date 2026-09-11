@@ -1,0 +1,37 @@
+version: 1
+databases:
+  sra_metagenomes:
+    label: SRA metagenomes
+    enabled: true
+    mongodb_collection: sra_metagenomes_metadata
+    metadata_filter:
+      include:
+        librarysource: METAGENOMIC
+      exclude:
+        any_field_contains:
+          - amplicon
+    wort_manifest_url: https://s3.bi.denbi.de/wort-sra/SOURMASH-MANIFEST.parquet
+    wort_signature_endpoint: https://wort.sourmash.bio/v1/view/sra
+    profiles:
+      - kmer: 21
+        scaled: 1000
+        moltype: DNA
+        enabled: true
+      - kmer: 31
+        scaled: 1000
+        moltype: DNA
+        enabled: false
+      - kmer: 51
+        scaled: 1000
+        moltype: DNA
+        enabled: false
+    download:
+      date_lag_days: 2
+      max_downloads: 1000
+      max_simultaneous: 100
+      timeout_seconds: 60
+      retry_failed: false
+    indexing:
+      batch_size: 100000
+      first_batch_number: 38
+      retain_indexed_signatures: true

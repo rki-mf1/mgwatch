@@ -5,11 +5,21 @@
             {% if settings_form_owns_form %}
                 {% csrf_token %}
             {% endif %}
-            <div class="form-group">
-                <label for="id_kmer">Select k-mers:</label>
-                <div class="options">{{ settings_form.kmer }}</div>
-                <small>Select at least one k-mer</small>
-            </div>
+            {% if settings_form.single_kmer_label %}
+                <div class="form-group">
+                    <label>K-mer length:</label>
+                    <div class="options">{{ settings_form.single_kmer_label }}</div>
+                    <input type="hidden"
+                           name="kmer"
+                           value="{{ settings_form.single_kmer_label }}">
+                </div>
+            {% else %}
+                <div class="form-group">
+                    <label for="id_kmer">Select k-mers:</label>
+                    <div class="options">{{ settings_form.kmer }}</div>
+                    <small>Select at least one k-mer</small>
+                </div>
+            {% endif %}
             <div class="form-group">
                 <label for="id_database">Select databases:</label>
                 <div class="options">{{ settings_form.database }}</div>
@@ -34,13 +44,14 @@
 </div>
 <script>
     function validateForm(event) {
+        const kmerInputs = document.querySelectorAll('input[name="kmer"]');
         const kmerCheckboxes = document.querySelectorAll('input[name="kmer"]:checked');
         const databaseCheckboxes = document.querySelectorAll('input[name="database"]:checked');
         const submissionMessageDiv = document.querySelector('.submission-message');
         submissionMessageDiv.innerHTML = '';
 
         let errorMessage = '';
-        if (kmerCheckboxes.length === 0) {
+        if (kmerInputs.length === 0 || (kmerCheckboxes.length === 0 && kmerInputs[0].type !== 'hidden')) {
             errorMessage += '<li class="error">Please select at least one k-mer.</li>';
         }
         if (databaseCheckboxes.length === 0) {

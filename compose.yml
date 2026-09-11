@@ -14,6 +14,7 @@ services:
     image: mgwatch:local
     volumes:
       - ./vars.env:/code/vars.env:ro
+      - ${CONFIG_DIR:-./config}:/config:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
       - ${LOG_DIR}:/logs
@@ -43,6 +44,7 @@ services:
     image: mgwatch:local
     volumes:
       - ./vars.env:/code/vars.env:ro
+      - ${CONFIG_DIR:-./config}:/config:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
       - ${LOG_DIR}:/logs
@@ -66,6 +68,7 @@ services:
     image: mgwatch:local
     volumes:
       - ./vars.env:/code/vars.env:ro
+      - ${CONFIG_DIR:-./config}:/config:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
       - ${LOG_DIR}:/logs
@@ -89,6 +92,7 @@ services:
     image: mgwatch:local
     volumes:
       - ./vars.env:/code/vars.env:ro
+      - ${CONFIG_DIR:-./config}:/config:ro
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - ${EXTERNAL_DATA_DIR}/backend-data:/data
       - ${LOG_DIR}:/logs

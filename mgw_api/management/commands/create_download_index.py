@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 
+from mgw_api.database_config import DEFAULT_DATABASE_ID
 from mgw_api.management.commands._celery import wait_for_task
 from mgw_api.tasks import MAINTENANCE_QUEUE
 from mgw_api.tasks import run_download_index_task
@@ -13,6 +14,7 @@ class Command(BaseCommand):
         parser.add_argument("--ids", nargs="+")
         parser.add_argument("--retry-failed", action="store_true")
         parser.add_argument("--index-max-signatures", default=None, type=int)
+        parser.add_argument("--database", default=DEFAULT_DATABASE_ID)
 
     def handle(self, *args, **kwargs):
         wait_for_task(
@@ -24,6 +26,7 @@ class Command(BaseCommand):
                 "ids": kwargs["ids"],
                 "retry_failed": kwargs["retry_failed"],
                 "index_max_signatures": kwargs["index_max_signatures"],
+                "database": kwargs["database"],
             },
             queue=MAINTENANCE_QUEUE,
         )
