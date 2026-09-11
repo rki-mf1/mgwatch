@@ -1,11 +1,19 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
+from django.contrib.auth.models import User
 from django.test import SimpleTestCase
+from django.test import TestCase
 from django.test import override_settings
 
 from mgw_api.database_config import get_database_configs
+from mgw_api.models import Result
+from mgw_api.models import Settings
+from mgw_api.models import Signature
+from mgw_api.services.exceptions import UnsupportedSearchConfiguration
 from mgw_api.services.searches import get_indices
+from mgw_api.services.searches import run_search
 
 
 class SearchIndexDiscoveryTests(SimpleTestCase):
@@ -57,3 +65,42 @@ databases:
                     self.assertEqual(get_indices("21", "disabled_metagenomes"), [])
                 finally:
                     get_database_configs.cache_clear()
+
+
+class SearchPlanGuardTests(TestCase):
+    def test_run_search_rejects_empty_plan_without_saving_result(self):
+        user = User.objects.create_user(username="owner", password="testpass123")
+        signature = Signature.objects.create(
+            user=user,
+            name="stale",
+            file="user_1/stale.sig",
+            submitted=True,
+        )
+        settings = Settings.objects.create(
+            user=user,
+            kmer=["31"],
+            database=["sra_metagenomes"],
+            containment=0.1,
+        )
+
+        with (
+            patch(
+                "mgw_api.services.searches.build_search_plan",
+                return_value=(signature, settings, []),
+            ),
+            patch("mgw_api.services.searches.send_notification") as send_notification,
+            patch(
+                "mgw_api.services.searches.try_record_search_rate"
+            ) as record_search_rate,
+        ):
+            with self.assertRaisesMessage(
+                UnsupportedSearchConfiguration,
+                "Search settings do not match any enabled indexed profile",
+            ):
+                run_search(user_id=user.pk, name="stale", watch="False")
+
+        self.assertFalse(Result.objects.exists())
+        signature.refresh_from_db()
+        self.assertTrue(signature.submitted)
+        send_notification.assert_not_called()
+        record_search_rate.assert_not_called()

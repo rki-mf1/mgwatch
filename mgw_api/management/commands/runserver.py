@@ -19,8 +19,13 @@ class Command(StaticRunServerCommand):
             legacy_init_flag = (
                 settings.DATA_DIR / "SRA" / "metadata" / "initial_setup.txt"
             )
-            if not init_flag.exists() and not legacy_init_flag.exists():
+            if not init_flag.exists():
                 LOGGER.info("Creating initial metadata.")
+                if legacy_init_flag.exists():
+                    LOGGER.info(
+                        "Legacy metadata flag exists, importing metadata into the "
+                        "configured collection."
+                    )
                 from mgw_api.services.maintenance import run_metadata
 
                 # Skip downloading to restore the original behaviour we had

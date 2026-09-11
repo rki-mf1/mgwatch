@@ -38,6 +38,12 @@ def _move_path(source, target, *, dry_run):
     return True
 
 
+def _preflight_targets(targets):
+    for target in targets:
+        if target.exists():
+            raise CommandError(f"Refusing to overwrite existing target: {target}")
+
+
 class Command(BaseCommand):
     help = "Move legacy SRA/metagenomes storage into the configured database layout."
 
@@ -66,12 +72,51 @@ class Command(BaseCommand):
                 settings.DATA_DIR / "search-databases" / database.id / "tmp",
             ),
         ]
+        move_operations = [
+            (source, target) for source, target in moves if source.exists()
+        ]
+        write_operations = []
+
+        failed_pickle = legacy_root / "download_failed.pickle"
+        if failed_pickle.exists():
+            write_operations.append(failed_downloads_path(database.id))
+
+        legacy_manifests = []
+        migrated_profiles_by_kmer = {}
+        for manifest_file in sorted((legacy_root / "manifests").glob("db*.pickle")):
+            batch_number = int(manifest_file.stem.removeprefix("db"))
+            batch_profiles = []
+            for kmer, profile in configured_profiles.items():
+                old_index = (
+                    legacy_root / "index" / f"{kmer}mers-db{batch_number}.rocksdb"
+                )
+                if old_index.exists():
+                    destination = index_path(database.id, profile, batch_number)
+                    move_operations.append((old_index, destination))
+                    write_operations.append(
+                        batch_manifest(database.id, profile, batch_number)
+                    )
+                    batch_profiles.append(profile)
+                    migrated_profiles_by_kmer[kmer] = profile
+            legacy_manifests.append((manifest_file, batch_number, batch_profiles))
+
+        if migrated_profiles_by_kmer:
+            write_operations.extend(
+                profile_manifest(database.id, profile)
+                for profile in migrated_profiles_by_kmer.values()
+            )
+
+        legacy_metadata = Path(settings.DATA_DIR) / "SRA" / "metadata" / "parquet"
+        if legacy_metadata.exists():
+            move_operations.append((legacy_metadata, metadata_cache_dir()))
+
+        _preflight_targets([target for _, target in move_operations] + write_operations)
+
         for source, target in moves:
             if _move_path(source, target, dry_run=dry_run):
                 action = "Would move" if dry_run else "Moved"
                 self.stdout.write(f"{action} {source} -> {target}")
 
-        failed_pickle = legacy_root / "download_failed.pickle"
         if failed_pickle.exists():
             failed = _load_pickle(failed_pickle)
             if dry_run:
@@ -81,26 +126,20 @@ class Command(BaseCommand):
             else:
                 write_accession_parquet(failed_downloads_path(database.id), failed)
 
-        for manifest_file in sorted((legacy_root / "manifests").glob("db*.pickle")):
-            batch_number = int(manifest_file.stem.removeprefix("db"))
+        for manifest_file, batch_number, batch_profiles in legacy_manifests:
             accessions = _load_pickle(manifest_file)
-            migrated_profiles = []
-            for kmer, profile in configured_profiles.items():
+            for profile in batch_profiles:
                 old_index = (
-                    legacy_root / "index" / f"{kmer}mers-db{batch_number}.rocksdb"
+                    legacy_root
+                    / "index"
+                    / f"{profile.kmer}mers-db{batch_number}.rocksdb"
                 )
-                if not old_index.exists():
-                    continue
                 destination = index_path(database.id, profile, batch_number)
                 if dry_run:
                     self.stdout.write(f"Would move {old_index} -> {destination}")
                 else:
                     destination.parent.mkdir(parents=True, exist_ok=True)
-                    if destination.exists():
-                        raise CommandError(f"Refusing to overwrite {destination}")
                     shutil.move(str(old_index), str(destination))
-                migrated_profiles.append(profile)
-            for profile in migrated_profiles:
                 target_manifest = batch_manifest(database.id, profile, batch_number)
                 if dry_run:
                     self.stdout.write(f"Would write {target_manifest}")
@@ -112,7 +151,7 @@ class Command(BaseCommand):
                     )
 
         if not dry_run:
-            for profile in configured_profiles.values():
+            for profile in migrated_profiles_by_kmer.values():
                 profile_accessions = []
                 profile_dir = batch_root(database.id, profile, 0).parent
                 for manifest in sorted(profile_dir.glob("batch-*/manifest.parquet")):
@@ -120,18 +159,17 @@ class Command(BaseCommand):
                 write_accession_parquet(
                     profile_manifest(database.id, profile), profile_accessions
                 )
+        elif migrated_profiles_by_kmer:
+            for profile in migrated_profiles_by_kmer.values():
+                target_manifest = profile_manifest(database.id, profile)
+                self.stdout.write(f"Would write {target_manifest}")
 
-        legacy_metadata = Path(settings.DATA_DIR) / "SRA" / "metadata" / "parquet"
         if legacy_metadata.exists():
             target = metadata_cache_dir()
             if dry_run:
                 self.stdout.write(f"Would move {legacy_metadata} -> {target}")
             else:
                 target.parent.mkdir(parents=True, exist_ok=True)
-                if target.exists() and any(target.iterdir()):
-                    raise CommandError(
-                        f"Refusing to overwrite non-empty target: {target}"
-                    )
                 shutil.move(str(legacy_metadata), str(target))
 
         self.stdout.write(self.style.SUCCESS("Storage migration completed"))

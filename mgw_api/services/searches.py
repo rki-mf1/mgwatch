@@ -18,6 +18,7 @@ from mgw_api.database_config import normalize_database_list
 from mgw_api.models import Result
 from mgw_api.models import Settings
 from mgw_api.models import Signature
+from mgw_api.services.exceptions import UnsupportedSearchConfiguration
 from mgw_api.services.stats import try_record_search_rate
 
 from .processes import run_command
@@ -178,6 +179,11 @@ def run_search(*, user_id, name, watch, progress_callback=None, state_callback=N
     signature, search_set, plan = build_search_plan(
         user_id=user_id, name=name, watch=watch
     )
+    if not plan:
+        raise UnsupportedSearchConfiguration(
+            "Search settings do not match any enabled indexed profile: "
+            f"kmer={search_set.kmer}, database={search_set.database}"
+        )
     date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     user_path = Path(signature.file.path).parent
     file_list = []

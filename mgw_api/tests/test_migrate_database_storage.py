@@ -80,3 +80,60 @@ class MigrateDatabaseStorageTests(SimpleTestCase):
 
             self.assertTrue((legacy_root / "updates").exists())
             self.assertFalse((target / "updates").exists())
+
+    def test_preflights_index_destinations_before_moving_any_storage(self):
+        with TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            legacy_root = data_dir / "SRA" / "metagenomes"
+            legacy_manifest_dir = legacy_root / "manifests"
+            legacy_index_dir = legacy_root / "index"
+            legacy_updates = legacy_root / "updates"
+            legacy_manifest_dir.mkdir(parents=True)
+            legacy_index_dir.mkdir()
+            legacy_updates.mkdir()
+            with (legacy_manifest_dir / "db38.pickle").open("wb") as handle:
+                pickle.dump(["SRR1"], handle)
+            old_index = legacy_index_dir / "21mers-db38.rocksdb"
+            old_index.mkdir()
+
+            with override_settings(DATA_DIR=data_dir):
+                database = get_database_config(DEFAULT_DATABASE_ID)
+                profile = database.enabled_profiles[0]
+                index_path(database.id, profile, 38).mkdir(parents=True)
+
+                with self.assertRaisesMessage(
+                    CommandError,
+                    "Refusing to overwrite existing target",
+                ):
+                    call_command("migrate_database_storage", "--dry-run")
+                with self.assertRaisesMessage(
+                    CommandError,
+                    "Refusing to overwrite existing target",
+                ):
+                    call_command("migrate_database_storage")
+
+            self.assertTrue(legacy_updates.exists())
+            self.assertTrue(old_index.exists())
+
+    def test_refuses_existing_empty_metadata_destination(self):
+        with TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            legacy_root = data_dir / "SRA" / "metagenomes"
+            legacy_root.mkdir(parents=True)
+            legacy_metadata = data_dir / "SRA" / "metadata" / "parquet"
+            legacy_metadata.mkdir(parents=True)
+            (legacy_metadata / "metadata.parquet").write_text(
+                "parquet", encoding="utf-8"
+            )
+            target = data_dir / "metadata" / "sra" / "parquet"
+            target.mkdir(parents=True)
+
+            with override_settings(DATA_DIR=data_dir):
+                with self.assertRaisesMessage(
+                    CommandError,
+                    "Refusing to overwrite existing target",
+                ):
+                    call_command("migrate_database_storage")
+
+            self.assertTrue(legacy_metadata.exists())
+            self.assertFalse((target / "parquet").exists())
