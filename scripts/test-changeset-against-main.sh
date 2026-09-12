@@ -181,11 +181,36 @@ run_logged() {
 compose_cmd() {
   local repo_dir=$1
   shift
+  local compose_files=(
+    -f "$repo_dir/compose.yml"
+    -f "$repo_dir/compose-dev.yml"
+  )
+  if [[ -n "${MGWATCH_COMPOSE_OVERRIDE:-}" ]]; then
+    compose_files+=(-f "$MGWATCH_COMPOSE_OVERRIDE")
+  fi
   docker compose \
     --project-directory "$repo_dir" \
-    -f "$repo_dir/compose.yml" \
-    -f "$repo_dir/compose-dev.yml" \
+    "${compose_files[@]}" \
     "$@"
+}
+
+write_quick_compose_override() {
+  local suite_dir=$1
+  local override_file="$suite_dir/compose-quick.override.yml"
+  if [[ ! -f "$override_file" ]]; then
+    cat > "$override_file" <<'YAML'
+services:
+  mgwatch:
+    ports: !override []
+  mgwatch-mongodb:
+    ports: !override []
+  mgwatch-postgres:
+    ports: !override []
+  mgwatch-redis:
+    ports: !override []
+YAML
+  fi
+  printf '%s' "$override_file"
 }
 
 compose_env_args() {
@@ -207,21 +232,22 @@ compose_run_quick() {
   local command=$3
   local suite_dir="$RUN_ROOT/$label"
   local project="mgwatch-${label//[^a-zA-Z0-9]/-}"
-  mkdir -p "$suite_dir"/{data/backend-data,postgres,django-logs,smoke}
-  chmod -R ugo+rwX "$suite_dir"/{data,postgres,django-logs}
+  local compose_override
+  compose_override=$(write_quick_compose_override "$suite_dir")
+  mkdir -p "$suite_dir"/{data/backend-data,postgres,mongo,mongo-logs,django-logs,smoke}
+  chmod -R ugo+rwX "$suite_dir"/{data,postgres,mongo,mongo-logs,django-logs}
 
   mapfile -d '' env_args < <(compose_env_args "$suite_dir" "$project")
   (
     export "${env_args[@]}"
-    compose_cmd "$repo_dir" up -d mgwatch-postgres >/dev/null
+    export MGWATCH_COMPOSE_OVERRIDE="$compose_override"
+    compose_cmd "$repo_dir" up -d mgwatch-postgres mgwatch-redis mgwatch-mongodb >/dev/null
     compose_cmd "$repo_dir" run --rm --no-deps \
       -e DATA_DIR=/data \
       -e LOG_DIR=/logs \
       -e DEBUG=True \
       -e LOG_LEVEL=DEBUG \
       -e AXES_ENABLED=False \
-      -e CELERY_TASK_ALWAYS_EAGER=True \
-      -e CELERY_TASK_EAGER_PROPAGATES=True \
       -e REDIS_URL=redis://mgwatch-redis:6379/0 \
       -e MONGO_URI=mongodb://root:example1@mgwatch-mongodb:27017/ \
       -v "$repo_dir/scripts:/code/scripts:ro" \
@@ -236,10 +262,13 @@ compose_down_quick() {
   local label=$2
   local suite_dir="$RUN_ROOT/$label"
   local project="mgwatch-${label//[^a-zA-Z0-9]/-}"
+  local compose_override
+  compose_override=$(write_quick_compose_override "$suite_dir")
 
   mapfile -d '' env_args < <(compose_env_args "$suite_dir" "$project")
   (
     export "${env_args[@]}"
+    export MGWATCH_COMPOSE_OVERRIDE="$compose_override"
     compose_cmd "$repo_dir" down --remove-orphans
   )
 }
@@ -260,6 +289,9 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
 from django.urls import reverse
 
+from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import get_database_config
+from mgw_api.database_config import index_path as configured_index_path
 from mgw_api.models import Fasta
 from mgw_api.models import FilterSetting
 from mgw_api.models import Job
@@ -284,10 +316,10 @@ def fake_signature_command(command, **kwargs):
     return SimpleNamespace(returncode=0, stdout="", stderr="")
 
 
-def fake_search_index(*, result_file, sketch_file, index_path, k, containment):
+def fake_search_index(*, result_file, sketch_file, index_path, k, scaled, containment):
     Path(result_file).write_text(
-        "query_name,match_name,containment\n"
-        "smoke-sequence,SRR_SMOKE,0.99\n",
+        "query_name,match_name,containment,query_containment_ani\n"
+        "smoke-sequence,SRR_SMOKE,0.99,0.98\n",
         encoding="ascii",
     )
 
@@ -298,9 +330,9 @@ User.objects.filter(username=username).delete()
 User.objects.filter(username="changeset_smoke_other").delete()
 user = User.objects.create_user(username=username, password=password, email="smoke@example.invalid")
 other = User.objects.create_user(username="changeset_smoke_other", password=password)
-Settings.objects.create(user=user, kmer=[21], database=["SRA"], containment=0.05)
+Settings.objects.create(user=user, kmer=[21], database=[DEFAULT_DATABASE_ID], containment=0.05)
 
-client = Client()
+client = Client(HTTP_HOST="localhost")
 response = client.get(reverse("mgw_api:upload_fasta"))
 assert_true(response.status_code == 302, "anonymous upload page should redirect")
 assert_true(client.login(username=username, password=password), "smoke user login failed")
@@ -350,10 +382,11 @@ pipeline_fasta = Fasta.objects.create(
     status="Queued",
 )
 pipeline_fasta.file.save("pipeline-smoke.fa", ContentFile(b">smoke\nACGTACGTACGTACGTACGTACGT\n"), save=True)
-index_dir = Path(settings.DATA_DIR) / "SRA" / "metagenomes" / "index"
+database = get_database_config(DEFAULT_DATABASE_ID)
+profile = database.enabled_profiles[0]
+index_dir = configured_index_path(database.id, profile, 38)
 shutil.rmtree(index_dir, ignore_errors=True)
 index_dir.mkdir(parents=True, exist_ok=True)
-(index_dir / "21mers-db38.rocksdb").mkdir(exist_ok=True)
 pipeline_job = Job.objects.create(
     job_type=Job.JobType.SIGNATURE_PIPELINE,
     state=Job.State.QUEUED,
@@ -423,7 +456,19 @@ assert_true(response.status_code == 200, "toggle watch failed")
 
 client.post(
     reverse("mgw_api:update_filters", kwargs={"pk": result.pk}),
-    data=json.dumps({"column": "2", "value": "SRR"}),
+    data=json.dumps(
+        {
+            "filter_spec": {
+                "rules": [
+                    {
+                        "field": "sra_accession",
+                        "operator": "contains",
+                        "value": "SRR",
+                    }
+                ]
+            }
+        }
+    ),
     content_type="application/json",
 )
 client.post(
@@ -432,7 +477,21 @@ client.post(
     content_type="application/json",
 )
 filters = FilterSetting.objects.get(user=user, result=result)
-assert_true(filters.filters == {"2": "SRR"}, f"filters not saved: {filters.filters}")
+assert_true(
+    filters.filter_spec
+    == {
+        "version": 1,
+        "rules": [
+            {
+                "field": "sra_accession",
+                "operator": "contains",
+                "include_missing": False,
+                "value": "SRR",
+            }
+        ],
+    },
+    f"filters not saved: {filters.filter_spec}",
+)
 assert_true(filters.sort_column == 2, "sort column not saved")
 
 download = client.get(reverse("mgw_api:download_result_file", kwargs={"pk": result.pk}))
@@ -552,6 +611,7 @@ write_full_setup() {
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
 
+from mgw_api.database_config import DEFAULT_DATABASE_ID
 from mgw_api.models import Fasta
 from mgw_api.models import Settings
 
@@ -559,7 +619,7 @@ username = "$username"
 sequence_name = "$sequence_name"
 User.objects.filter(username=username).delete()
 user = User.objects.create_user(username=username, password="testpass123", email="smoke@example.invalid")
-Settings.objects.create(user=user, kmer=[21], database=["SRA"], containment=0.01)
+Settings.objects.create(user=user, kmer=[21], database=[DEFAULT_DATABASE_ID], containment=0.01)
 fasta = Fasta.objects.create(
     user=user,
     name=sequence_name,
@@ -582,17 +642,16 @@ write_full_prepare_index() {
   local sequence_name=$3
   cat > "$smoke_file" <<PY
 import shutil
-from pathlib import Path
 
-from django.conf import settings
-
+from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import signature_dirs
 from mgw_api.models import Signature
 
 signature = Signature.objects.get(user__username="$username", name="$sequence_name")
-updates = Path(settings.DATA_DIR) / "SRA" / "metagenomes" / "updates"
-updates.mkdir(parents=True, exist_ok=True)
-shutil.copy2(signature.file.path, updates / f"{sequence_name}.sig")
-print(updates / f"{sequence_name}.sig")
+pending = signature_dirs(DEFAULT_DATABASE_ID)["pending"]
+pending.mkdir(parents=True, exist_ok=True)
+shutil.copy2(signature.file.path, pending / f"{sequence_name}.sig")
+print(pending / f"{sequence_name}.sig")
 PY
 }
 

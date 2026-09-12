@@ -1,4 +1,3 @@
-import pickle
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -6,6 +5,11 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
+from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import get_database_config
+from mgw_api.database_config import profile_root
+from mgw_api.database_config import signature_dirs
+from mgw_api.database_config import write_accession_parquet
 from mgw_api.services.maintenance import can_reuse_last_index
 from mgw_api.services.maintenance import get_last_index
 from mgw_api.services.maintenance import process_index_batch
@@ -31,17 +35,15 @@ class CreateIndexServiceTests(SimpleTestCase):
                 succeeded, manifest_ids = process_index_batch(
                     work_dir=base_dir,
                     dir_paths={
-                        "index": base_dir / "index",
                         "signatures": base_dir / "signatures",
                         "indexing-failed": base_dir / "indexing-failed",
-                        "manifests": base_dir / "manifests",
                     },
                     sig_list=base_dir / "sig-list.txt",
-                    kmers=[21, 31, 51],
+                    database=DEFAULT_DATABASE_ID,
+                    profiles=get_database_config().enabled_profiles,
                     index_number=38,
                     new_files=[str(update_sig)],
                     mani_list=[],
-                    manifest=base_dir / "manifest.pickle",
                     max_signatures=100,
                     delete_indexed_sigs=False,
                 )
@@ -55,18 +57,24 @@ class CreateIndexServiceTests(SimpleTestCase):
     def test_get_last_index_filters_missing_signature_files(self):
         with TemporaryDirectory() as tmp_dir:
             base_dir = Path(tmp_dir)
-            manifests_dir = base_dir / "manifests"
-            signatures_dir = base_dir / "signatures"
-            manifests_dir.mkdir()
-            signatures_dir.mkdir()
+            data_dir = base_dir / "data"
+            database = get_database_config()
+            profile = database.enabled_profiles[0]
+            with override_settings(DATA_DIR=data_dir):
+                signatures_dir = signature_dirs(database.id)["indexed"]
+                signatures_dir.mkdir(parents=True)
+                (signatures_dir / "present.sig").write_text("sig", encoding="ascii")
+                batch_dir = profile_root(database.id, profile) / "batch-7"
+                write_accession_parquet(
+                    batch_dir / "manifest.parquet",
+                    ["present", "deleted"],
+                )
 
-            (signatures_dir / "present.sig").write_text("sig", encoding="ascii")
-            with open(manifests_dir / "db7.pickle", "wb") as handle:
-                pickle.dump(["present", "deleted"], handle, protocol=4)
-
-            last_sig_files, last_num, has_existing_index = get_last_index(
-                {"manifests": manifests_dir, "signatures": signatures_dir}
-            )
+                last_sig_files, last_num, has_existing_index = get_last_index(
+                    database.id,
+                    profile,
+                    {"signatures": signatures_dir},
+                )
 
         self.assertEqual(last_num, 38)
         self.assertTrue(has_existing_index)
@@ -94,21 +102,16 @@ class CreateIndexServiceTests(SimpleTestCase):
     def test_run_index_uses_override_for_max_index_size(self):
         with TemporaryDirectory() as tmp_dir:
             data_dir = Path(tmp_dir)
-            metagenomes_dir = data_dir / "SRA" / "metagenomes"
-            for name in [
-                "updates",
-                "index",
-                "signatures",
-                "indexing-failed",
-                "manifests",
-            ]:
-                (metagenomes_dir / name).mkdir(parents=True, exist_ok=True)
+            pending_dir = (
+                data_dir
+                / "search-databases"
+                / DEFAULT_DATABASE_ID
+                / "signatures"
+                / "pending"
+            )
+            pending_dir.mkdir(parents=True, exist_ok=True)
             for accession in ["SRR1", "SRR2", "SRR3"]:
-                (metagenomes_dir / "updates" / f"{accession}.sig").write_text(
-                    "sig", encoding="ascii"
-                )
-            with open(metagenomes_dir / "manifest.pickle", "wb") as handle:
-                pickle.dump([], handle, protocol=4)
+                (pending_dir / f"{accession}.sig").write_text("sig", encoding="ascii")
 
             written_lists = []
 

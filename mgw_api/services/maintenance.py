@@ -25,6 +25,19 @@ from django.urls import reverse
 
 from mgw.settings import LOGGER
 from mgw.settings import MGW_URL
+from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import batch_manifest
+from mgw_api.database_config import database_root
+from mgw_api.database_config import failed_downloads_path
+from mgw_api.database_config import get_database_config
+from mgw_api.database_config import index_path
+from mgw_api.database_config import metadata_cache_dir
+from mgw_api.database_config import metadata_init_flag
+from mgw_api.database_config import profile_manifest
+from mgw_api.database_config import profile_root
+from mgw_api.database_config import read_accession_parquet
+from mgw_api.database_config import signature_dirs
+from mgw_api.database_config import write_accession_parquet
 from mgw_api.functions import get_results_with_metadata
 from mgw_api.models import FilterSetting
 from mgw_api.models import Result
@@ -45,18 +58,23 @@ SRA_METADATA_MAX_DOWNLOADS = 8
 
 
 def run_metadata(
-    *, no_download=False, no_process=False, drop_first=False, indexed_only=False
+    *,
+    no_download=False,
+    no_process=False,
+    drop_first=False,
+    indexed_only=False,
+    database=DEFAULT_DATABASE_ID,
 ):
     started_at = monotonic()
+    database_config = get_database_config(database)
     LOGGER.info("Starting metadata update")
-    database = "SRA"
-    metadata_dir = settings.DATA_DIR / database / "metadata" / "parquet"
+    metadata_dir = metadata_cache_dir()
     metadata_dir.mkdir(parents=True, exist_ok=True)
     metadata_stat = None
 
     if drop_first:
-        drop_mongo_collection("sradb_list")
-        drop_mongo_collection("sradb_temp")
+        drop_mongo_collection(database_config.mongodb_collection)
+        drop_mongo_collection(f"{database_config.mongodb_collection}_temp")
 
     if not no_download:
         asyncio.run(
@@ -68,10 +86,15 @@ def run_metadata(
         )
 
     if not no_process:
-        import_parquet(metadata_dir, indexed_only=indexed_only)
-        metadata_stat = try_record_metadata_stats()
+        import_parquet(
+            metadata_dir,
+            indexed_only=indexed_only,
+            database=database_config.id,
+        )
+        metadata_stat = try_record_metadata_stats(database=database_config.id)
 
-    init_flag = settings.DATA_DIR / "SRA" / "metadata" / "initial_setup.txt"
+    init_flag = metadata_init_flag()
+    init_flag.parent.mkdir(parents=True, exist_ok=True)
     init_flag.touch()
     if not no_process:
         try_record_metadata_update_runtime(
@@ -181,20 +204,23 @@ def drop_mongo_collection(collection):
     mongo.close()
 
 
-def import_parquet(parquet_dir, indexed_only=False):
-    drop_mongo_collection("sradb_temp")
+def import_parquet(parquet_dir, indexed_only=False, database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
+    temp_collection = f"{database_config.mongodb_collection}_temp"
+    drop_mongo_collection(temp_collection)
     mongo = pm.MongoClient(settings.MONGO_URI)
     db = mongo["sradb"]
-    db.create_collection("sradb_temp")
+    db.create_collection(temp_collection)
     mongo.close()
 
     column_list, jattr_dtypes, allowed_librarysources = get_filter_data()
     indexed_ids = None
     if indexed_only:
-        indexed_ids_file = settings.DATA_DIR / "SRA" / "metagenomes" / "manifest.pickle"
-        if indexed_ids_file.exists():
-            with open(indexed_ids_file, "rb") as handle:
-                indexed_ids = pickle.load(handle)
+        indexed_ids = set()
+        for profile in database_config.enabled_profiles:
+            indexed_ids.update(
+                read_accession_parquet(profile_manifest(database_config.id, profile))
+            )
 
     for parquet_file in parquet_dir.glob("*"):
         df = pl.scan_parquet(parquet_file)
@@ -207,6 +233,10 @@ def import_parquet(parquet_dir, indexed_only=False):
             sra_lf = sra_lf.filter(
                 pl.col("librarysource").is_in(allowed_librarysources)
             )
+        include_filters = database_config.metadata_filter.get("include", {})
+        librarysource = include_filters.get("librarysource")
+        if librarysource and "librarysource" in available_columns:
+            sra_lf = sra_lf.filter(pl.col("librarysource") == librarysource)
         if "jattr" in available_columns:
             sra_lf = sra_lf.select(selected_columns + ["jattr"])
         else:
@@ -230,36 +260,81 @@ def import_parquet(parquet_dir, indexed_only=False):
         if "bioproject" in sra_df.columns:
             alias_expressions.append(pl.col("bioproject").alias("sra_bioproject"))
         sra_df = sra_df.with_columns(alias_expressions)
+        excluded_terms = database_config.metadata_filter.get("exclude", {}).get(
+            "descriptive_fields_contain",
+            [],
+        )
+        if excluded_terms and sra_df.height > 0:
+            text_columns = [
+                column
+                for column in [
+                    "assay_type",
+                    "organism",
+                    "librarysource",
+                    "sample_name",
+                    "sample_title",
+                    "experiment_title",
+                    "study_title",
+                    "description",
+                    "host",
+                    "isolation_source",
+                ]
+                if column in sra_df.columns
+            ]
+            if text_columns:
+                for term in excluded_terms:
+                    term_expr = pl.any_horizontal(
+                        [
+                            pl.col(column)
+                            .cast(pl.String)
+                            .str.to_lowercase()
+                            .str.contains(str(term).lower())
+                            .fill_null(False)
+                            for column in text_columns
+                        ]
+                    )
+                    sra_df = sra_df.filter(~term_expr)
         if sra_df.height > 0:
             mongo = pm.MongoClient(settings.MONGO_URI)
             db = mongo["sradb"]
-            db["sradb_temp"].insert_many(sra_df.to_dicts())
+            db[temp_collection].insert_many(sra_df.to_dicts())
             mongo.close()
 
-    drop_mongo_collection("sradb_list")
+    drop_mongo_collection(database_config.mongodb_collection)
     mongo = pm.MongoClient(settings.MONGO_URI)
     db = mongo["sradb"]
-    db["sradb_temp"].rename("sradb_list")
+    db[temp_collection].rename(database_config.mongodb_collection)
     mongo.close()
 
 
 def run_downloads(
     *,
     max_downloads=None,
-    max_simultaneous=100,
-    timeout=60,
+    max_simultaneous=None,
+    timeout=None,
     ids=None,
     retry_failed=False,
+    database=DEFAULT_DATABASE_ID,
 ):
-    test_url = "https://wort.sourmash.bio/v1/view/sra/SRR15461028"
+    database_config = get_database_config(database)
+    if max_simultaneous is None:
+        max_simultaneous = database_config.download.get("max_simultaneous", 100)
+    if timeout is None:
+        timeout = database_config.download.get("timeout_seconds", 60)
+    test_url = f"{database_config.wort_signature_endpoint}/SRR15461028"
     run_command(["curl", "-sLf", "-r", "0-10", test_url, "-o", "/dev/null"])
-    dir_paths, man_fail, sra_ids = prepare_download_targets(ids=ids)
+    dir_paths, man_fail, sra_ids = prepare_download_targets(
+        ids=ids,
+        database=database_config.id,
+    )
     selected_ids = select_download_ids(
         sra_ids,
         dir_paths,
         man_fail,
-        retry_failed=retry_failed or not settings.WORT_SKIP_FAILED,
+        retry_failed=retry_failed
+        or database_config.download.get("retry_failed", False),
         max_downloads=max_downloads,
+        database=database_config.id,
     )
     results = asyncio.run(
         download_from_wort(
@@ -267,6 +342,8 @@ def run_downloads(
             selected_ids,
             man_fail,
             timeout,
+            endpoint=database_config.wort_signature_endpoint,
+            database=database_config.id,
             retry_failed=True,
             max_downloads=len(selected_ids),
             max_simultaneous=max_simultaneous,
@@ -278,31 +355,31 @@ def run_downloads(
     return {"downloaded": downloaded}
 
 
-def prepare_download_targets(ids=None):
-    database = "SRA"
-    dir_paths = handle_dirs(
-        database, ["updates", "index", "signatures", "indexing-failed", "manifests"]
-    )
-    man_fail = settings.DATA_DIR / database / "metagenomes" / "download_failed.pickle"
-    manifest = settings.DATA_DIR / database / "metagenomes" / "manifest.pickle"
-    if not ids and not manifest.exists() and not settings.INDEX_FROM_SCRATCH:
+def prepare_download_targets(ids=None, database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
+    dir_paths = handle_dirs(database_config.id)
+    man_fail = failed_downloads_path(database_config.id)
+    indexed_ids = get_all_profile_indexed_accessions(database_config.id)
+    if not ids and not indexed_ids and not settings.INDEX_FROM_SCRATCH:
         raise RuntimeError(
-            "manifest.pickle is missing and INDEX_FROM_SCRATCH is disabled; "
-            "create manifests first or provide explicit IDs"
+            "profile manifest is missing and INDEX_FROM_SCRATCH is disabled; "
+            "create indexes first or provide explicit IDs"
         )
-    mani_list = set(get_manifest(manifest))
     if ids:
-        wanted_ids = set(ids) - mani_list
+        wanted_ids = set(ids) - indexed_ids
     else:
-        start_date, end_date = get_download_date_range()
-        mongo_ids = get_mongo_ids(start_date, end_date)
-        wanted_ids = set(mongo_ids) - mani_list
-    sra_ids_in_wort = get_wort_accessions()
+        start_date, end_date = get_download_date_range(database_config)
+        mongo_ids = get_mongo_ids(start_date, end_date, database_config.id)
+        wanted_ids = set(mongo_ids) - indexed_ids
+    sra_ids_in_wort = get_wort_accessions(database_config.id)
     return dir_paths, man_fail, sorted(wanted_ids & sra_ids_in_wort)
 
 
-def get_download_date_range():
-    today = datetime.today() - timedelta(days=2)
+def get_download_date_range(database_config=None):
+    database_config = database_config or get_database_config(DEFAULT_DATABASE_ID)
+    today = datetime.today() - timedelta(
+        days=database_config.download.get("date_lag_days", 2)
+    )
     start_date = (
         today
         if settings.START_DATE == "auto"
@@ -317,22 +394,44 @@ def get_download_date_range():
 
 
 def select_download_ids(
-    sra_ids, dir_paths, man_fail, *, retry_failed=False, max_downloads=None
+    sra_ids,
+    dir_paths,
+    man_fail,
+    *,
+    retry_failed=False,
+    max_downloads=None,
+    database=DEFAULT_DATABASE_ID,
 ):
     selected_ids = set(sra_ids) - get_update_accessions(dir_paths["updates"])
-    ids_fail = set(load_pickle(man_fail)) if man_fail.exists() else set()
+    ids_fail = load_failed_downloads(man_fail)
     if not retry_failed:
         selected_ids -= ids_fail
     selected_ids = sorted(selected_ids)
-    if max_downloads is None and settings.MAX_DOWNLOADS:
-        max_downloads = settings.MAX_DOWNLOADS
+    if max_downloads is None:
+        max_downloads = get_configured_max_downloads(get_database_config(database))
     if max_downloads and max_downloads < len(selected_ids):
         selected_ids = selected_ids[:max_downloads]
     return selected_ids
 
 
-def handle_dirs(database, dir_names):
-    dir_paths = {n: settings.DATA_DIR / database / "metagenomes" / n for n in dir_names}
+def get_configured_max_downloads(database_config):
+    max_downloads = database_config.download.get(
+        "max_downloads", settings.MAX_DOWNLOADS
+    )
+    return max_downloads or None
+
+
+def handle_dirs(database=DEFAULT_DATABASE_ID):
+    dirs = signature_dirs(database)
+    dir_paths = {
+        "updates": dirs["pending"],
+        "pending": dirs["pending"],
+        "signatures": dirs["indexed"],
+        "indexed": dirs["indexed"],
+        "indexing-failed": dirs["failed-indexing"],
+        "failed-indexing": dirs["failed-indexing"],
+    }
+    dir_paths["tmp"] = database_root(database) / "tmp"
     for dir_path in dir_paths.values():
         dir_path.mkdir(parents=True, exist_ok=True)
         os.chmod(dir_path, 0o700)
@@ -346,22 +445,21 @@ def get_manifest(manifest):
         return pickle.load(handle)
 
 
-def get_mongo_ids(start_date, end_date):
+def get_mongo_ids(start_date, end_date, database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
     mongo = pm.MongoClient(settings.MONGO_URI)
     db = mongo["sradb"]
-    collection = db["sradb_list"]
+    collection = db[database_config.mongodb_collection]
     query = {"releasedate": {"$gte": start_date, "$lte": end_date}}
-    if settings.LIB_SOURCE:
-        query = query | {"librarysource": {"$in": settings.LIB_SOURCE}}
     ids = [doc["_id"] for doc in collection.find(query, {"_id": 1})]
     mongo.close()
     return ids
 
 
-def get_wort_accessions():
-    wort_manifest_url = "https://s3.bi.denbi.de/wort-sra/SOURMASH-MANIFEST.parquet"
+def get_wort_accessions(database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
     accessions = (
-        pl.scan_parquet(wort_manifest_url)
+        pl.scan_parquet(database_config.wort_manifest_url)
         .select(pl.col("name").str.extract(r"([\w.]+)", 1).alias("accession"))
         .collect()
         .get_column("accession")
@@ -376,21 +474,26 @@ async def download_from_wort(
     sra_ids,
     man_fail,
     timeout_seconds,
+    *,
+    endpoint=None,
+    database=DEFAULT_DATABASE_ID,
     retry_failed=False,
     max_downloads=None,
     max_simultaneous=100,
 ):
-    ids_fail = set(load_pickle(man_fail)) if man_fail.exists() else set()
+    database_config = get_database_config(database)
+    endpoint = (endpoint or database_config.wort_signature_endpoint).rstrip("/")
+    ids_fail = load_failed_downloads(man_fail)
     sra_ids = select_download_ids(
         sra_ids,
         dir_paths,
         man_fail,
         retry_failed=retry_failed,
         max_downloads=max_downloads,
+        database=database_config.id,
     )
     target_dir = dir_paths["updates"]
-    signature_endpoint = "https://wort.sourmash.bio/v1/view/sra"
-    urls = [f"{signature_endpoint}/{id_}" for id_ in sra_ids]
+    urls = [f"{endpoint}/{id_}" for id_ in sra_ids]
     if not urls:
         return []
     lock = asyncio.Lock()
@@ -417,7 +520,7 @@ async def fetch_signature(session, url, target_dir, ids_fail, man_fail, lock):
             if status < 200 or status >= 300:
                 async with lock:
                     ids_fail.add(accession)
-                    await asyncio.to_thread(save_pickle, ids_fail, man_fail)
+                    await asyncio.to_thread(save_failed_downloads, man_fail, ids_fail)
                 return {"id": accession, "status": status, "error": "non-success"}
             async with aiofiles.tempfile.NamedTemporaryFile(
                 "wb",
@@ -440,7 +543,7 @@ async def fetch_signature(session, url, target_dir, ids_fail, man_fail, lock):
         LOGGER.exception("Download exception for %s", url)
         async with lock:
             ids_fail.add(accession)
-            await asyncio.to_thread(save_pickle, ids_fail, man_fail)
+            await asyncio.to_thread(save_failed_downloads, man_fail, ids_fail)
         return {"id": accession, "status": None}
 
 
@@ -454,19 +557,62 @@ def load_pickle(file):
         return pickle.load(handle)
 
 
+def load_failed_downloads(path):
+    path = Path(path)
+    if not path.exists():
+        return set()
+    if path.suffix == ".pickle":
+        return set(load_pickle(path))
+    return set(read_accession_parquet(path))
+
+
+def save_failed_downloads(path, accessions):
+    path = Path(path)
+    if path.suffix == ".pickle":
+        save_pickle(set(accessions), path)
+        return
+    write_accession_parquet(path, accessions)
+
+
+def get_any_profile_indexed_accessions(database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
+    indexed = set()
+    for profile in database_config.enabled_profiles:
+        indexed.update(
+            read_accession_parquet(profile_manifest(database_config.id, profile))
+        )
+    return indexed
+
+
+def get_all_profile_indexed_accessions(database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
+    profile_accessions = [
+        set(read_accession_parquet(profile_manifest(database_config.id, profile)))
+        for profile in database_config.enabled_profiles
+    ]
+    if not profile_accessions:
+        return set()
+    return set.intersection(*profile_accessions)
+
+
 def get_update_accessions(updates_dir):
     return {sig_path.stem for sig_path in Path(updates_dir).glob("*.sig")}
 
 
-def run_index(*, index_max_signatures=None):
+def run_index(*, index_max_signatures=None, database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
     tmp_dir = settings.DATA_DIR / "tmp"
     os.makedirs(tmp_dir, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="mgwatch-index-", dir=tmp_dir) as work_dir:
         result = run_index_batches(
             work_dir,
+            database=database_config.id,
             index_max_signatures=index_max_signatures,
             max_batches=None,
-            delete_indexed_sigs=getattr(settings, "DELETE_INDEXED_SIGS", False),
+            delete_indexed_sigs=not database_config.indexing.get(
+                "retain_indexed_signatures",
+                True,
+            ),
         )
     return {"indexes_updated": result["indexes_updated"]}
 
@@ -474,22 +620,26 @@ def run_index(*, index_max_signatures=None):
 def run_index_batches(
     work_dir,
     *,
+    database=DEFAULT_DATABASE_ID,
     index_max_signatures=None,
     max_batches=None,
     delete_indexed_sigs=False,
 ):
     started_at = monotonic()
-    kmers = [21, 31, 51]
-    database = "SRA"
-    metagenomes_dir = settings.DATA_DIR / database / "metagenomes"
+    database_config = get_database_config(database)
+    profiles = database_config.enabled_profiles
     sig_list = Path(work_dir) / "sig-list.txt"
-    manifest = metagenomes_dir / "manifest.pickle"
-    dir_paths = handle_dirs(
-        database, ["updates", "index", "signatures", "indexing-failed", "manifests"]
+    dir_paths = handle_dirs(database_config.id)
+    mani_list = set(get_any_profile_indexed_accessions(database_config.id))
+    last_sig_files, last_num, has_existing_index = get_last_index(
+        database_config.id,
+        profiles[0],
+        dir_paths,
     )
-    mani_list = get_manifest(manifest)
-    last_sig_files, last_num, has_existing_index = get_last_index(dir_paths)
-    max_signatures = index_max_signatures or settings.INDEX_MAX_SIGNATURES
+    max_signatures = index_max_signatures or database_config.indexing.get(
+        "batch_size",
+        settings.INDEX_MAX_SIGNATURES,
+    )
     batch_specs = get_index_batch_specs(
         dir_paths,
         last_sig_files,
@@ -510,11 +660,11 @@ def run_index_batches(
             work_dir,
             dir_paths,
             sig_list,
-            kmers,
+            database_config.id,
+            profiles,
             index_number,
             new_files,
             mani_list,
-            manifest,
             max_signatures,
             delete_indexed_sigs,
         )
@@ -525,12 +675,12 @@ def run_index_batches(
                 1 for sig_file in new_files if sig_file in update_sig_files
             )
     if indexing_ever_succeeded:
-        index_stat = try_record_index_stats(database=database)
+        index_stat = try_record_index_stats(database=database_config.id)
         try_record_index_update_runtime(
             duration_seconds=monotonic() - started_at,
             samples_added=samples_added,
-            sketches_added=samples_added * len(kmers),
-            database=database,
+            sketches_added=samples_added * len(profiles),
+            database=database_config.id,
             total_index_sample_count=index_stat.value if index_stat else None,
         )
     return {
@@ -565,19 +715,19 @@ def process_index_batch(
     work_dir,
     dir_paths,
     sig_list,
-    kmers,
+    database,
+    profiles,
     index_number,
     new_files,
     mani_list,
-    manifest,
     max_signatures,
     delete_indexed_sigs,
 ):
     write_signature_list(new_files, sig_list)
     try:
         retvals = [
-            update_index(work_dir, dir_paths["index"], sig_list, k, index_number)
-            for k in kmers
+            update_index(work_dir, database, profile, sig_list, index_number)
+            for profile in profiles
         ]
         indexing_succeeded = all(val == 0 for val in retvals)
     except Exception:
@@ -593,7 +743,11 @@ def process_index_batch(
         move_files(new_files, dir_paths, target_dir)
     if indexing_succeeded:
         mani_list = update_manifests(
-            new_files, mani_list, manifest, dir_paths, index_number
+            new_files,
+            mani_list,
+            database,
+            profiles,
+            index_number,
         )
     return indexing_succeeded, mani_list
 
@@ -601,21 +755,37 @@ def process_index_batch(
 def run_download_index(
     *,
     max_downloads=None,
-    max_simultaneous=100,
-    timeout=60,
+    max_simultaneous=None,
+    timeout=None,
     ids=None,
     retry_failed=False,
     index_max_signatures=None,
+    database=DEFAULT_DATABASE_ID,
 ):
     started_at = monotonic()
-    test_url = "https://wort.sourmash.bio/v1/view/sra/SRR15461028"
+    database_config = get_database_config(database)
+    if max_simultaneous is None:
+        max_simultaneous = database_config.download.get("max_simultaneous", 100)
+    if timeout is None:
+        timeout = database_config.download.get("timeout_seconds", 60)
+    test_url = f"{database_config.wort_signature_endpoint}/SRR15461028"
     run_command(["curl", "-sLf", "-r", "0-10", test_url, "-o", "/dev/null"])
-    dir_paths, man_fail, remaining_ids = prepare_download_targets(ids=ids)
-    max_signatures = index_max_signatures or settings.INDEX_MAX_SIGNATURES
-    retry_failed = retry_failed or not settings.WORT_SKIP_FAILED
+    dir_paths, man_fail, remaining_ids = prepare_download_targets(
+        ids=ids,
+        database=database_config.id,
+    )
+    max_signatures = index_max_signatures or database_config.indexing.get(
+        "batch_size",
+        settings.INDEX_MAX_SIGNATURES,
+    )
+    retry_failed = retry_failed or database_config.download.get("retry_failed", False)
     total_downloaded = 0
     total_batches = 0
-    remaining_download_budget = max_downloads
+    remaining_download_budget = (
+        max_downloads
+        if max_downloads is not None
+        else get_configured_max_downloads(database_config)
+    )
 
     while True:
         updates_count = len(get_update_accessions(dir_paths["updates"]))
@@ -634,6 +804,7 @@ def run_download_index(
                 max_downloads=min(remaining_download_budget, batch_capacity)
                 if remaining_download_budget is not None
                 else batch_capacity,
+                database=database_config.id,
             )
             if selected_ids:
                 results = asyncio.run(
@@ -642,6 +813,8 @@ def run_download_index(
                         selected_ids,
                         man_fail,
                         timeout,
+                        endpoint=database_config.wort_signature_endpoint,
+                        database=database_config.id,
                         retry_failed=True,
                         max_downloads=len(selected_ids),
                         max_simultaneous=max_simultaneous,
@@ -670,6 +843,7 @@ def run_download_index(
         ) as work_dir:
             index_result = run_index_batches(
                 work_dir,
+                database=database_config.id,
                 index_max_signatures=max_signatures,
                 max_batches=1,
                 delete_indexed_sigs=True,
@@ -687,17 +861,19 @@ def run_download_index(
     return {"downloaded": total_downloaded, "indexes_updated": total_batches}
 
 
-def get_last_index(dir_paths):
-    manifests = list(dir_paths["manifests"].glob("db*.pickle"))
-    if not manifests:
-        return [], max(settings.INDEX_MIN_ITERATOR, 0), False
+def get_last_index(database, profile, dir_paths):
+    database_config = get_database_config(database)
+    profile_dir = profile_root(database_config.id, profile)
+    batch_dirs = list(profile_dir.glob("batch-*"))
+    if not batch_dirs:
+        return [], max(database_config.indexing.get("first_batch_number", 38), 0), False
     manifest_num = max(
-        [int(f.name.split("db")[1].split(".pickle")[0]) for f in manifests]
+        int(batch_dir.name.removeprefix("batch-")) for batch_dir in batch_dirs
     )
-    last_num = max(settings.INDEX_MIN_ITERATOR, manifest_num)
-    last_sigs = os.path.join(dir_paths["manifests"], f"db{manifest_num}.pickle")
-    with open(last_sigs, "rb") as handle:
-        last_sig_ids = pickle.load(handle)
+    last_num = max(database_config.indexing.get("first_batch_number", 38), manifest_num)
+    last_sig_ids = read_accession_parquet(
+        batch_manifest(database_config.id, profile, manifest_num)
+    )
     last_sig_files = [
         os.path.join(dir_paths["signatures"], f"{identifier}.sig")
         for identifier in last_sig_ids
@@ -719,9 +895,9 @@ def write_signature_list(sig_file_names, output_file):
         handle.writelines(f"{fp}\n" for fp in sig_file_names)
 
 
-def update_index(work_dir, index_dir, sig_list, k, last_num):
-    old_idx = os.path.join(index_dir, f"{k}mers-db{last_num}.rocksdb")
-    new_idx = os.path.join(work_dir, f"{k}mers-db{last_num}.rocksdb")
+def update_index(work_dir, database, profile, sig_list, last_num):
+    old_idx = index_path(database, profile, last_num)
+    new_idx = Path(work_dir) / "index.rocksdb"
     cpus = min(8, int(os.cpu_count() * 0.8))
     run_command(
         [
@@ -729,22 +905,23 @@ def update_index(work_dir, index_dir, sig_list, k, last_num):
             "scripts",
             "index",
             "--ksize",
-            f"{k}",
+            f"{profile.kmer}",
             "--moltype",
-            "DNA",
+            profile.moltype,
             "--scaled",
-            "1000",
+            f"{profile.scaled}",
             "--cores",
             f"{cpus}",
             "--no-store-sketches",
             "--output",
-            f"{new_idx}",
+            str(new_idx),
             f"{sig_list}",
         ]
     )
-    if os.path.isdir(old_idx) and old_idx.endswith(".rocksdb"):
+    if old_idx.is_dir() and old_idx.name.endswith(".rocksdb"):
         shutil.rmtree(old_idx)
-    shutil.move(new_idx, old_idx)
+    old_idx.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(new_idx), str(old_idx))
     return 0
 
 
@@ -761,14 +938,19 @@ def delete_files(file_list):
             os.remove(file)
 
 
-def update_manifests(new_files, mani_list, manifest, dir_paths, last_num):
+def update_manifests(new_files, mani_list, database, profiles, last_num):
     new_files = [os.path.basename(file).split(".sig")[0] for file in new_files]
-    last_sigs = os.path.join(dir_paths["manifests"], f"db{last_num}.pickle")
-    with open(last_sigs, "wb") as handle:
-        pickle.dump(new_files, handle, protocol=4)
-    sig_files = list(set(mani_list) | set(new_files))
-    with open(manifest, "wb") as handle:
-        pickle.dump(sig_files, handle, protocol=4)
+    sig_files = sorted(set(mani_list) | set(new_files))
+    for profile in profiles:
+        write_accession_parquet(
+            batch_manifest(database, profile, last_num),
+            new_files,
+            batch=last_num,
+        )
+        write_accession_parquet(
+            profile_manifest(database, profile),
+            sig_files,
+        )
     return sig_files
 
 

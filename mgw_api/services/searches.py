@@ -12,9 +12,13 @@ from django.urls import reverse
 
 from mgw.settings import LOGGER
 from mgw.settings import MGW_URL
+from mgw_api.database_config import get_database_config
+from mgw_api.database_config import index_path
+from mgw_api.database_config import normalize_database_list
 from mgw_api.models import Result
 from mgw_api.models import Settings
 from mgw_api.models import Signature
+from mgw_api.services.exceptions import UnsupportedSearchConfiguration
 from mgw_api.services.stats import try_record_search_rate
 
 from .processes import run_command
@@ -31,8 +35,27 @@ def get_search_context(*, user_id, name, watch):
 
 
 def get_indices(k, db):
-    index_dir = settings.DATA_DIR / db / "metagenomes" / "index"
-    new_files = list(index_dir.glob(f"{k}mers-db*.rocksdb"))
+    database = get_database_config(db)
+    if not database.enabled:
+        LOGGER.info("Skipping disabled database in search plan: %s", database.id)
+        return []
+    profiles = [
+        profile for profile in database.enabled_profiles if str(profile.kmer) == str(k)
+    ]
+    new_files = []
+    for profile in profiles:
+        profile_dir = (
+            settings.DATA_DIR
+            / "search-databases"
+            / database.id
+            / "profiles"
+            / profile.key
+        )
+        for batch_dir in sorted(profile_dir.glob("batch-*")):
+            batch_number = int(batch_dir.name.removeprefix("batch-"))
+            idx = index_path(database.id, profile, batch_number)
+            if idx.exists():
+                new_files.append((profile, idx))
     LOGGER.info("Found indexes for db=%s k=%s: %s", db, k, new_files)
     return new_files
 
@@ -41,26 +64,27 @@ def build_search_plan(*, user_id, name, watch):
     signature, search_set = get_search_context(user_id=user_id, name=name, watch=watch)
     kmer, database, containment = (
         search_set.kmer,
-        search_set.database,
+        normalize_database_list(search_set.database),
         search_set.containment,
     )
     plan = []
     for k, db in product(kmer, database):
         indices = get_indices(k, db)
-        for idx, index_path in enumerate(indices):
+        for idx, (profile, profile_index_path) in enumerate(indices):
             plan.append(
                 {
                     "kmer": k,
                     "database": db,
                     "containment": containment,
+                    "scaled": profile.scaled,
                     "index_idx": idx,
-                    "index_path": str(index_path),
+                    "index_path": str(profile_index_path),
                 }
             )
     return signature, search_set, plan
 
 
-def search_index(*, result_file, sketch_file, index_path, k, containment):
+def search_index(*, result_file, sketch_file, index_path, k, scaled, containment):
     cores = 1
     run_command(
         [
@@ -72,7 +96,7 @@ def search_index(*, result_file, sketch_file, index_path, k, containment):
             "--moltype",
             "DNA",
             "--scaled",
-            "1000",
+            f"{scaled}",
             "--cores",
             f"{cores}",
             "--threshold",
@@ -155,6 +179,11 @@ def run_search(*, user_id, name, watch, progress_callback=None, state_callback=N
     signature, search_set, plan = build_search_plan(
         user_id=user_id, name=name, watch=watch
     )
+    if not plan:
+        raise UnsupportedSearchConfiguration(
+            "Search settings do not match any enabled indexed profile: "
+            f"kmer={search_set.kmer}, database={search_set.database}"
+        )
     date = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     user_path = Path(signature.file.path).parent
     file_list = []
@@ -169,6 +198,7 @@ def run_search(*, user_id, name, watch, progress_callback=None, state_callback=N
             sketch_file=signature.file.path,
             index_path=item["index_path"],
             k=item["kmer"],
+            scaled=item["scaled"],
             containment=item["containment"],
         )
         file_list.append((item["kmer"], item["database"], result_file))

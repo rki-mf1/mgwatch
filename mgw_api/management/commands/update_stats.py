@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.core.management.base import CommandError
 
+from mgw_api.database_config import DEFAULT_DATABASE_ID
 from mgw_api.services.stats import record_index_stats
 from mgw_api.services.stats import record_metadata_stats
 
@@ -16,8 +17,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "--database",
-            default="SRA",
-            help="Database name to use for the index manifest. Defaults to SRA.",
+            default=DEFAULT_DATABASE_ID,
+            help="Database name to use for stats.",
         )
         parser.add_argument(
             "--index-only",
@@ -47,7 +48,7 @@ class Command(BaseCommand):
             )
 
         if update_metadata:
-            metadata_stat = record_metadata_stats()
+            metadata_stat = record_metadata_stats(database=kwargs["database"])
             self.stdout.write(
                 self.style.SUCCESS(f"Metadata samples: {int(metadata_stat.value):,}")
             )

@@ -1,125 +1,63 @@
-# mgw_api/management/commands/create_manifests.py
-
-import os
-import pickle
-import re
-
-from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from mgw.settings import LOGGER
-
-################################################################################
-## django command class
-################################################################################
+from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import batch_manifest
+from mgw_api.database_config import get_database_config
+from mgw_api.database_config import index_path
+from mgw_api.database_config import profile_manifest
+from mgw_api.database_config import profile_root
+from mgw_api.database_config import read_accession_parquet
+from mgw_api.database_config import write_accession_parquet
 
 
 class Command(BaseCommand):
+    help = "Rebuild configured database profile manifests from batch manifests."
+
     def add_arguments(self, parser):
+        parser.add_argument(
+            "--database",
+            default=DEFAULT_DATABASE_ID,
+            help=f"Configured database id. Defaults to {DEFAULT_DATABASE_ID}.",
+        )
         parser.add_argument(
             "--force",
             action="store_true",
-            help="Skip checking if the number of indexes matches number of manifest files",
+            help="Allow batches with missing index.rocksdb directories.",
         )
 
-    def handle(self, *args, **kwargs):
-        try:
-            database = "SRA"
-            manifest = os.path.join(
-                settings.DATA_DIR, database, "metagenomes", "manifest.pickle"
-            )
-            dir_paths = self.handle_dirs(
-                database,
-                [
-                    "updates",
-                    "index",
-                    "signatures",
-                    "indexing-failed",
-                    "lists",
-                    "manifests",
-                ],
-            )
-            self.create_initial_manifests(manifest, dir_paths, kwargs["force"])
-            LOGGER.info("Creating manifests finished.")
-        except Exception as e:
-            LOGGER.error(f"Error creating manifests '{settings.DATA_DIR}': {e}")
+    def handle(self, *args, **options):
+        database = get_database_config(options["database"])
+        force = options["force"]
 
-    def handle_dirs(self, database, dir_names):
-        dir_paths = {
-            n: os.path.join(settings.DATA_DIR, database, "metagenomes", n)
-            for n in dir_names
-        }
-        for dir_path in dir_paths.values():
-            if not os.path.exists(dir_path):
-                os.makedirs(dir_path)
-                os.chmod(dir_path, 0o700)
-        return dir_paths
+        for profile in database.enabled_profiles:
+            root = profile_root(database.id, profile)
+            root.mkdir(parents=True, exist_ok=True)
+            batches = sorted(
+                batch
+                for batch in root.glob("batch-*")
+                if batch.is_dir() and batch.name.removeprefix("batch-").isdigit()
+            )
+            accessions = []
+            for batch in batches:
+                batch_number = int(batch.name.removeprefix("batch-"))
+                manifest_path = batch_manifest(database.id, profile, batch_number)
+                if not manifest_path.exists():
+                    LOGGER.warning("Skipping batch without manifest: %s", batch)
+                    continue
+                if (
+                    not force
+                    and not index_path(database.id, profile, batch_number).exists()
+                ):
+                    raise FileNotFoundError(
+                        f"Batch manifest has no matching index.rocksdb: {batch}"
+                    )
+                accessions.extend(read_accession_parquet(manifest_path))
 
-    def create_initial_manifests(self, manifest, dir_paths, force):
-        manifest_IDs, index_paths, index_lists = (
-            list(),
-            os.listdir(dir_paths["index"]),
-            os.listdir(dir_paths["lists"]),
-        )
-        # currently we have 3 indexes for every sample: one for each k-mer length (21, 31, 51)
-        # FIXME: this should not be hard coded
-        indexes_per_sample = 3
-        if os.path.exists(manifest):
-            LOGGER.info("Manifest found, reading it.")
-            with open(manifest, "rb") as pcl_in:
-                manifest_IDs = pickle.load(pcl_in)
-            LOGGER.info(f"Manifest has {len(manifest_IDs)} IDs.")
-        if not manifest_IDs and not index_paths:
-            LOGGER.info("No index and no manifest, creating empty manifest.")
-            self.save_pickle([], manifest)
-        if not manifest_IDs and index_paths:
-            LOGGER.info("Index found, but no manifest, creating manifest.")
-            if not force and len(index_paths) != (
-                indexes_per_sample * len(index_lists)
-            ):
-                raise Exception(
-                    "The number of indices and index lists are not the same."
+            write_accession_parquet(profile_manifest(database.id, profile), accessions)
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Rebuilt {database.id}/{profile.key} manifest with "
+                    f"{len(set(accessions))} accessions from {len(batches)} batches."
                 )
-            index_lists = sorted(index_lists, key=lambda x: self.extract_number(x))
-            manifest_dict = dict()
-            for index_list in index_lists:
-                with open(os.path.join(dir_paths["lists"], index_list), "r") as list_in:
-                    i = self.extract_number(index_list)
-                    ID_list = [
-                        os.path.splitext(os.path.split(line.strip())[1])[0]
-                        for line in list_in
-                    ]
-                    manifest_dict[i] = ID_list
-            LOGGER.info(
-                f"Extracted SRA IDs from index list files, found {len(manifest_dict)} list files beloning to indices."
             )
-            SRA_IDs = [v for val in manifest_dict.values() for v in val]
-            LOGGER.info(f"Saving manifest with {len(SRA_IDs)} SRA IDs.")
-            self.save_pickle(SRA_IDs, manifest)
-            for i, IDs in manifest_dict.items():
-                self.save_pickle(
-                    IDs,
-                    os.path.join(dir_paths["manifests"], f"db{i}.pickle"),
-                )
-            LOGGER.info(
-                f"Finished, creating new empty starting manifest {len(manifest_dict)} for further updates."
-            )
-            self.save_pickle(
-                [],
-                os.path.join(
-                    dir_paths["manifests"],
-                    f"db{len(manifest_dict)}.pickle",
-                ),
-            )
-
-    def save_pickle(self, data, file):
-        with open(file, "wb") as outpcl:
-            pickle.dump(data, outpcl, protocol=4)
-
-    def extract_number(self, s):
-        return int(re.search(r"\d+", s).group())
-
-    def get_manifest(self, manifest):
-        with open(manifest, "rb") as pcl_in:
-            mani_list = pickle.load(pcl_in)
-        return mani_list

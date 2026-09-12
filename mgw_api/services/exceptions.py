@@ -6,6 +6,10 @@ class LockTimeoutError(Exception):
     """Raised when a distributed lock could not be acquired in time."""
 
 
+class UnsupportedSearchConfiguration(Exception):
+    """Raised when saved search settings cannot produce a supported search plan."""
+
+
 class ExternalCommandError(Exception):
     """Raised when an external command fails."""
 

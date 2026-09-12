@@ -1,4 +1,3 @@
-import pickle
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,6 +11,10 @@ from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import get_database_config
+from mgw_api.database_config import profile_manifest
+from mgw_api.database_config import write_accession_parquet
 from mgw_api.models import Fasta
 from mgw_api.models import Result
 from mgw_api.models import Signature
@@ -57,12 +60,13 @@ class StatsServiceTests(TestCase):
     def test_count_index_samples_reads_manifest_count(self):
         with TemporaryDirectory() as tmp_dir:
             data_dir = Path(tmp_dir)
-            manifest = data_dir / "SRA" / "metagenomes" / "manifest.pickle"
-            manifest.parent.mkdir(parents=True)
-            with open(manifest, "wb") as handle:
-                pickle.dump(["SRR1", "SRR2", "SRR3"], handle, protocol=4)
-
             with override_settings(DATA_DIR=data_dir):
+                database = get_database_config()
+                profile = database.enabled_profiles[0]
+                write_accession_parquet(
+                    profile_manifest(database.id, profile),
+                    ["SRR1", "SRR2", "SRR3"],
+                )
                 self.assertEqual(count_index_samples(), 3)
 
     def test_record_metadata_stats_stores_current_and_snapshot_rows(self):
@@ -172,7 +176,7 @@ class StatsServiceTests(TestCase):
 
         self.assertEqual(
             result,
-            {"metadata_dir": str(data_dir / "SRA" / "metadata" / "parquet")},
+            {"metadata_dir": str(data_dir / "metadata" / "sra" / "parquet")},
         )
         statistic = SystemStatistic.objects.get(
             metric=SystemStatistic.Metric.METADATA_UPDATE_RUNTIME_SECONDS
@@ -185,21 +189,16 @@ class StatsServiceTests(TestCase):
     def test_run_index_records_update_runtime_and_added_samples(self):
         with TemporaryDirectory() as tmp_dir:
             data_dir = Path(tmp_dir)
-            metagenomes_dir = data_dir / "SRA" / "metagenomes"
-            for name in [
-                "updates",
-                "index",
-                "signatures",
-                "indexing-failed",
-                "manifests",
-            ]:
-                (metagenomes_dir / name).mkdir(parents=True, exist_ok=True)
+            pending_dir = (
+                data_dir
+                / "search-databases"
+                / DEFAULT_DATABASE_ID
+                / "signatures"
+                / "pending"
+            )
+            pending_dir.mkdir(parents=True, exist_ok=True)
             for accession in ["SRR1", "SRR2", "SRR3"]:
-                (metagenomes_dir / "updates" / f"{accession}.sig").write_text(
-                    "sig", encoding="ascii"
-                )
-            with open(metagenomes_dir / "manifest.pickle", "wb") as handle:
-                pickle.dump([], handle, protocol=4)
+                (pending_dir / f"{accession}.sig").write_text("sig", encoding="ascii")
 
             with (
                 override_settings(
@@ -224,7 +223,7 @@ class StatsServiceTests(TestCase):
         self.assertEqual(statistic.observation_count, 1)
         self.assertEqual(statistic.details["last_runtime_seconds"], 7)
         self.assertEqual(statistic.details["samples_added"], 3)
-        self.assertEqual(statistic.details["sketches_added"], 9)
+        self.assertEqual(statistic.details["sketches_added"], 3)
         self.assertEqual(statistic.details["total_index_sample_count"], 3)
 
     def test_run_download_index_records_task_runtime(self):
@@ -296,16 +295,17 @@ class UpdateStatsCommandTests(TestCase):
     def test_update_stats_records_index_and_metadata_counts(self):
         with TemporaryDirectory() as tmp_dir:
             data_dir = Path(tmp_dir)
-            manifest = data_dir / "SRA" / "metagenomes" / "manifest.pickle"
-            manifest.parent.mkdir(parents=True)
-            with open(manifest, "wb") as handle:
-                pickle.dump(["SRR1", "SRR2"], handle, protocol=4)
-
             stdout = StringIO()
             with (
                 override_settings(DATA_DIR=data_dir),
                 patch("mgw_api.services.stats.pm.MongoClient", FakeMongoClient),
             ):
+                database = get_database_config()
+                profile = database.enabled_profiles[0]
+                write_accession_parquet(
+                    profile_manifest(database.id, profile),
+                    ["SRR1", "SRR2"],
+                )
                 call_command("update_stats", stdout=stdout)
 
         self.assertIn("Index samples: 2", stdout.getvalue())
@@ -333,16 +333,17 @@ class UpdateStatsCommandTests(TestCase):
         )
         with TemporaryDirectory() as tmp_dir:
             data_dir = Path(tmp_dir)
-            manifest = data_dir / "SRA" / "metagenomes" / "manifest.pickle"
-            manifest.parent.mkdir(parents=True)
-            with open(manifest, "wb") as handle:
-                pickle.dump(["SRR1", "SRR2", "SRR3"], handle, protocol=4)
-
             stdout = StringIO()
             with (
                 override_settings(DATA_DIR=data_dir),
                 patch("mgw_api.services.stats.pm.MongoClient") as mongo_client,
             ):
+                database = get_database_config()
+                profile = database.enabled_profiles[0]
+                write_accession_parquet(
+                    profile_manifest(database.id, profile),
+                    ["SRR1", "SRR2", "SRR3"],
+                )
                 call_command("update_stats", "--index-only", stdout=stdout)
 
         mongo_client.assert_not_called()
@@ -351,7 +352,7 @@ class UpdateStatsCommandTests(TestCase):
             metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT
         )
         self.assertEqual(statistic.value, 3)
-        self.assertEqual(statistic.details["database"], "SRA")
+        self.assertEqual(statistic.details["database"], DEFAULT_DATABASE_ID)
         self.assertEqual(SystemStatisticSnapshot.objects.count(), 1)
 
     def test_update_stats_rejects_conflicting_scope_options(self):
