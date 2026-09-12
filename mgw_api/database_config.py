@@ -11,6 +11,9 @@ from django.core.exceptions import ImproperlyConfigured
 DEFAULT_DATABASE_ID = "sra_metagenomes"
 LEGACY_DATABASE_ID = "SRA"
 DATABASE_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+SUPPORTED_PROFILE_KMERS = {21, 31, 51}
+SUPPORTED_PROFILE_MOLTYPE = "DNA"
+SUPPORTED_PROFILE_SCALED = 1000
 
 
 @dataclass(frozen=True)
@@ -70,11 +73,26 @@ def _load_profile(raw_profile):
     profile = IndexProfile(
         kmer=int(raw_profile["kmer"]),
         scaled=int(raw_profile.get("scaled", 1000)),
-        moltype=str(raw_profile.get("moltype", "DNA")),
+        moltype=str(raw_profile.get("moltype", SUPPORTED_PROFILE_MOLTYPE)).upper(),
         enabled=bool(raw_profile.get("enabled", True)),
     )
     if profile.kmer <= 0 or profile.scaled <= 0:
         raise ImproperlyConfigured("Profile kmer and scaled must be positive")
+    if profile.kmer not in SUPPORTED_PROFILE_KMERS:
+        raise ImproperlyConfigured(
+            f"Unsupported profile kmer {profile.kmer}; "
+            f"supported values are {sorted(SUPPORTED_PROFILE_KMERS)}"
+        )
+    if profile.scaled != SUPPORTED_PROFILE_SCALED:
+        raise ImproperlyConfigured(
+            f"Unsupported profile scaled {profile.scaled}; "
+            f"supported value is {SUPPORTED_PROFILE_SCALED}"
+        )
+    if profile.moltype != SUPPORTED_PROFILE_MOLTYPE:
+        raise ImproperlyConfigured(
+            f"Unsupported profile moltype {profile.moltype}; "
+            f"supported value is {SUPPORTED_PROFILE_MOLTYPE}"
+        )
     return profile
 
 

@@ -166,10 +166,8 @@ class Command(BaseCommand):
 
         if legacy_metadata.exists():
             target = metadata_cache_dir()
-            if dry_run:
-                self.stdout.write(f"Would move {legacy_metadata} -> {target}")
-            else:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(legacy_metadata), str(target))
+            if _move_path(legacy_metadata, target, dry_run=dry_run):
+                action = "Would move" if dry_run else "Moved"
+                self.stdout.write(f"{action} {legacy_metadata} -> {target}")
 
         self.stdout.write(self.style.SUCCESS("Storage migration completed"))
