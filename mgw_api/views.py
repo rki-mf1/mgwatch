@@ -25,6 +25,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
+from .database_config import DEFAULT_DATABASE_ID
 from .forms import FastaForm
 from .forms import LoginForm
 from .forms import SettingsForm
@@ -457,7 +458,7 @@ def sourmash_settings(request):
             "kmer": sourmash_settings.kmer if sourmash_settings.kmer else [21],
             "database": sourmash_settings.database
             if sourmash_settings.database
-            else ["SRA"],
+            else [DEFAULT_DATABASE_ID],
             "containment": sourmash_settings.containment
             if sourmash_settings.containment is not None
             else 0.10,

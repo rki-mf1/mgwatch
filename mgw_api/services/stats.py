@@ -1,33 +1,39 @@
-import pickle
-
 import pymongo as pm
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from mgw.settings import LOGGER
+from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import get_database_config
+from mgw_api.database_config import normalize_database_list
+from mgw_api.database_config import profile_manifest
+from mgw_api.database_config import read_accession_parquet
 from mgw_api.models import SystemStatistic
 from mgw_api.models import SystemStatisticSnapshot
 
 
-def count_index_samples(database="SRA"):
-    manifest = settings.DATA_DIR / database / "metagenomes" / "manifest.pickle"
-    if not manifest.exists():
-        return 0
-    with open(manifest, "rb") as handle:
-        return len(pickle.load(handle))
+def count_index_samples(database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
+    counts = [
+        len(read_accession_parquet(profile_manifest(database_config.id, profile)))
+        for profile in database_config.enabled_profiles
+    ]
+    return min(counts) if counts else 0
 
 
 def get_cached_index_sample_count_for_databases(databases):
     if isinstance(databases, str):
         databases = [databases]
-    databases = set(databases)
+    databases = set(normalize_database_list(databases))
     statistic = SystemStatistic.objects.filter(
         metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT
     ).first()
     if statistic is None:
         return None
-    statistic_database = statistic.details.get("database", "SRA")
+    statistic_database = normalize_database_list(
+        [statistic.details.get("database", DEFAULT_DATABASE_ID)]
+    )[0]
     if databases != {statistic_database}:
         LOGGER.debug(
             "Skipped cached index sample count for unsupported database selection: %s",
@@ -37,11 +43,12 @@ def get_cached_index_sample_count_for_databases(databases):
     return int(statistic.value)
 
 
-def count_metadata_samples():
+def count_metadata_samples(database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
     mongo = pm.MongoClient(settings.MONGO_URI)
     try:
         db = mongo["sradb"]
-        return db["sradb_list"].count_documents({})
+        return db[database_config.mongodb_collection].count_documents({})
     finally:
         mongo.close()
 
@@ -71,7 +78,7 @@ def record_metric(
     return statistic
 
 
-def record_index_stats(database="SRA"):
+def record_index_stats(database=DEFAULT_DATABASE_ID):
     sample_count = count_index_samples(database=database)
     return record_metric(
         metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
@@ -80,12 +87,13 @@ def record_index_stats(database="SRA"):
     )
 
 
-def record_metadata_stats():
-    sample_count = count_metadata_samples()
+def record_metadata_stats(database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
+    sample_count = count_metadata_samples(database=database_config.id)
     return record_metric(
         metric=SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
         value=sample_count,
-        details={"database": "SRA"},
+        details={"database": database_config.id},
     )
 
 
@@ -139,7 +147,7 @@ def record_index_update_runtime(
     duration_seconds,
     samples_added,
     sketches_added,
-    database="SRA",
+    database=DEFAULT_DATABASE_ID,
     total_index_sample_count=None,
 ):
     details = {
@@ -239,7 +247,7 @@ def record_search_rate(
     return statistic
 
 
-def try_record_index_stats(database="SRA"):
+def try_record_index_stats(database=DEFAULT_DATABASE_ID):
     try:
         return record_index_stats(database=database)
     except Exception as exc:
@@ -252,9 +260,9 @@ def try_record_index_stats(database="SRA"):
     return None
 
 
-def try_record_metadata_stats():
+def try_record_metadata_stats(database=DEFAULT_DATABASE_ID):
     try:
-        return record_metadata_stats()
+        return record_metadata_stats(database=database)
     except Exception as exc:
         if exc.__class__.__name__ == "DatabaseOperationForbidden":
             LOGGER.debug(
@@ -287,7 +295,7 @@ def try_record_index_update_runtime(
     duration_seconds,
     samples_added,
     sketches_added,
-    database="SRA",
+    database=DEFAULT_DATABASE_ID,
     total_index_sample_count=None,
 ):
     try:

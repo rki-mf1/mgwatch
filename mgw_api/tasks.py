@@ -2,6 +2,7 @@ from celery import shared_task
 from django.conf import settings
 from django.db import transaction
 
+from mgw_api.database_config import enabled_databases
 from mgw_api.locking import acquire_lock
 from mgw_api.models import FilterSetting
 from mgw_api.models import Job
@@ -266,10 +267,18 @@ def run_watch_task(self, **kwargs):
 
 @shared_task(**NO_RETRY_TASK_OPTIONS)
 def run_daily_pipeline_task(self):
-    run_metadata_task.apply(kwargs={}).get()
-    run_downloads_task.apply(kwargs={}).get()
-    run_index_task.apply(kwargs={}).get()
-    return run_watch_task.apply(kwargs={}).get()
+    database_results = {}
+    for database in enabled_databases():
+        kwargs = {"database": database.id}
+        database_results[database.id] = {
+            "metadata": run_metadata_task.apply(kwargs=kwargs).get(),
+            "downloads": run_downloads_task.apply(kwargs=kwargs).get(),
+            "index": run_index_task.apply(kwargs=kwargs).get(),
+        }
+    return {
+        "databases": database_results,
+        "watches": run_watch_task.apply(kwargs={}).get(),
+    }
 
 
 @shared_task(**NO_RETRY_TASK_OPTIONS)

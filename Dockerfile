@@ -32,6 +32,7 @@ COPY --chown=${MGWATCH_UID}:${MGWATCH_GID} pixi.toml pixi.lock* .
 RUN pixi install --locked
 COPY --chown=${MGWATCH_UID}:${MGWATCH_GID} manage.py README.md .coveragerc .
 COPY --chown=${MGWATCH_UID}:${MGWATCH_GID} templates/ /code/templates
+COPY --chown=${MGWATCH_UID}:${MGWATCH_GID} config/ /code/config
 COPY --chown=${MGWATCH_UID}:${MGWATCH_GID} mgw/ /code/mgw
 COPY --chown=${MGWATCH_UID}:${MGWATCH_GID} mgw_api/ /code/mgw_api
 RUN DEBUG=True SECRET_KEY=dummy pixi run --locked ./manage.py collectstatic --no-input

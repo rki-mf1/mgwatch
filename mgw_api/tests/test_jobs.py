@@ -141,7 +141,7 @@ class JobStatusViewTests(TestCase):
                 {
                     "name": "query",
                     "file": upload,
-                    "kmer": ["31"],
+                    "kmer": ["21"],
                     "database": ["SRA"],
                     "containment": "0.25",
                 },
@@ -151,8 +151,8 @@ class JobStatusViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["success"])
         settings = Settings.objects.get(user=self.user)
-        self.assertEqual(settings.kmer, ["31"])
-        self.assertEqual(settings.database, ["SRA"])
+        self.assertEqual(settings.kmer, ["21"])
+        self.assertEqual(settings.database, ["sra_metagenomes"])
         self.assertEqual(settings.containment, 0.25)
 
     def test_upload_page_includes_compact_advanced_filters(self):
@@ -327,7 +327,7 @@ class JobStatusViewTests(TestCase):
                 {
                     "name": "query",
                     "file": upload,
-                    "kmer": ["31"],
+                    "kmer": ["21"],
                     "database": ["SRA"],
                     "containment": "0.25",
                 },
