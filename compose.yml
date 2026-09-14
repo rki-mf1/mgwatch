@@ -22,7 +22,7 @@ services:
       - TZ=$TZ
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     entrypoint: /bin/sh -c
-    command: ["pixi run --frozen gunicorn --workers 2 --threads 2 --bind 0.0.0.0:8100 mgw.wsgi:application"]
+    command: ["pixi run --frozen ./manage.py initialize_metadata && pixi run --frozen gunicorn --workers 2 --threads 2 --bind 0.0.0.0:8100 mgw.wsgi:application"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pixi run --frozen python -c \"import urllib.request; request = urllib.request.Request('http://127.0.0.1:8100/', headers={'Host': 'localhost'}); urllib.request.urlopen(request, timeout=5).close()\""]

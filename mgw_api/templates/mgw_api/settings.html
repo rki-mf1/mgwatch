@@ -32,6 +32,18 @@
             </div>
         </div>
         <div class="submission-message">
+            {% if settings_form.non_field_errors %}
+                <ul class="messages">
+                    {% for error in settings_form.non_field_errors %}<li class="error">{{ error }}</li>{% endfor %}
+                </ul>
+            {% endif %}
+            {% for field in settings_form %}
+                {% if field.errors %}
+                    <ul class="messages">
+                        {% for error in field.errors %}<li class="error">{{ field.label }}: {{ error }}</li>{% endfor %}
+                    </ul>
+                {% endif %}
+            {% endfor %}
             {% if messages %}
                 <ul class="messages">
                     {% for message in messages %}
@@ -40,6 +52,7 @@
                 </ul>
             {% endif %}
         </div>
+        {% if settings_form_owns_form %}<button type="submit">Save settings</button>{% endif %}
         {% if settings_form_owns_form %}</form>{% endif %}
 </div>
 <script>
@@ -70,11 +83,4 @@
         settingsForm.addEventListener('submit', validateForm);
     }
 
-    document.querySelectorAll('#id_kmer, #id_database, #id_containment').forEach(function(element) {
-        element.addEventListener('change', function() {
-            if (settingsForm && validateForm()) {
-                settingsForm.submit();
-            }
-        });
-    });
 </script>
