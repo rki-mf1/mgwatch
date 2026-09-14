@@ -58,8 +58,9 @@ class Command(BaseCommand):
         configured_profiles = {profile.kmer: profile for profile in database.profiles}
         dry_run = kwargs["dry_run"]
         legacy_root = Path(settings.DATA_DIR) / "SRA" / "metagenomes"
-        if not legacy_root.exists():
-            self.stdout.write("No legacy SRA/metagenomes storage found.")
+        legacy_metadata = Path(settings.DATA_DIR) / "SRA" / "metadata" / "parquet"
+        if not legacy_root.exists() and not legacy_metadata.exists():
+            self.stdout.write("No legacy SRA storage found.")
             return
 
         dirs = signature_dirs(database.id)
@@ -106,7 +107,6 @@ class Command(BaseCommand):
                 for profile in migrated_profiles_by_kmer.values()
             )
 
-        legacy_metadata = Path(settings.DATA_DIR) / "SRA" / "metadata" / "parquet"
         if legacy_metadata.exists():
             move_operations.append((legacy_metadata, metadata_cache_dir()))
 

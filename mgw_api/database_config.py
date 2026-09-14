@@ -158,6 +158,17 @@ def enabled_databases():
     ]
 
 
+def unsupported_database_kmer_pairs(kmers, databases):
+    unsupported_pairs = []
+    for database_id in normalize_database_list(databases):
+        database = get_database_config(database_id)
+        supported_kmers = {str(profile.kmer) for profile in database.enabled_profiles}
+        for kmer in kmers:
+            if str(kmer) not in supported_kmers:
+                unsupported_pairs.append((database.id, str(kmer)))
+    return unsupported_pairs
+
+
 def database_root(database_id=DEFAULT_DATABASE_ID):
     database_id = normalize_database_id(database_id)
     return Path(settings.DATA_DIR) / "search-databases" / database_id

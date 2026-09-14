@@ -6,6 +6,7 @@ from mgw_api.database_config import DEFAULT_DATABASE_ID
 from mgw_api.database_config import LEGACY_DATABASE_ID
 from mgw_api.database_config import enabled_databases
 from mgw_api.database_config import normalize_database_list
+from mgw_api.database_config import unsupported_database_kmer_pairs
 from mgw_api.models import Fasta
 from mgw_api.models import FilterSetting
 from mgw_api.models import Result
@@ -81,6 +82,21 @@ class SettingsForm(forms.ModelForm):
 
     def clean_database(self):
         return normalize_database_list(self.cleaned_data["database"])
+
+    def clean(self):
+        cleaned_data = super().clean()
+        kmers = cleaned_data.get("kmer") or []
+        databases = cleaned_data.get("database") or []
+        unsupported_pairs = unsupported_database_kmer_pairs(kmers, databases)
+        if unsupported_pairs:
+            details = ", ".join(
+                f"{database_id} does not support {kmer}-mers"
+                for database_id, kmer in unsupported_pairs
+            )
+            raise forms.ValidationError(
+                f"Unsupported database and k-mer combination: {details}."
+            )
+        return cleaned_data
 
 
 class WatchForm(forms.ModelForm):

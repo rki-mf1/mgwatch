@@ -15,6 +15,7 @@ from mgw.settings import MGW_URL
 from mgw_api.database_config import get_database_config
 from mgw_api.database_config import index_path
 from mgw_api.database_config import normalize_database_list
+from mgw_api.database_config import unsupported_database_kmer_pairs
 from mgw_api.models import Result
 from mgw_api.models import Settings
 from mgw_api.models import Signature
@@ -67,6 +68,15 @@ def build_search_plan(*, user_id, name, watch):
         normalize_database_list(search_set.database),
         search_set.containment,
     )
+    unsupported_pairs = unsupported_database_kmer_pairs(kmer, database)
+    if unsupported_pairs:
+        details = ", ".join(
+            f"{database_id} does not support {profile_kmer}-mers"
+            for database_id, profile_kmer in unsupported_pairs
+        )
+        raise UnsupportedSearchConfiguration(
+            f"Unsupported database and k-mer combination: {details}."
+        )
     plan = []
     for k, db in product(kmer, database):
         indices = get_indices(k, db)

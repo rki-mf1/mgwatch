@@ -10,6 +10,7 @@ from django.test.utils import override_settings
 from mgw_api.database_config import DEFAULT_DATABASE_ID
 from mgw_api.database_config import get_database_config
 from mgw_api.database_config import index_path
+from mgw_api.database_config import metadata_cache_dir
 from mgw_api.database_config import profile_manifest
 from mgw_api.database_config import read_accession_parquet
 
@@ -137,3 +138,19 @@ class MigrateDatabaseStorageTests(SimpleTestCase):
 
             self.assertTrue(legacy_metadata.exists())
             self.assertFalse((target / "parquet").exists())
+
+    def test_migrates_metadata_without_legacy_metagenome_storage(self):
+        with TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            legacy_metadata = data_dir / "SRA" / "metadata" / "parquet"
+            legacy_metadata.mkdir(parents=True)
+            (legacy_metadata / "metadata.parquet").write_text(
+                "parquet", encoding="utf-8"
+            )
+
+            with override_settings(DATA_DIR=data_dir):
+                call_command("migrate_database_storage")
+                target = metadata_cache_dir()
+
+            self.assertFalse(legacy_metadata.exists())
+            self.assertTrue((target / "metadata.parquet").exists())

@@ -12,6 +12,7 @@ from mgw_api.models import Result
 from mgw_api.models import Settings
 from mgw_api.models import Signature
 from mgw_api.services.exceptions import UnsupportedSearchConfiguration
+from mgw_api.services.searches import build_search_plan
 from mgw_api.services.searches import get_indices
 from mgw_api.services.searches import run_search
 
@@ -104,3 +105,81 @@ class SearchPlanGuardTests(TestCase):
         self.assertTrue(signature.submitted)
         send_notification.assert_not_called()
         record_search_rate.assert_not_called()
+
+    def test_build_search_plan_rejects_unsupported_database_kmer_pairs(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config_dir = root / "config"
+            data_dir = root / "data"
+            config_dir.mkdir()
+            (config_dir / "database.yml").write_text(
+                """
+version: 1
+databases:
+  sra_metagenomes:
+    enabled: true
+    mongodb_collection: sra_metagenomes_metadata
+    wort_manifest_url: https://example.test/sra-manifest.parquet
+    wort_signature_endpoint: https://example.test/sra-signatures
+    profiles:
+      - kmer: 21
+        scaled: 1000
+        enabled: true
+  other_metagenomes:
+    enabled: true
+    mongodb_collection: other_metagenomes_metadata
+    wort_manifest_url: https://example.test/other-manifest.parquet
+    wort_signature_endpoint: https://example.test/other-signatures
+    profiles:
+      - kmer: 31
+        scaled: 1000
+        enabled: true
+""",
+                encoding="utf-8",
+            )
+            (
+                data_dir
+                / "search-databases"
+                / "sra_metagenomes"
+                / "profiles"
+                / "k21-scaled1000"
+                / "batch-1"
+                / "index.rocksdb"
+            ).mkdir(parents=True)
+            (
+                data_dir
+                / "search-databases"
+                / "other_metagenomes"
+                / "profiles"
+                / "k31-scaled1000"
+                / "batch-1"
+                / "index.rocksdb"
+            ).mkdir(parents=True)
+            user = User.objects.create_user(username="owner", password="testpass123")
+            Signature.objects.create(
+                user=user,
+                name="mixed",
+                file="user_1/mixed.sig",
+                submitted=True,
+            )
+            Settings.objects.create(
+                user=user,
+                kmer=["21", "31"],
+                database=["sra_metagenomes", "other_metagenomes"],
+                containment=0.1,
+            )
+
+            with override_settings(CONFIG_DIR=config_dir, DATA_DIR=data_dir):
+                get_database_configs.cache_clear()
+                try:
+                    with self.assertRaisesMessage(
+                        UnsupportedSearchConfiguration,
+                        "Unsupported database and k-mer combination",
+                    ):
+                        build_search_plan(
+                            user_id=user.pk,
+                            name="mixed",
+                            watch="False",
+                        )
+                finally:
+                    get_database_configs.cache_clear()
