@@ -9,7 +9,7 @@ from mgw_api.models import Signature
 
 
 class SuspendUnsupportedWatchesMigrationTests(TestCase):
-    def test_suspends_watches_with_no_enabled_kmer(self):
+    def test_suspends_watches_with_any_disabled_kmer(self):
         migration = importlib.import_module(
             "mgw_api.migrations.0040_suspend_unsupported_watches"
         )
@@ -27,11 +27,19 @@ class SuspendUnsupportedWatchesMigrationTests(TestCase):
             database=["sra_metagenomes"],
             is_watched=True,
         )
+        mixed = Result.objects.create(
+            user=user,
+            name="mixed",
+            signature=signature,
+            kmer=["21", "31"],
+            database=["sra_metagenomes"],
+            is_watched=True,
+        )
         supported = Result.objects.create(
             user=user,
             name="supported",
             signature=signature,
-            kmer=["21", "31"],
+            kmer=["21"],
             database=["sra_metagenomes"],
             is_watched=True,
         )
@@ -47,8 +55,10 @@ class SuspendUnsupportedWatchesMigrationTests(TestCase):
         migration.suspend_unsupported_watches(apps, None)
 
         unsupported.refresh_from_db()
+        mixed.refresh_from_db()
         supported.refresh_from_db()
         already_unwatched.refresh_from_db()
         self.assertFalse(unsupported.is_watched)
+        self.assertFalse(mixed.is_watched)
         self.assertTrue(supported.is_watched)
         self.assertFalse(already_unwatched.is_watched)

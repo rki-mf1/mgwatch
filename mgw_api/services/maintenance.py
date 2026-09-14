@@ -595,6 +595,16 @@ def get_all_profile_indexed_accessions(database=DEFAULT_DATABASE_ID):
     return set.intersection(*profile_accessions)
 
 
+def get_profile_indexed_accessions(database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
+    return {
+        profile.key: set(
+            read_accession_parquet(profile_manifest(database_config.id, profile))
+        )
+        for profile in database_config.enabled_profiles
+    }
+
+
 def get_update_accessions(updates_dir):
     return {sig_path.stem for sig_path in Path(updates_dir).glob("*.sig")}
 
@@ -630,7 +640,7 @@ def run_index_batches(
     profiles = database_config.enabled_profiles
     sig_list = Path(work_dir) / "sig-list.txt"
     dir_paths = handle_dirs(database_config.id)
-    mani_list = set(get_any_profile_indexed_accessions(database_config.id))
+    indexed_accessions_by_profile = get_profile_indexed_accessions(database_config.id)
     last_sig_files, last_num, has_existing_index = get_last_index(
         database_config.id,
         profiles[0],
@@ -656,7 +666,7 @@ def run_index_batches(
     indexing_ever_succeeded = False
     samples_added = 0
     for index_number, new_files in batch_specs:
-        indexing_succeeded, mani_list = process_index_batch(
+        indexing_succeeded, indexed_accessions_by_profile = process_index_batch(
             work_dir,
             dir_paths,
             sig_list,
@@ -664,7 +674,7 @@ def run_index_batches(
             profiles,
             index_number,
             new_files,
-            mani_list,
+            indexed_accessions_by_profile,
             max_signatures,
             delete_indexed_sigs,
         )
@@ -719,7 +729,7 @@ def process_index_batch(
     profiles,
     index_number,
     new_files,
-    mani_list,
+    indexed_accessions_by_profile,
     max_signatures,
     delete_indexed_sigs,
 ):
@@ -742,14 +752,14 @@ def process_index_batch(
         target_dir = "signatures" if indexing_succeeded else "indexing-failed"
         move_files(new_files, dir_paths, target_dir)
     if indexing_succeeded:
-        mani_list = update_manifests(
+        indexed_accessions_by_profile = update_manifests(
             new_files,
-            mani_list,
+            indexed_accessions_by_profile,
             database,
             profiles,
             index_number,
         )
-    return indexing_succeeded, mani_list
+    return indexing_succeeded, indexed_accessions_by_profile
 
 
 def run_download_index(
@@ -938,20 +948,31 @@ def delete_files(file_list):
             os.remove(file)
 
 
-def update_manifests(new_files, mani_list, database, profiles, last_num):
-    new_files = [os.path.basename(file).split(".sig")[0] for file in new_files]
-    sig_files = sorted(set(mani_list) | set(new_files))
+def update_manifests(
+    new_files,
+    indexed_accessions_by_profile,
+    database,
+    profiles,
+    last_num,
+):
+    new_accessions = [os.path.basename(file).split(".sig")[0] for file in new_files]
+    updated_accessions_by_profile = {}
     for profile in profiles:
+        profile_accessions = sorted(
+            set(indexed_accessions_by_profile.get(profile.key, set()))
+            | set(new_accessions)
+        )
         write_accession_parquet(
             batch_manifest(database, profile, last_num),
-            new_files,
+            new_accessions,
             batch=last_num,
         )
         write_accession_parquet(
             profile_manifest(database, profile),
-            sig_files,
+            profile_accessions,
         )
-    return sig_files
+        updated_accessions_by_profile[profile.key] = set(profile_accessions)
+    return updated_accessions_by_profile
 
 
 def run_watch():

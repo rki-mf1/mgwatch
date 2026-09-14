@@ -6,14 +6,18 @@ from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
 from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import IndexProfile
 from mgw_api.database_config import get_database_config
+from mgw_api.database_config import profile_manifest
 from mgw_api.database_config import profile_root
+from mgw_api.database_config import read_accession_parquet
 from mgw_api.database_config import signature_dirs
 from mgw_api.database_config import write_accession_parquet
 from mgw_api.services.maintenance import can_reuse_last_index
 from mgw_api.services.maintenance import get_last_index
 from mgw_api.services.maintenance import process_index_batch
 from mgw_api.services.maintenance import run_index
+from mgw_api.services.maintenance import update_manifests
 
 
 class CreateIndexServiceTests(SimpleTestCase):
@@ -43,16 +47,53 @@ class CreateIndexServiceTests(SimpleTestCase):
                     profiles=get_database_config().enabled_profiles,
                     index_number=38,
                     new_files=[str(update_sig)],
-                    mani_list=[],
+                    indexed_accessions_by_profile={},
                     max_signatures=100,
                     delete_indexed_sigs=False,
                 )
 
             self.assertFalse(succeeded)
-            self.assertEqual(manifest_ids, [])
+            self.assertEqual(manifest_ids, {})
             manifest_mock.assert_not_called()
             self.assertFalse(update_sig.exists())
             self.assertTrue((base_dir / "indexing-failed" / update_sig.name).exists())
+
+    def test_update_manifests_keeps_profile_manifests_separate(self):
+        with TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir)
+            sig_file = data_dir / "SRR2.sig"
+            sig_file.write_text("sig", encoding="ascii")
+            profiles = (
+                IndexProfile(kmer=21, scaled=1000),
+                IndexProfile(kmer=31, scaled=1000),
+            )
+
+            with override_settings(DATA_DIR=data_dir):
+                updated = update_manifests(
+                    new_files=[str(sig_file)],
+                    indexed_accessions_by_profile={
+                        profiles[0].key: {"SRR1"},
+                        profiles[1].key: set(),
+                    },
+                    database=DEFAULT_DATABASE_ID,
+                    profiles=profiles,
+                    last_num=38,
+                )
+
+                self.assertEqual(updated[profiles[0].key], {"SRR1", "SRR2"})
+                self.assertEqual(updated[profiles[1].key], {"SRR2"})
+                self.assertEqual(
+                    read_accession_parquet(
+                        profile_manifest(DEFAULT_DATABASE_ID, profiles[0])
+                    ),
+                    ["SRR1", "SRR2"],
+                )
+                self.assertEqual(
+                    read_accession_parquet(
+                        profile_manifest(DEFAULT_DATABASE_ID, profiles[1])
+                    ),
+                    ["SRR2"],
+                )
 
     def test_get_last_index_filters_missing_signature_files(self):
         with TemporaryDirectory() as tmp_dir:

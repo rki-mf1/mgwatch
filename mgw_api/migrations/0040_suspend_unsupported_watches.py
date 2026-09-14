@@ -3,7 +3,6 @@ import functools
 from django.db import migrations
 from django.db import models
 
-
 ENABLED_KMERS = {"21"}
 
 
@@ -13,7 +12,7 @@ def suspend_unsupported_watches(apps, schema_editor):
         kmers = getattr(result, "kmer", None)
         if not isinstance(kmers, list):
             continue
-        if not {str(kmer) for kmer in kmers} & ENABLED_KMERS:
+        if {str(kmer) for kmer in kmers} - ENABLED_KMERS:
             result.is_watched = False
             result.save(update_fields=["is_watched"])
 
