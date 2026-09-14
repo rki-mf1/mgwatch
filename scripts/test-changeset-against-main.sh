@@ -243,7 +243,6 @@ compose_run_quick() {
     export MGWATCH_COMPOSE_OVERRIDE="$compose_override"
     compose_cmd "$repo_dir" up -d mgwatch-postgres mgwatch-redis mgwatch-mongodb >/dev/null
     compose_cmd "$repo_dir" run --rm --no-deps \
-      -e DATA_DIR=/data \
       -e LOG_DIR=/logs \
       -e DEBUG=True \
       -e LOG_LEVEL=DEBUG \
