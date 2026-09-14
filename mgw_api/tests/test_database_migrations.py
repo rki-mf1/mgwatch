@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from mgw_api.models import Result
+from mgw_api.models import Settings
 from mgw_api.models import Signature
 
 
@@ -62,3 +63,51 @@ class SuspendUnsupportedWatchesMigrationTests(TestCase):
         self.assertFalse(mixed.is_watched)
         self.assertTrue(supported.is_watched)
         self.assertFalse(already_unwatched.is_watched)
+
+    def test_normalizes_settings_with_disabled_kmers(self):
+        migration = importlib.import_module(
+            "mgw_api.migrations.0040_suspend_unsupported_watches"
+        )
+        unsupported_user = User.objects.create_user(
+            username="unsupported-settings", password="testpass123"
+        )
+        mixed_user = User.objects.create_user(
+            username="mixed-settings", password="testpass123"
+        )
+        supported_user = User.objects.create_user(
+            username="supported-settings", password="testpass123"
+        )
+        string_mixed_user = User.objects.create_user(
+            username="string-mixed-settings", password="testpass123"
+        )
+        unsupported = Settings.objects.create(
+            user=unsupported_user,
+            kmer=[31],
+            database=["sra_metagenomes"],
+        )
+        mixed = Settings.objects.create(
+            user=mixed_user,
+            kmer=[21, 31],
+            database=["sra_metagenomes"],
+        )
+        supported = Settings.objects.create(
+            user=supported_user,
+            kmer=[21],
+            database=["sra_metagenomes"],
+        )
+        string_mixed = Settings.objects.create(
+            user=string_mixed_user,
+            kmer=["21", "51"],
+            database=["sra_metagenomes"],
+        )
+
+        migration.normalize_unsupported_settings(apps, None)
+
+        unsupported.refresh_from_db()
+        mixed.refresh_from_db()
+        supported.refresh_from_db()
+        string_mixed.refresh_from_db()
+        self.assertEqual(unsupported.kmer, [21])
+        self.assertEqual(mixed.kmer, [21])
+        self.assertEqual(supported.kmer, [21])
+        self.assertEqual(string_mixed.kmer, ["21"])
