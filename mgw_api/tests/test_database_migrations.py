@@ -1,8 +1,11 @@
 import importlib
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from django.apps import apps
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.test import override_settings
 
 from mgw_api.models import Result
 from mgw_api.models import Settings
@@ -10,6 +13,30 @@ from mgw_api.models import Signature
 
 
 class SuspendUnsupportedWatchesMigrationTests(TestCase):
+    def write_database_config(self, config_dir, *, enabled_kmers):
+        profiles = "\n".join(
+            f"""      - kmer: {kmer}
+        scaled: 1000
+        moltype: DNA
+        enabled: true"""
+            for kmer in enabled_kmers
+        )
+        (config_dir / "database.yml").write_text(
+            f"""
+version: 1
+databases:
+  sra_metagenomes:
+    enabled: true
+    label: SRA Metagenomes
+    mongodb_collection: sra_metagenomes_metadata
+    wort_manifest_url: https://example.test/sra-manifest.parquet
+    wort_signature_endpoint: https://example.test/sra-signatures
+    profiles:
+{profiles}
+""",
+            encoding="utf-8",
+        )
+
     def test_suspends_watches_with_any_disabled_kmer(self):
         migration = importlib.import_module(
             "mgw_api.migrations.0040_suspend_unsupported_watches"
@@ -64,6 +91,44 @@ class SuspendUnsupportedWatchesMigrationTests(TestCase):
         self.assertTrue(supported.is_watched)
         self.assertFalse(already_unwatched.is_watched)
 
+    def test_preserves_watches_with_configured_enabled_kmers(self):
+        migration = importlib.import_module(
+            "mgw_api.migrations.0040_suspend_unsupported_watches"
+        )
+        user = User.objects.create_user(username="configured", password="testpass123")
+        signature = Signature.objects.create(
+            user=user,
+            name="query",
+            file="user_1/query.sig",
+        )
+        configured = Result.objects.create(
+            user=user,
+            name="configured",
+            signature=signature,
+            kmer=["31"],
+            database=["sra_metagenomes"],
+            is_watched=True,
+        )
+        unsupported = Result.objects.create(
+            user=user,
+            name="unsupported",
+            signature=signature,
+            kmer=["21"],
+            database=["sra_metagenomes"],
+            is_watched=True,
+        )
+
+        with TemporaryDirectory() as tmpdir:
+            config_dir = Path(tmpdir)
+            self.write_database_config(config_dir, enabled_kmers=[31])
+            with override_settings(CONFIG_DIR=config_dir):
+                migration.suspend_unsupported_watches(apps, None)
+
+        configured.refresh_from_db()
+        unsupported.refresh_from_db()
+        self.assertTrue(configured.is_watched)
+        self.assertFalse(unsupported.is_watched)
+
     def test_normalizes_settings_with_disabled_kmers(self):
         migration = importlib.import_module(
             "mgw_api.migrations.0040_suspend_unsupported_watches"
@@ -111,3 +176,35 @@ class SuspendUnsupportedWatchesMigrationTests(TestCase):
         self.assertEqual(mixed.kmer, [21])
         self.assertEqual(supported.kmer, [21])
         self.assertEqual(string_mixed.kmer, ["21"])
+
+    def test_normalizes_settings_to_configured_enabled_kmer(self):
+        migration = importlib.import_module(
+            "mgw_api.migrations.0040_suspend_unsupported_watches"
+        )
+        unsupported_user = User.objects.create_user(
+            username="configured-unsupported-settings", password="testpass123"
+        )
+        supported_user = User.objects.create_user(
+            username="configured-supported-settings", password="testpass123"
+        )
+        unsupported = Settings.objects.create(
+            user=unsupported_user,
+            kmer=[21],
+            database=["sra_metagenomes"],
+        )
+        supported = Settings.objects.create(
+            user=supported_user,
+            kmer=[31],
+            database=["sra_metagenomes"],
+        )
+
+        with TemporaryDirectory() as tmpdir:
+            config_dir = Path(tmpdir)
+            self.write_database_config(config_dir, enabled_kmers=[31])
+            with override_settings(CONFIG_DIR=config_dir):
+                migration.normalize_unsupported_settings(apps, None)
+
+        unsupported.refresh_from_db()
+        supported.refresh_from_db()
+        self.assertEqual(unsupported.kmer, [31])
+        self.assertEqual(supported.kmer, [31])
