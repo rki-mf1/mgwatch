@@ -37,6 +37,37 @@ databases:
             encoding="utf-8",
         )
 
+    def write_disjoint_database_config(self, config_dir):
+        (config_dir / "database.yml").write_text(
+            """
+version: 1
+databases:
+  sra_metagenomes:
+    enabled: true
+    label: SRA Metagenomes
+    mongodb_collection: sra_metagenomes_metadata
+    wort_manifest_url: https://example.test/sra-manifest.parquet
+    wort_signature_endpoint: https://example.test/sra-signatures
+    profiles:
+      - kmer: 21
+        scaled: 1000
+        moltype: DNA
+        enabled: true
+  other_metagenomes:
+    enabled: true
+    label: Other Metagenomes
+    mongodb_collection: other_metagenomes_metadata
+    wort_manifest_url: https://example.test/other-manifest.parquet
+    wort_signature_endpoint: https://example.test/other-signatures
+    profiles:
+      - kmer: 31
+        scaled: 1000
+        moltype: DNA
+        enabled: true
+""",
+            encoding="utf-8",
+        )
+
     def test_suspends_watches_with_any_disabled_kmer(self):
         migration = importlib.import_module(
             "mgw_api.migrations.0040_suspend_unsupported_watches"
@@ -129,6 +160,46 @@ databases:
         self.assertTrue(configured.is_watched)
         self.assertFalse(unsupported.is_watched)
 
+    def test_suspends_watches_using_kmers_unsupported_by_saved_database(self):
+        migration = importlib.import_module(
+            "mgw_api.migrations.0040_suspend_unsupported_watches"
+        )
+        user = User.objects.create_user(
+            username="saved-database", password="testpass123"
+        )
+        signature = Signature.objects.create(
+            user=user,
+            name="query",
+            file="user_1/query.sig",
+        )
+        unsupported_for_saved_database = Result.objects.create(
+            user=user,
+            name="unsupported-for-saved-database",
+            signature=signature,
+            kmer=["31"],
+            database=["sra_metagenomes"],
+            is_watched=True,
+        )
+        supported_for_saved_database = Result.objects.create(
+            user=user,
+            name="supported-for-saved-database",
+            signature=signature,
+            kmer=["31"],
+            database=["other_metagenomes"],
+            is_watched=True,
+        )
+
+        with TemporaryDirectory() as tmpdir:
+            config_dir = Path(tmpdir)
+            self.write_disjoint_database_config(config_dir)
+            with override_settings(CONFIG_DIR=config_dir):
+                migration.suspend_unsupported_watches(apps, None)
+
+        unsupported_for_saved_database.refresh_from_db()
+        supported_for_saved_database.refresh_from_db()
+        self.assertFalse(unsupported_for_saved_database.is_watched)
+        self.assertTrue(supported_for_saved_database.is_watched)
+
     def test_normalizes_settings_with_disabled_kmers(self):
         migration = importlib.import_module(
             "mgw_api.migrations.0040_suspend_unsupported_watches"
@@ -208,3 +279,58 @@ databases:
         supported.refresh_from_db()
         self.assertEqual(unsupported.kmer, [31])
         self.assertEqual(supported.kmer, [31])
+
+    def test_normalizes_settings_against_saved_database_profiles(self):
+        migration = importlib.import_module(
+            "mgw_api.migrations.0040_suspend_unsupported_watches"
+        )
+        sra_user = User.objects.create_user(
+            username="sra-only-settings", password="testpass123"
+        )
+        other_user = User.objects.create_user(
+            username="other-only-settings", password="testpass123"
+        )
+        sra_settings = Settings.objects.create(
+            user=sra_user,
+            kmer=[31],
+            database=["sra_metagenomes"],
+        )
+        other_settings = Settings.objects.create(
+            user=other_user,
+            kmer=[31],
+            database=["other_metagenomes"],
+        )
+
+        with TemporaryDirectory() as tmpdir:
+            config_dir = Path(tmpdir)
+            self.write_disjoint_database_config(config_dir)
+            with override_settings(CONFIG_DIR=config_dir):
+                migration.normalize_unsupported_settings(apps, None)
+
+        sra_settings.refresh_from_db()
+        other_settings.refresh_from_db()
+        self.assertEqual(sra_settings.kmer, [21])
+        self.assertEqual(other_settings.kmer, [31])
+
+    def test_normalizes_settings_with_no_shared_profile_to_first_saved_database(self):
+        migration = importlib.import_module(
+            "mgw_api.migrations.0040_suspend_unsupported_watches"
+        )
+        user = User.objects.create_user(
+            username="disjoint-settings", password="testpass123"
+        )
+        settings = Settings.objects.create(
+            user=user,
+            kmer=[31],
+            database=["sra_metagenomes", "other_metagenomes"],
+        )
+
+        with TemporaryDirectory() as tmpdir:
+            config_dir = Path(tmpdir)
+            self.write_disjoint_database_config(config_dir)
+            with override_settings(CONFIG_DIR=config_dir):
+                migration.normalize_unsupported_settings(apps, None)
+
+        settings.refresh_from_db()
+        self.assertEqual(settings.database, ["sra_metagenomes"])
+        self.assertEqual(settings.kmer, [21])

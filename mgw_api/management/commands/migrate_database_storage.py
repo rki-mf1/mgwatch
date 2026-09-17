@@ -53,8 +53,6 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         database = get_database_config(kwargs["database"])
-        if len(database.enabled_profiles) != 1:
-            raise CommandError("Legacy migration expects exactly one enabled profile")
         configured_profiles = {profile.kmer: profile for profile in database.profiles}
         dry_run = kwargs["dry_run"]
         legacy_root = Path(settings.DATA_DIR) / "SRA" / "metagenomes"

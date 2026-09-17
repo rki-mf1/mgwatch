@@ -183,3 +183,72 @@ databases:
                         )
                 finally:
                     get_database_configs.cache_clear()
+
+    def test_build_search_plan_rejects_missing_index_for_selected_database(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config_dir = root / "config"
+            data_dir = root / "data"
+            config_dir.mkdir()
+            (config_dir / "database.yml").write_text(
+                """
+version: 1
+databases:
+  sra_metagenomes:
+    enabled: true
+    mongodb_collection: sra_metagenomes_metadata
+    wort_manifest_url: https://example.test/sra-manifest.parquet
+    wort_signature_endpoint: https://example.test/sra-signatures
+    profiles:
+      - kmer: 21
+        scaled: 1000
+        enabled: true
+  other_metagenomes:
+    enabled: true
+    mongodb_collection: other_metagenomes_metadata
+    wort_manifest_url: https://example.test/other-manifest.parquet
+    wort_signature_endpoint: https://example.test/other-signatures
+    profiles:
+      - kmer: 21
+        scaled: 1000
+        enabled: true
+""",
+                encoding="utf-8",
+            )
+            (
+                data_dir
+                / "search-databases"
+                / "sra_metagenomes"
+                / "profiles"
+                / "k21-scaled1000"
+                / "batch-1"
+                / "index.rocksdb"
+            ).mkdir(parents=True)
+            user = User.objects.create_user(username="missing-index")
+            Signature.objects.create(
+                user=user,
+                name="query",
+                file="user_1/query.sig",
+                submitted=True,
+            )
+            Settings.objects.create(
+                user=user,
+                kmer=["21"],
+                database=["sra_metagenomes", "other_metagenomes"],
+                containment=0.1,
+            )
+
+            with override_settings(CONFIG_DIR=config_dir, DATA_DIR=data_dir):
+                get_database_configs.cache_clear()
+                try:
+                    with self.assertRaisesMessage(
+                        UnsupportedSearchConfiguration,
+                        "other_metagenomes has no indexes for 21-mers",
+                    ):
+                        build_search_plan(
+                            user_id=user.pk,
+                            name="query",
+                            watch="False",
+                        )
+                finally:
+                    get_database_configs.cache_clear()

@@ -78,8 +78,12 @@ def build_search_plan(*, user_id, name, watch):
             f"Unsupported database and k-mer combination: {details}."
         )
     plan = []
+    missing_index_pairs = []
     for k, db in product(kmer, database):
         indices = get_indices(k, db)
+        if not indices:
+            missing_index_pairs.append((db, str(k)))
+            continue
         for idx, (profile, profile_index_path) in enumerate(indices):
             plan.append(
                 {
@@ -91,6 +95,14 @@ def build_search_plan(*, user_id, name, watch):
                     "index_path": str(profile_index_path),
                 }
             )
+    if missing_index_pairs:
+        details = ", ".join(
+            f"{database_id} has no indexes for {profile_kmer}-mers"
+            for database_id, profile_kmer in missing_index_pairs
+        )
+        raise UnsupportedSearchConfiguration(
+            f"Search settings do not match available indexes: {details}."
+        )
     return signature, search_set, plan
 
 
