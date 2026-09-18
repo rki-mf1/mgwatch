@@ -68,6 +68,37 @@ databases:
             encoding="utf-8",
         )
 
+    def write_replacement_database_config(self, config_dir):
+        (config_dir / "database.yml").write_text(
+            """
+version: 1
+databases:
+  sra_metagenomes:
+    enabled: false
+    label: SRA Metagenomes
+    mongodb_collection: sra_metagenomes_metadata
+    wort_manifest_url: https://example.test/sra-manifest.parquet
+    wort_signature_endpoint: https://example.test/sra-signatures
+    profiles:
+      - kmer: 21
+        scaled: 1000
+        moltype: DNA
+        enabled: true
+  replacement_metagenomes:
+    enabled: true
+    label: Replacement Metagenomes
+    mongodb_collection: replacement_metagenomes_metadata
+    wort_manifest_url: https://example.test/replacement-manifest.parquet
+    wort_signature_endpoint: https://example.test/replacement-signatures
+    profiles:
+      - kmer: 31
+        scaled: 1000
+        moltype: DNA
+        enabled: true
+""",
+            encoding="utf-8",
+        )
+
     def test_suspends_watches_with_any_disabled_kmer(self):
         migration = importlib.import_module(
             "mgw_api.migrations.0040_suspend_unsupported_watches"
@@ -334,3 +365,26 @@ databases:
         settings.refresh_from_db()
         self.assertEqual(settings.database, ["sra_metagenomes"])
         self.assertEqual(settings.kmer, [21])
+
+    def test_normalizes_settings_to_enabled_fallback_database(self):
+        migration = importlib.import_module(
+            "mgw_api.migrations.0040_suspend_unsupported_watches"
+        )
+        user = User.objects.create_user(
+            username="disabled-database-settings", password="testpass123"
+        )
+        settings = Settings.objects.create(
+            user=user,
+            kmer=[21],
+            database=["sra_metagenomes"],
+        )
+
+        with TemporaryDirectory() as tmpdir:
+            config_dir = Path(tmpdir)
+            self.write_replacement_database_config(config_dir)
+            with override_settings(CONFIG_DIR=config_dir):
+                migration.normalize_unsupported_settings(apps, None)
+
+        settings.refresh_from_db()
+        self.assertEqual(settings.database, ["replacement_metagenomes"])
+        self.assertEqual(settings.kmer, [31])

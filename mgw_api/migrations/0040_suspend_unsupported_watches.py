@@ -61,6 +61,13 @@ def _enabled_kmers_for_databases(databases, enabled_kmers_by_database):
     return [kmer for kmer in selected_kmers[0] if kmer in shared_kmers]
 
 
+def _first_enabled_database(enabled_kmers_by_database):
+    for database_id, kmers in enabled_kmers_by_database.items():
+        if kmers:
+            return database_id, kmers
+    return DEFAULT_DATABASE_ID, [str(kmer) for kmer in FALLBACK_KMERS]
+
+
 def _default_kmers(enabled_kmers):
     return [int(enabled_kmers[0])]
 
@@ -105,6 +112,12 @@ def normalize_unsupported_settings(apps, schema_editor):
                     database_update = [database_id]
                     enabled_kmers_list = database_kmers
                     break
+        if not enabled_kmers_list:
+            fallback_database, fallback_kmers = _first_enabled_database(
+                enabled_kmers_by_database
+            )
+            database_update = [fallback_database]
+            enabled_kmers_list = fallback_kmers
         enabled_kmers = set(enabled_kmers_list)
         default_kmers = _default_kmers(
             enabled_kmers_list or [str(kmer) for kmer in FALLBACK_KMERS]

@@ -14,6 +14,7 @@ DATABASE_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 SUPPORTED_PROFILE_KMERS = {21, 31, 51}
 SUPPORTED_PROFILE_MOLTYPE = "DNA"
 SUPPORTED_PROFILE_SCALED = 1000
+SUPPORTED_LIBRARYSOURCES = {"METAGENOMIC", "GENOMIC", "METATRANSCRIPTOMIC"}
 
 
 @dataclass(frozen=True)
@@ -115,6 +116,18 @@ def _load_database(database_id, raw_database):
             f"Unsupported metadata filter for {database_id}: "
             f"include={sorted(unsupported_include)} exclude={sorted(unsupported_exclude)}"
         )
+    librarysource = include.get("librarysource")
+    if librarysource:
+        normalized_librarysource = str(librarysource).upper()
+        if normalized_librarysource not in SUPPORTED_LIBRARYSOURCES:
+            raise ImproperlyConfigured(
+                f"Unsupported metadata filter librarysource for {database_id}: "
+                f"{librarysource}; supported values are {sorted(SUPPORTED_LIBRARYSOURCES)}"
+            )
+        metadata_filter = {
+            **metadata_filter,
+            "include": {**include, "librarysource": normalized_librarysource},
+        }
     return DatabaseConfig(
         id=database_id,
         label=raw_database.get("label", database_id),

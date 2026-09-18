@@ -9,7 +9,7 @@ from mgw_api.database_config import get_database_configs
 
 
 class DatabaseConfigValidationTests(SimpleTestCase):
-    def load_config(self, profile_fragment):
+    def load_config(self, profile_fragment, database_fragment=""):
         with TemporaryDirectory() as tmpdir:
             config_dir = Path(tmpdir)
             (config_dir / "database.yml").write_text(
@@ -21,6 +21,7 @@ databases:
     mongodb_collection: sra_metagenomes_metadata
     wort_manifest_url: https://example.test/manifest.parquet
     wort_signature_endpoint: https://example.test/signatures
+{database_fragment}
     profiles:
 {profile_fragment}
 """,
@@ -86,3 +87,42 @@ databases:
         enabled: true
 """
             )
+
+    def test_rejects_librarysource_excluded_by_metadata_importer_allowlist(self):
+        with self.assertRaisesMessage(
+            ImproperlyConfigured,
+            "Unsupported metadata filter librarysource",
+        ):
+            self.load_config(
+                """
+      - kmer: 21
+        scaled: 1000
+        moltype: DNA
+        enabled: true
+""",
+                database_fragment="""
+    metadata_filter:
+      include:
+        librarysource: OTHER
+""",
+            )
+
+    def test_accepts_librarysource_supported_by_metadata_importer_allowlist(self):
+        configs = self.load_config(
+            """
+      - kmer: 21
+        scaled: 1000
+        moltype: DNA
+        enabled: true
+""",
+            database_fragment="""
+    metadata_filter:
+      include:
+        librarysource: metagenomic
+""",
+        )
+
+        self.assertEqual(
+            configs["sra_metagenomes"].metadata_filter["include"]["librarysource"],
+            "METAGENOMIC",
+        )
