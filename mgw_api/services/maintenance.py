@@ -321,12 +321,11 @@ def run_downloads(
         max_simultaneous = database_config.download.get("max_simultaneous", 100)
     if timeout is None:
         timeout = database_config.download.get("timeout_seconds", 60)
-    test_url = f"{database_config.wort_signature_endpoint}/SRR15461028"
-    run_command(["curl", "-sLf", "-r", "0-10", test_url, "-o", "/dev/null"])
     dir_paths, man_fail, sra_ids = prepare_download_targets(
         ids=ids,
         database=database_config.id,
     )
+    probe_wort_endpoint(database_config, sra_ids)
     selected_ids = select_download_ids(
         sra_ids,
         dir_paths,
@@ -360,7 +359,13 @@ def prepare_download_targets(ids=None, database=DEFAULT_DATABASE_ID):
     dir_paths = handle_dirs(database_config.id)
     man_fail = failed_downloads_path(database_config.id)
     indexed_ids = get_all_profile_indexed_accessions(database_config.id)
-    if not ids and not indexed_ids and not settings.INDEX_FROM_SCRATCH:
+    any_profile_indexed_ids = get_any_profile_indexed_accessions(database_config.id)
+    if (
+        not ids
+        and not indexed_ids
+        and not any_profile_indexed_ids
+        and not settings.INDEX_FROM_SCRATCH
+    ):
         raise RuntimeError(
             "profile manifest is missing and INDEX_FROM_SCRATCH is disabled; "
             "create indexes first or provide explicit IDs"
@@ -373,6 +378,14 @@ def prepare_download_targets(ids=None, database=DEFAULT_DATABASE_ID):
         wanted_ids = set(mongo_ids) - indexed_ids
     sra_ids_in_wort = get_wort_accessions(database_config.id)
     return dir_paths, man_fail, sorted(wanted_ids & sra_ids_in_wort)
+
+
+def probe_wort_endpoint(database_config, accessions):
+    accessions = list(accessions)
+    if not accessions:
+        return
+    test_url = f"{database_config.wort_signature_endpoint}/{accessions[0]}"
+    run_command(["curl", "-sLf", "-r", "0-10", test_url, "-o", "/dev/null"])
 
 
 def get_download_date_range(database_config=None):
@@ -641,72 +654,118 @@ def run_index_batches(
     sig_list = Path(work_dir) / "sig-list.txt"
     dir_paths = handle_dirs(database_config.id)
     indexed_accessions_by_profile = get_profile_indexed_accessions(database_config.id)
-    last_sig_files, last_num, has_existing_index = get_last_index(
-        database_config.id,
-        profiles[0],
-        dir_paths,
-    )
     max_signatures = index_max_signatures or database_config.indexing.get(
         "batch_size",
         settings.INDEX_MAX_SIGNATURES,
     )
-    batch_specs = get_index_batch_specs(
-        dir_paths,
-        last_sig_files,
-        last_num,
-        has_existing_index,
-        max_signatures,
-    )
-    if max_batches is not None:
-        batch_specs = batch_specs[:max_batches]
-    if not batch_specs:
+    update_sig_files = sorted(glob.glob(os.path.join(dir_paths["updates"], "*.sig")))
+    if not update_sig_files:
         return {"indexes_updated": 0, "batches_processed": 0}
-    update_sig_files = set(glob.glob(os.path.join(dir_paths["updates"], "*.sig")))
     indexing_ever_failed = False
     indexing_ever_succeeded = False
-    samples_added = 0
-    for index_number, new_files in batch_specs:
-        indexing_succeeded, indexed_accessions_by_profile = process_index_batch(
-            work_dir,
-            dir_paths,
-            sig_list,
-            database_config.id,
-            profiles,
-            index_number,
-            new_files,
-            indexed_accessions_by_profile,
-            max_signatures,
-            delete_indexed_sigs,
+    batches_processed = 0
+    successful_update_files = set()
+    failed_update_files = set()
+    partial_batch_files = set()
+    processed_update_files = set()
+    sketches_added = 0
+    for profile in profiles:
+        profile_indexed_accessions = indexed_accessions_by_profile.get(
+            profile.key, set()
         )
-        indexing_ever_failed = indexing_ever_failed or not indexing_succeeded
-        indexing_ever_succeeded = indexing_ever_succeeded or indexing_succeeded
-        if indexing_succeeded:
-            samples_added += sum(
-                1 for sig_file in new_files if sig_file in update_sig_files
+        profile_update_files = [
+            sig_file
+            for sig_file in update_sig_files
+            if sig_accession(sig_file) not in profile_indexed_accessions
+        ]
+        if not profile_update_files:
+            continue
+        last_sig_files, last_num, has_existing_index = get_last_index(
+            database_config.id,
+            profile,
+            dir_paths,
+        )
+        batch_specs = get_index_batch_specs(
+            dir_paths,
+            last_sig_files,
+            last_num,
+            has_existing_index,
+            max_signatures,
+            new_sig_files=profile_update_files,
+        )
+        if max_batches is not None:
+            batch_specs = batch_specs[:max_batches]
+        for index_number, new_files in batch_specs:
+            batch_update_files = set(new_files) & set(update_sig_files)
+            indexing_succeeded, indexed_accessions_by_profile = process_index_batch(
+                work_dir,
+                dir_paths,
+                sig_list,
+                database_config.id,
+                (profile,),
+                index_number,
+                new_files,
+                indexed_accessions_by_profile,
+                max_signatures,
+                delete_indexed_sigs,
+                defer_file_cleanup=True,
             )
+            batches_processed += 1
+            processed_update_files.update(batch_update_files)
+            if indexing_succeeded:
+                successful_update_files.update(batch_update_files)
+                sketches_added += len(batch_update_files)
+                if len(new_files) < max_signatures:
+                    partial_batch_files.update(batch_update_files)
+            else:
+                failed_update_files.update(batch_update_files)
+            indexing_ever_failed = indexing_ever_failed or not indexing_succeeded
+            indexing_ever_succeeded = indexing_ever_succeeded or indexing_succeeded
+    already_indexed_update_files = set(update_sig_files) - processed_update_files
+    successful_update_files.update(already_indexed_update_files)
+    successful_update_files -= failed_update_files
+    cleanup_indexed_files(
+        successful_update_files,
+        failed_update_files,
+        partial_batch_files,
+        dir_paths,
+        delete_indexed_sigs,
+    )
+    samples_added = len(successful_update_files)
+    if not batches_processed:
+        return {"indexes_updated": 0, "batches_processed": 0}
     if indexing_ever_succeeded:
         index_stat = try_record_index_stats(database=database_config.id)
         try_record_index_update_runtime(
             duration_seconds=monotonic() - started_at,
             samples_added=samples_added,
-            sketches_added=samples_added * len(profiles),
+            sketches_added=sketches_added,
             database=database_config.id,
             total_index_sample_count=index_stat.value if index_stat else None,
         )
     return {
         "indexes_updated": 1,
-        "batches_processed": len(batch_specs),
+        "batches_processed": batches_processed,
         "indexing_failed": indexing_ever_failed,
     }
 
 
 def get_index_batch_specs(
-    dir_paths, last_sig_files, last_num, has_existing_index, max_signatures
+    dir_paths,
+    last_sig_files,
+    last_num,
+    has_existing_index,
+    max_signatures,
+    new_sig_files=None,
 ):
-    new_sig_files = sorted(glob.glob(os.path.join(dir_paths["updates"], "*.sig")))
+    if new_sig_files is None:
+        new_sig_files = sorted(glob.glob(os.path.join(dir_paths["updates"], "*.sig")))
     if not new_sig_files:
         return []
-    reuse_last_index = can_reuse_last_index(last_sig_files, has_existing_index)
+    reuse_last_index = (
+        can_reuse_last_index(last_sig_files, has_existing_index)
+        and len(last_sig_files) < max_signatures
+    )
     if reuse_last_index:
         sig_files = last_sig_files + new_sig_files
         start_index_number = last_num
@@ -732,6 +791,7 @@ def process_index_batch(
     indexed_accessions_by_profile,
     max_signatures,
     delete_indexed_sigs,
+    defer_file_cleanup=False,
 ):
     write_signature_list(new_files, sig_list)
     try:
@@ -743,14 +803,17 @@ def process_index_batch(
     except Exception:
         LOGGER.exception("Index batch %s failed", index_number)
         indexing_succeeded = False
-    delete_after_indexing = (
-        indexing_succeeded and delete_indexed_sigs and len(new_files) == max_signatures
-    )
-    if delete_after_indexing:
-        delete_files(new_files)
-    else:
-        target_dir = "signatures" if indexing_succeeded else "indexing-failed"
-        move_files(new_files, dir_paths, target_dir)
+    if not defer_file_cleanup:
+        delete_after_indexing = (
+            indexing_succeeded
+            and delete_indexed_sigs
+            and len(new_files) == max_signatures
+        )
+        if delete_after_indexing:
+            delete_files(new_files)
+        else:
+            target_dir = "signatures" if indexing_succeeded else "indexing-failed"
+            move_files(new_files, dir_paths, target_dir)
     if indexing_succeeded:
         indexed_accessions_by_profile = update_manifests(
             new_files,
@@ -760,6 +823,28 @@ def process_index_batch(
             index_number,
         )
     return indexing_succeeded, indexed_accessions_by_profile
+
+
+def sig_accession(sig_file):
+    return Path(sig_file).name.split(".sig")[0]
+
+
+def cleanup_indexed_files(
+    successful_update_files,
+    failed_update_files,
+    partial_batch_files,
+    dir_paths,
+    delete_indexed_sigs,
+):
+    if failed_update_files:
+        move_files(sorted(failed_update_files), dir_paths, "indexing-failed")
+    delete_after_indexing = (
+        delete_indexed_sigs and successful_update_files and not partial_batch_files
+    )
+    if delete_after_indexing:
+        delete_files(sorted(successful_update_files))
+    elif successful_update_files:
+        move_files(sorted(successful_update_files), dir_paths, "signatures")
 
 
 def run_download_index(
@@ -778,12 +863,11 @@ def run_download_index(
         max_simultaneous = database_config.download.get("max_simultaneous", 100)
     if timeout is None:
         timeout = database_config.download.get("timeout_seconds", 60)
-    test_url = f"{database_config.wort_signature_endpoint}/SRR15461028"
-    run_command(["curl", "-sLf", "-r", "0-10", test_url, "-o", "/dev/null"])
     dir_paths, man_fail, remaining_ids = prepare_download_targets(
         ids=ids,
         database=database_config.id,
     )
+    probe_wort_endpoint(database_config, remaining_ids)
     max_signatures = index_max_signatures or database_config.indexing.get(
         "batch_size",
         settings.INDEX_MAX_SIGNATURES,
@@ -956,7 +1040,10 @@ def update_manifests(
     last_num,
 ):
     new_accessions = [os.path.basename(file).split(".sig")[0] for file in new_files]
-    updated_accessions_by_profile = {}
+    updated_accessions_by_profile = {
+        profile_key: set(accessions)
+        for profile_key, accessions in indexed_accessions_by_profile.items()
+    }
     for profile in profiles:
         profile_accessions = sorted(
             set(indexed_accessions_by_profile.get(profile.key, set()))

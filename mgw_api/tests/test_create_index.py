@@ -1,5 +1,6 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.test import SimpleTestCase
@@ -7,6 +8,7 @@ from django.test.utils import override_settings
 
 from mgw_api.database_config import DEFAULT_DATABASE_ID
 from mgw_api.database_config import IndexProfile
+from mgw_api.database_config import batch_manifest
 from mgw_api.database_config import get_database_config
 from mgw_api.database_config import profile_manifest
 from mgw_api.database_config import profile_root
@@ -17,6 +19,7 @@ from mgw_api.services.maintenance import can_reuse_last_index
 from mgw_api.services.maintenance import get_last_index
 from mgw_api.services.maintenance import process_index_batch
 from mgw_api.services.maintenance import run_index
+from mgw_api.services.maintenance import run_index_batches
 from mgw_api.services.maintenance import update_manifests
 
 
@@ -134,6 +137,91 @@ class CreateIndexServiceTests(SimpleTestCase):
             )
             self.assertFalse(can_reuse_last_index([], True))
             self.assertTrue(can_reuse_last_index([], False))
+
+    def test_run_index_batches_uses_each_profile_batch_state(self):
+        with TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir)
+            profiles = (
+                IndexProfile(kmer=31, scaled=1000),
+                IndexProfile(kmer=21, scaled=1000),
+            )
+            database_config = SimpleNamespace(
+                id=DEFAULT_DATABASE_ID,
+                enabled_profiles=profiles,
+                indexing={},
+            )
+            captured_lists = []
+
+            def capture_update_index(work_dir, database, profile, sig_list, last_num):
+                captured_lists.append(
+                    {
+                        "profile": profile.key,
+                        "index": last_num,
+                        "files": [
+                            Path(line).name
+                            for line in Path(sig_list).read_text().splitlines()
+                        ],
+                    }
+                )
+                return 0
+
+            with (
+                override_settings(DATA_DIR=data_dir),
+                patch(
+                    "mgw_api.services.maintenance.get_database_config",
+                    return_value=database_config,
+                ),
+                patch(
+                    "mgw_api.services.maintenance.update_index",
+                    side_effect=capture_update_index,
+                ),
+                patch("mgw_api.services.maintenance.try_record_index_stats"),
+                patch("mgw_api.services.maintenance.try_record_index_update_runtime"),
+            ):
+                dirs = signature_dirs(DEFAULT_DATABASE_ID)
+                dirs["pending"].mkdir(parents=True)
+                dirs["indexed"].mkdir(parents=True)
+                old_sig = dirs["indexed"] / "SRR_OLD.sig"
+                old_sig.write_text("sig", encoding="ascii")
+                new_sig = dirs["pending"] / "SRR_NEW.sig"
+                new_sig.write_text("sig", encoding="ascii")
+                existing_profile = profiles[1]
+                write_accession_parquet(
+                    batch_manifest(DEFAULT_DATABASE_ID, existing_profile, 38),
+                    ["SRR_OLD"],
+                )
+                write_accession_parquet(
+                    profile_manifest(DEFAULT_DATABASE_ID, existing_profile),
+                    ["SRR_OLD"],
+                )
+                work_dir = data_dir / "work"
+                work_dir.mkdir()
+
+                result = run_index_batches(
+                    work_dir,
+                    database=DEFAULT_DATABASE_ID,
+                    index_max_signatures=10,
+                )
+
+        self.assertEqual(
+            result,
+            {"indexes_updated": 1, "batches_processed": 2, "indexing_failed": False},
+        )
+        self.assertEqual(
+            captured_lists,
+            [
+                {
+                    "profile": "k31-scaled1000",
+                    "index": 38,
+                    "files": ["SRR_NEW.sig"],
+                },
+                {
+                    "profile": "k21-scaled1000",
+                    "index": 38,
+                    "files": ["SRR_OLD.sig", "SRR_NEW.sig"],
+                },
+            ],
+        )
 
     @override_settings(
         INDEX_MAX_SIGNATURES=100000,

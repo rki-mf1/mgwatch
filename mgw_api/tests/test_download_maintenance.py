@@ -2,12 +2,16 @@ import asyncio
 import pickle
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
 from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import IndexProfile
+from mgw_api.database_config import profile_manifest
+from mgw_api.database_config import write_accession_parquet
 from mgw_api.services.maintenance import download_from_wort
 from mgw_api.services.maintenance import fetch_signature
 from mgw_api.services.maintenance import get_update_accessions
@@ -269,6 +273,43 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 ):
                     prepare_download_targets()
 
+    def test_prepare_download_targets_backfills_missing_profile_manifest(self):
+        with TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir)
+            profiles = (
+                IndexProfile(kmer=21, scaled=1000),
+                IndexProfile(kmer=31, scaled=1000),
+            )
+            database_config = SimpleNamespace(
+                id=DEFAULT_DATABASE_ID,
+                enabled_profiles=profiles,
+                download={},
+            )
+
+            with (
+                override_settings(DATA_DIR=data_dir, INDEX_FROM_SCRATCH=False),
+                patch(
+                    "mgw_api.services.maintenance.get_database_config",
+                    return_value=database_config,
+                ),
+                patch(
+                    "mgw_api.services.maintenance.get_mongo_ids",
+                    return_value=["SRR1", "SRR2"],
+                ),
+                patch(
+                    "mgw_api.services.maintenance.get_wort_accessions",
+                    return_value={"SRR1", "SRR2"},
+                ),
+            ):
+                write_accession_parquet(
+                    profile_manifest(DEFAULT_DATABASE_ID, profiles[0]),
+                    ["SRR1", "SRR2"],
+                )
+
+                _dir_paths, _man_fail, sra_ids = prepare_download_targets()
+
+        self.assertEqual(sra_ids, ["SRR1", "SRR2"])
+
     def test_get_update_accessions_reads_pending_signatures_from_updates_dir(self):
         with TemporaryDirectory() as tmp_dir:
             updates_dir = Path(tmp_dir)
@@ -361,7 +402,7 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 ]
 
             with (
-                patch("mgw_api.services.maintenance.run_command"),
+                patch("mgw_api.services.maintenance.run_command") as run_command_mock,
                 patch(
                     "mgw_api.services.maintenance.prepare_download_targets",
                     return_value=(
@@ -380,6 +421,11 @@ class DownloadMaintenanceTests(SimpleTestCase):
         self.assertEqual(result, {"downloaded": 3})
         self.assertEqual(captured["sra_ids"], ["SRR1", "SRR2", "SRR3"])
         self.assertEqual(captured["max_downloads"], 3)
+        run_command_mock.assert_called_once()
+        self.assertEqual(
+            run_command_mock.call_args.args[0][4],
+            "https://wort.sourmash.bio/v1/view/sra/SRR1",
+        )
 
     @override_settings(
         DATA_DIR=Path("/tmp/mgwatch-test-data"),
@@ -467,7 +513,7 @@ class DownloadMaintenanceTests(SimpleTestCase):
 
             with (
                 override_settings(DATA_DIR=data_dir),
-                patch("mgw_api.services.maintenance.run_command"),
+                patch("mgw_api.services.maintenance.run_command") as run_command_mock,
                 patch(
                     "mgw_api.services.maintenance.prepare_download_targets",
                     return_value=(
@@ -492,6 +538,11 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 result = run_download_index(index_max_signatures=2)
 
         self.assertEqual(result, {"downloaded": 3, "indexes_updated": 2})
+        run_command_mock.assert_called_once()
+        self.assertEqual(
+            run_command_mock.call_args.args[0][4],
+            "https://wort.sourmash.bio/v1/view/sra/SRR1",
+        )
         self.assertEqual(
             run_index_calls,
             [
