@@ -37,7 +37,8 @@ env = environ.Env(
     MGW_URL=(str, None),
     CSRF_TRUSTED_ORIGINS=(str, ""),
     TIME_ZONE=(str, "Europe/Berlin"),
-    DATA_DIR=(Path, BASE_DIR / ".." / "mgw-data"),
+    INTERNAL_DATA_DIR=(Path, Path("/data")),
+    INTERNAL_CONFIG_DIR=(Path, Path("/config")),
     MONGO_URI=(str, None),
     POSTGRES_DB=(str, "mgwatch"),
     POSTGRES_USER=(str, "mgwatch"),
@@ -332,7 +333,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "mgw.wsgi.application"
 
-DATA_DIR = env("DATA_DIR")
+DATA_DIR = env("INTERNAL_DATA_DIR")
+CONFIG_DIR = env("INTERNAL_CONFIG_DIR")
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases

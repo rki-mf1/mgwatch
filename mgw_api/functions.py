@@ -7,12 +7,16 @@ import pymongo as pm
 from django.conf import settings
 
 from mgw.settings import LOGGER
+from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import get_database_config
+from mgw_api.database_config import normalize_database_id
 
 
 def search_mongodb(headers, rows):
+    database_config = get_database_config(DEFAULT_DATABASE_ID)
     mongo = pm.MongoClient(settings.MONGO_URI)
     db = mongo["sradb"]
-    collection = db["sradb_list"]
+    collection = db[database_config.mongodb_collection]
     qidx = headers.index("match_name")
     query = {"_id": {"$in": [row[qidx] for row in rows]}}
     mongo_df = pd.DataFrame(list(collection.find(query)))
@@ -53,8 +57,10 @@ def get_branchwater_table(result, max_rows=None):
         "jaccard": "float64",
         "max_containment": "float64",
         "query_containment_ani": "float64",
+        "database": "string",
     }
     branchwater_columns_for_output = [
+        "database",
         "query_containment_ani",
         "containment",
     ]
@@ -62,7 +68,12 @@ def get_branchwater_table(result, max_rows=None):
     branchwater_results = pd.read_csv(
         result.file.path, index_col="match_name", nrows=max_rows, dtype=data_types
     )
-    branchwater_subset = branchwater_results[branchwater_columns_for_output]
+    available_columns = [
+        column
+        for column in branchwater_columns_for_output
+        if column in branchwater_results.columns
+    ]
+    branchwater_subset = branchwater_results[available_columns]
     LOGGER.debug(
         "Loaded branchwater results: rows=%s columns=%s",
         len(branchwater_subset),
@@ -120,7 +131,7 @@ def prettify_column_names(df):
     return df
 
 
-def add_sra_metadata(branchwater_results):
+def add_sra_metadata(branchwater_results, *, default_database=DEFAULT_DATABASE_ID):
     branchwater_results.rename_axis("sra_accession", inplace=True)
     sra_columns = [
         "sra_accession",
@@ -142,9 +153,17 @@ def add_sra_metadata(branchwater_results):
         "host",
         "isolation_source",
     ]
-    sra_accessions = branchwater_results.index.to_list()
-    sra_metadata = get_sra_fields(sra_accessions, sra_columns)
-    results_with_metadata = branchwater_results.join(sra_metadata, on="sra_accession")
+    if "database" not in branchwater_results.columns:
+        branchwater_results["database"] = default_database
+    metadata_frames = []
+    for database_id, database_results in branchwater_results.groupby("database"):
+        database_id = normalize_database_id(str(database_id))
+        sra_accessions = database_results.index.to_list()
+        sra_metadata = get_sra_fields(sra_accessions, sra_columns, database_id)
+        metadata_frames.append(database_results.join(sra_metadata, on="sra_accession"))
+    results_with_metadata = (
+        pd.concat(metadata_frames) if metadata_frames else branchwater_results
+    )
     results_with_metadata = results_with_metadata.reset_index(drop=True)
     LOGGER.debug(
         "Joined branchwater results with SRA metadata: result_rows=%s metadata_rows=%s joined_rows=%s",
@@ -157,6 +176,7 @@ def add_sra_metadata(branchwater_results):
 
 def reorder_result_columns_sra(df):
     output_ordering = [
+        "database",
         "sra_accession",
         "sra_bioproject",
         "sra_biosample",
@@ -181,10 +201,11 @@ def reorder_result_columns_sra(df):
     return df[output_ordering]
 
 
-def get_sra_fields(sra_accessions, fields):
+def get_sra_fields(sra_accessions, fields, database_id=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database_id)
     mongo = pm.MongoClient(settings.MONGO_URI)
     db = mongo["sradb"]
-    collection = db["sradb_list"]
+    collection = db[database_config.mongodb_collection]
     query = {"_id": {"$in": sra_accessions}}
     results = list(collection.find(query))
     if len(results) == 0:
@@ -230,6 +251,10 @@ def search_csv(headers, rows, column_dict):
 
 def get_results_with_metadata(result, max_results=None):
     branchwater_results = get_branchwater_table(result, max_rows=max_results)
-    results_with_metadata = add_sra_metadata(branchwater_results)
+    default_database = result.database[0] if result.database else DEFAULT_DATABASE_ID
+    results_with_metadata = add_sra_metadata(
+        branchwater_results,
+        default_database=normalize_database_id(default_database),
+    )
     results_with_metadata = reorder_result_columns_sra(results_with_metadata)
     return results_with_metadata
