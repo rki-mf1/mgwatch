@@ -12,6 +12,7 @@ from django.test.utils import override_settings
 from mgw_api.database_config import DEFAULT_DATABASE_ID
 from mgw_api.database_config import IndexProfile
 from mgw_api.database_config import profile_manifest
+from mgw_api.database_config import signature_dirs
 from mgw_api.database_config import write_accession_parquet
 from mgw_api.services.maintenance import download_from_wort
 from mgw_api.services.maintenance import fetch_signature
@@ -313,7 +314,7 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 ):
                     prepare_download_targets()
 
-    def test_prepare_download_targets_backfills_missing_profile_manifest(self):
+    def test_prepare_download_targets_backfills_missing_profile_accessions(self):
         with TemporaryDirectory() as tmp_dir:
             data_dir = Path(tmp_dir)
             profiles = (
@@ -334,21 +335,32 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 ),
                 patch(
                     "mgw_api.services.maintenance.get_mongo_ids",
-                    return_value=["SRR1", "SRR2"],
+                    return_value=["SRR_RECENT"],
                 ),
                 patch(
                     "mgw_api.services.maintenance.get_wort_accessions",
-                    return_value={"SRR1", "SRR2"},
+                    return_value={"SRR_HISTORICAL", "SRR_RECENT"},
                 ),
             ):
                 write_accession_parquet(
                     profile_manifest(DEFAULT_DATABASE_ID, profiles[0]),
-                    ["SRR1", "SRR2"],
+                    ["SRR_HISTORICAL", "SRR_RECENT"],
                 )
+                write_accession_parquet(
+                    profile_manifest(DEFAULT_DATABASE_ID, profiles[1]),
+                    ["SRR_RECENT"],
+                )
+                dirs = signature_dirs(DEFAULT_DATABASE_ID)
+                dirs["indexed"].mkdir(parents=True)
+                retained_signature = dirs["indexed"] / "SRR_HISTORICAL.sig"
+                retained_signature.write_text("sig", encoding="ascii")
 
-                _dir_paths, _man_fail, sra_ids = prepare_download_targets()
+                dir_paths, _man_fail, sra_ids = prepare_download_targets()
+                pending_signature = dir_paths["updates"] / "SRR_HISTORICAL.sig"
+                pending_signature_exists = pending_signature.exists()
 
-        self.assertEqual(sra_ids, ["SRR1", "SRR2"])
+        self.assertEqual(sra_ids, ["SRR_HISTORICAL"])
+        self.assertTrue(pending_signature_exists)
 
     def test_get_update_accessions_reads_pending_signatures_from_updates_dir(self):
         with TemporaryDirectory() as tmp_dir:

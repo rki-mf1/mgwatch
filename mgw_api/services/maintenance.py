@@ -360,6 +360,7 @@ def prepare_download_targets(ids=None, database=DEFAULT_DATABASE_ID):
     man_fail = failed_downloads_path(database_config.id)
     indexed_ids = get_all_profile_indexed_accessions(database_config.id)
     any_profile_indexed_ids = get_any_profile_indexed_accessions(database_config.id)
+    missing_profile_ids = any_profile_indexed_ids - indexed_ids
     if (
         not ids
         and not indexed_ids
@@ -375,9 +376,19 @@ def prepare_download_targets(ids=None, database=DEFAULT_DATABASE_ID):
     else:
         start_date, end_date = get_download_date_range(database_config)
         mongo_ids = get_mongo_ids(start_date, end_date, database_config.id)
-        wanted_ids = set(mongo_ids) - indexed_ids
+        wanted_ids = (set(mongo_ids) - indexed_ids) | missing_profile_ids
     sra_ids_in_wort = get_wort_accessions(database_config.id)
-    return dir_paths, man_fail, sorted(wanted_ids & sra_ids_in_wort)
+    target_ids = wanted_ids & sra_ids_in_wort
+    stage_retained_signatures(target_ids, dir_paths)
+    return dir_paths, man_fail, sorted(target_ids)
+
+
+def stage_retained_signatures(accessions, dir_paths):
+    for accession in accessions:
+        retained_signature = Path(dir_paths["signatures"]) / f"{accession}.sig"
+        pending_signature = Path(dir_paths["updates"]) / f"{accession}.sig"
+        if retained_signature.exists() and not pending_signature.exists():
+            shutil.copy2(retained_signature, pending_signature)
 
 
 def probe_wort_endpoint(database_config, accessions):
