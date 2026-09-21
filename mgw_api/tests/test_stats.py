@@ -112,6 +112,13 @@ databases:
                         profile_manifest(database.id, profile_31),
                         ["SRR1", "SRR2"],
                     )
+                    SystemStatistic.objects.create(
+                        metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                        scope=statistic_scope(database.id),
+                        value=999,
+                        details={"database": "SRA"},
+                        recorded_at=timezone.now(),
+                    )
 
                     statistic = record_index_stats()
 
@@ -129,6 +136,12 @@ databases:
                             scope=statistic_scope(database.id, profile_31.key),
                         ).value,
                         2,
+                    )
+                    self.assertFalse(
+                        SystemStatistic.objects.filter(
+                            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                            scope=statistic_scope(database.id),
+                        ).exists()
                     )
                     self.assertEqual(SystemStatisticSnapshot.objects.count(), 2)
                 finally:
@@ -531,6 +544,14 @@ class StatsViewTests(TestCase):
             },
             recorded_at=recorded_at,
         )
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope=statistic_scope(DEFAULT_DATABASE_ID),
+            value=999,
+            observation_count=0,
+            details={"database": "SRA"},
+            recorded_at=recorded_at,
+        )
         SystemStatisticSnapshot.objects.create(
             metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
             value=1234,
@@ -612,6 +633,7 @@ class StatsViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Stats")
         self.assertContains(response, "1,234")
+        self.assertNotContains(response, "2,233")
         self.assertContains(response, "Average search rate")
         self.assertContains(response, "12.35 seq/s")
         self.assertContains(response, "Database Status")

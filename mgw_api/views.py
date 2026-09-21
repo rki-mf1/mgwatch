@@ -26,6 +26,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .database_config import DEFAULT_DATABASE_ID
+from .database_config import normalize_database_list
 from .forms import FastaForm
 from .forms import LoginForm
 from .forms import SettingsForm
@@ -279,12 +280,24 @@ def _aggregate_current_stat(metric):
             None,
         )
 
-    values_by_database = {}
+    statistics_by_database = {}
     for statistic in statistics:
-        database = statistic.details.get("database", statistic.scope)
-        values_by_database.setdefault(database, []).append(statistic.value)
+        database = statistic.details.get("database")
+        if not database and statistic.scope:
+            database = statistic.scope.split(":", 1)[0]
+        database = normalize_database_list([database or DEFAULT_DATABASE_ID])[0]
+        statistics_by_database.setdefault(database, []).append(statistic)
+    values = []
+    for database_statistics in statistics_by_database.values():
+        profile_statistics = [
+            statistic
+            for statistic in database_statistics
+            if statistic.details.get("profile") or ":" in statistic.scope
+        ]
+        selected_statistics = profile_statistics or database_statistics
+        values.append(min(statistic.value for statistic in selected_statistics))
     return SimpleNamespace(
-        value=sum(min(values) for values in values_by_database.values()),
+        value=sum(values),
         observation_count=sum(statistic.observation_count for statistic in statistics),
         details={},
         recorded_at=max(statistic.recorded_at for statistic in statistics),

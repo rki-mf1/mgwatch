@@ -57,6 +57,13 @@ def _record_profile_metric(
     )
 
 
+def _delete_database_scope_statistic(metric, database_config):
+    SystemStatistic.objects.filter(
+        metric=metric,
+        scope=statistic_scope(database_config.id),
+    ).delete()
+
+
 def get_cached_index_sample_count_for_databases(databases):
     if isinstance(databases, str):
         databases = [databases]
@@ -159,6 +166,10 @@ def record_index_stats(database=DEFAULT_DATABASE_ID):
     database_config = get_database_config(database)
     recorded_at = timezone.now()
     profile_counts = count_index_samples_by_profile(database=database_config.id)
+    _delete_database_scope_statistic(
+        SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+        database_config,
+    )
     statistics = [
         _record_profile_metric(
             metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
@@ -178,6 +189,10 @@ def record_metadata_stats(database=DEFAULT_DATABASE_ID):
     database_config = get_database_config(database)
     sample_count = count_metadata_samples(database=database_config.id)
     recorded_at = timezone.now()
+    _delete_database_scope_statistic(
+        SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+        database_config,
+    )
     statistics = [
         _record_profile_metric(
             metric=SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
@@ -195,6 +210,10 @@ def record_wort_signature_stats(database=DEFAULT_DATABASE_ID):
     database_config = get_database_config(database)
     sample_count = count_wort_signature_samples(database=database_config.id)
     recorded_at = timezone.now()
+    _delete_database_scope_statistic(
+        SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
+        database_config,
+    )
     statistics = [
         _record_profile_metric(
             metric=SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
