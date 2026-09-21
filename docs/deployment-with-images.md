@@ -8,6 +8,7 @@ application repository.
 A release bundle should include:
 
 - `compose.prod.yml`
+- `config/database.yml` (mounted read-only at `/config/database.yml`)
 - `.env` (compose/runtime host settings)
 - `vars.env` (Django app settings/secrets)
 
@@ -21,19 +22,27 @@ Prefer digest pinning for reproducibility.
 
 1. Place deployment artifacts in a directory on the runtime host.
 2. Set `DOCKER_MGWATCH_IMAGE` in `.env`.
-3. Start services:
+3. For upgrades from a deployment with legacy `SRA/metagenomes` data, migrate
+   the persistent storage layout before serving traffic:
+
+   ```bash
+   docker compose -f compose.prod.yml run --rm --no-deps mgwatch "pixi run --frozen ./manage.py migrate_database_storage --dry-run"
+   docker compose -f compose.prod.yml run --rm --no-deps mgwatch "pixi run --frozen ./manage.py migrate_database_storage"
+   ```
+
+4. Start services:
 
    ```bash
    docker compose -f compose.prod.yml up -d
    ```
 
-4. Run migrations if needed:
+5. Run Django migrations if needed:
 
    ```bash
    docker compose -f compose.prod.yml run --rm mgwatch "pixi run --frozen ./manage.py migrate"
    ```
 
-5. Verify service logs:
+6. Verify service logs:
 
    ```bash
    docker compose -f compose.prod.yml logs -f --tail=200
@@ -41,7 +50,7 @@ Prefer digest pinning for reproducibility.
 
 ## Operational notes
 
-- Keep persistent paths (`EXTERNAL_DATA_DIR`, `POSTGRES_DATA_DIR`, `MONGODB_DATA_DIR`, `LOG_DIR`) on durable storage.
+- Keep persistent paths (`CONFIG_DIR`, `EXTERNAL_DATA_DIR`, `POSTGRES_DATA_DIR`, `MONGODB_DATA_DIR`, `LOG_DIR`) on durable storage.
 - Use `vars.env` to manage Django secrets and environment-specific behavior.
 - Keep backend, Celery worker, and Celery Beat services on the same image tag/digest.
 

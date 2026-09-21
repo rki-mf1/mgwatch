@@ -15,6 +15,7 @@
 - Python code follows PEP 8 with 4-space indents; keep imports grouped stdlib/third-party/local (see `mgw_api/views.py`). Use descriptive, lowercase_with_underscores for functions and snake_case for fields/model attributes.
 - Keep views slim; push data shaping into `mgw_api/functions.py` helpers or management commands. Favor Django templates in `mgw_api/templates/` and static assets in `mgw_api/static/`.
 - HTML templates should remain lintable with `djlint` (config in `djlint.toml`); keep block/variable names consistent with existing templates.
+- Python code changes must be formatted with ruff
 
 ## Testing Guidelines
 - Run the suite via `./scripts/run-tests.sh` before pushing any branch. The script builds the backend image, starts the required Docker Compose services without the development port overrides, and executes `manage.py test mgw_api` in the container. To run a narrower target, pass Django test labels, e.g. `./scripts/run-tests.sh mgw_api.tests.test_jobs`.

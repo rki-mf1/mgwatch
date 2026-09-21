@@ -11,6 +11,7 @@ from django.db import models
 from django.db.models import Q
 
 from mgw.settings import LOGGER
+from mgw_api.database_config import DEFAULT_DATABASE_ID
 
 FASTA_EXTENSIONS = (".fa", ".fasta", ".fsa", ".fna")
 FASTA_GZIP_EXTENSIONS = tuple(f"{extension}.gz" for extension in FASTA_EXTENSIONS)
@@ -151,7 +152,7 @@ class Settings(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     kmer = models.JSONField(default=partial(list, [21]), help_text="List of k-mers")
     database = models.JSONField(
-        default=partial(list, ["SRA"]), help_text="List of databases"
+        default=partial(list, [DEFAULT_DATABASE_ID]), help_text="List of databases"
     )
     containment = models.FloatField(
         default=0.10, help_text="Containment value (between 0 and 1)"

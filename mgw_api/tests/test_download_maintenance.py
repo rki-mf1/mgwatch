@@ -2,11 +2,18 @@ import asyncio
 import pickle
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
+import polars as pl
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
+from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import IndexProfile
+from mgw_api.database_config import profile_manifest
+from mgw_api.database_config import signature_dirs
+from mgw_api.database_config import write_accession_parquet
 from mgw_api.services.maintenance import download_from_wort
 from mgw_api.services.maintenance import fetch_signature
 from mgw_api.services.maintenance import get_update_accessions
@@ -248,9 +255,51 @@ class DownloadMaintenanceTests(SimpleTestCase):
             with patch("mgw_api.services.maintenance.pm.MongoClient", FakeMongoClient):
                 import_parquet(Path(tmp_dir))
 
-        self.assertEqual(FakeMongoClient.db.created, ["sradb_temp"])
-        self.assertEqual(FakeMongoClient.db.renamed, [("sradb_temp", "sradb_list")])
-        self.assertEqual(FakeMongoClient.db.collections, {"sradb_list"})
+        self.assertEqual(FakeMongoClient.db.created, ["sra_metagenomes_metadata_temp"])
+        self.assertEqual(
+            FakeMongoClient.db.renamed,
+            [("sra_metagenomes_metadata_temp", "sra_metagenomes_metadata")],
+        )
+        self.assertEqual(FakeMongoClient.db.collections, {"sra_metagenomes_metadata"})
+
+    def test_import_parquet_treats_exclusion_terms_as_literal_substrings(self):
+        FakeMongoClient.reset()
+
+        with TemporaryDirectory() as tmp_dir:
+            parquet_dir = Path(tmp_dir)
+            pl.DataFrame(
+                {
+                    "acc": ["SRR1", "SRR2", "SRR3"],
+                    "librarysource": ["METAGENOMIC", "METAGENOMIC", "METAGENOMIC"],
+                    "description": [
+                        "assembled with C++ tools",
+                        "contains [draft] annotation",
+                        "plain metadata",
+                    ],
+                }
+            ).write_parquet(parquet_dir / "metadata.parquet")
+            database_config = SimpleNamespace(
+                id=DEFAULT_DATABASE_ID,
+                mongodb_collection="sra_metagenomes_metadata",
+                metadata_filter={
+                    "exclude": {"descriptive_fields_contain": ["C++", "[draft]"]}
+                },
+                enabled_profiles=(),
+            )
+
+            with (
+                patch("mgw_api.services.maintenance.pm.MongoClient", FakeMongoClient),
+                patch(
+                    "mgw_api.services.maintenance.get_database_config",
+                    return_value=database_config,
+                ),
+            ):
+                import_parquet(parquet_dir)
+
+        self.assertEqual(
+            [document["_id"] for document in FakeMongoClient.db.inserted],
+            ["SRR3"],
+        )
 
     @override_settings(
         DATA_DIR=Path("/tmp/mgwatch-test-data"),
@@ -261,9 +310,57 @@ class DownloadMaintenanceTests(SimpleTestCase):
             with override_settings(DATA_DIR=Path(tmp_dir)):
                 with self.assertRaisesMessage(
                     RuntimeError,
-                    "manifest.pickle is missing and INDEX_FROM_SCRATCH is disabled",
+                    "profile manifest is missing and INDEX_FROM_SCRATCH is disabled",
                 ):
                     prepare_download_targets()
+
+    def test_prepare_download_targets_backfills_missing_profile_accessions(self):
+        with TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir)
+            profiles = (
+                IndexProfile(kmer=21, scaled=1000),
+                IndexProfile(kmer=31, scaled=1000),
+            )
+            database_config = SimpleNamespace(
+                id=DEFAULT_DATABASE_ID,
+                enabled_profiles=profiles,
+                download={},
+            )
+
+            with (
+                override_settings(DATA_DIR=data_dir, INDEX_FROM_SCRATCH=False),
+                patch(
+                    "mgw_api.services.maintenance.get_database_config",
+                    return_value=database_config,
+                ),
+                patch(
+                    "mgw_api.services.maintenance.get_mongo_ids",
+                    return_value=["SRR_RECENT"],
+                ),
+                patch(
+                    "mgw_api.services.maintenance.get_wort_accessions",
+                    return_value={"SRR_HISTORICAL", "SRR_RECENT"},
+                ),
+            ):
+                write_accession_parquet(
+                    profile_manifest(DEFAULT_DATABASE_ID, profiles[0]),
+                    ["SRR_HISTORICAL", "SRR_RECENT"],
+                )
+                write_accession_parquet(
+                    profile_manifest(DEFAULT_DATABASE_ID, profiles[1]),
+                    ["SRR_RECENT"],
+                )
+                dirs = signature_dirs(DEFAULT_DATABASE_ID)
+                dirs["indexed"].mkdir(parents=True)
+                retained_signature = dirs["indexed"] / "SRR_HISTORICAL.sig"
+                retained_signature.write_text("sig", encoding="ascii")
+
+                dir_paths, _man_fail, sra_ids = prepare_download_targets()
+                pending_signature = dir_paths["updates"] / "SRR_HISTORICAL.sig"
+                pending_signature_exists = pending_signature.exists()
+
+        self.assertEqual(sra_ids, ["SRR_HISTORICAL"])
+        self.assertTrue(pending_signature_exists)
 
     def test_get_update_accessions_reads_pending_signatures_from_updates_dir(self):
         with TemporaryDirectory() as tmp_dir:
@@ -339,6 +436,8 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 sra_ids,
                 man_fail,
                 timeout_seconds,
+                endpoint=None,
+                database=DEFAULT_DATABASE_ID,
                 retry_failed=False,
                 max_downloads=None,
                 max_simultaneous=100,
@@ -355,7 +454,7 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 ]
 
             with (
-                patch("mgw_api.services.maintenance.run_command"),
+                patch("mgw_api.services.maintenance.run_command") as run_command_mock,
                 patch(
                     "mgw_api.services.maintenance.prepare_download_targets",
                     return_value=(
@@ -374,6 +473,11 @@ class DownloadMaintenanceTests(SimpleTestCase):
         self.assertEqual(result, {"downloaded": 3})
         self.assertEqual(captured["sra_ids"], ["SRR1", "SRR2", "SRR3"])
         self.assertEqual(captured["max_downloads"], 3)
+        run_command_mock.assert_called_once()
+        self.assertEqual(
+            run_command_mock.call_args.args[0][4],
+            "https://wort.sourmash.bio/v1/view/sra/SRR1",
+        )
 
     @override_settings(
         DATA_DIR=Path("/tmp/mgwatch-test-data"),
@@ -384,21 +488,12 @@ class DownloadMaintenanceTests(SimpleTestCase):
     def test_run_index_does_not_touch_download_successful_pickle(self):
         with TemporaryDirectory() as tmp_dir:
             data_dir = Path(tmp_dir)
-            database_dir = data_dir / "SRA" / "metagenomes"
-            for name in [
-                "updates",
-                "index",
-                "signatures",
-                "indexing-failed",
-                "manifests",
-            ]:
-                (database_dir / name).mkdir(parents=True, exist_ok=True)
-            (database_dir / "updates" / "SRR1.sig").write_text("sig", encoding="ascii")
+            database_dir = data_dir / "search-databases" / DEFAULT_DATABASE_ID
+            pending_dir = database_dir / "signatures" / "pending"
+            pending_dir.mkdir(parents=True, exist_ok=True)
+            (pending_dir / "SRR1.sig").write_text("sig", encoding="ascii")
             success_pickle = database_dir / "download_successful.pickle"
             success_pickle.write_bytes(b"sentinel")
-            manifest = database_dir / "manifest.pickle"
-            with open(manifest, "wb") as handle:
-                pickle.dump([], handle, protocol=4)
 
             with (
                 override_settings(DATA_DIR=data_dir),
@@ -425,6 +520,8 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 sra_ids,
                 man_fail,
                 timeout_seconds,
+                endpoint=None,
+                database=DEFAULT_DATABASE_ID,
                 retry_failed=False,
                 max_downloads=None,
                 max_simultaneous=100,
@@ -445,6 +542,7 @@ class DownloadMaintenanceTests(SimpleTestCase):
             def fake_run_index_batches(
                 work_dir,
                 *,
+                database=None,
                 index_max_signatures=None,
                 max_batches=None,
                 delete_indexed_sigs=False,
@@ -452,6 +550,7 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 run_index_calls.append(
                     {
                         "updates": sorted(current_updates),
+                        "database": database,
                         "index_max_signatures": index_max_signatures,
                         "max_batches": max_batches,
                         "delete_indexed_sigs": delete_indexed_sigs,
@@ -466,7 +565,7 @@ class DownloadMaintenanceTests(SimpleTestCase):
 
             with (
                 override_settings(DATA_DIR=data_dir),
-                patch("mgw_api.services.maintenance.run_command"),
+                patch("mgw_api.services.maintenance.run_command") as run_command_mock,
                 patch(
                     "mgw_api.services.maintenance.prepare_download_targets",
                     return_value=(
@@ -491,17 +590,24 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 result = run_download_index(index_max_signatures=2)
 
         self.assertEqual(result, {"downloaded": 3, "indexes_updated": 2})
+        run_command_mock.assert_called_once()
+        self.assertEqual(
+            run_command_mock.call_args.args[0][4],
+            "https://wort.sourmash.bio/v1/view/sra/SRR1",
+        )
         self.assertEqual(
             run_index_calls,
             [
                 {
                     "updates": ["SRR1", "SRR2"],
+                    "database": DEFAULT_DATABASE_ID,
                     "index_max_signatures": 2,
                     "max_batches": 1,
                     "delete_indexed_sigs": True,
                 },
                 {
                     "updates": ["SRR3"],
+                    "database": DEFAULT_DATABASE_ID,
                     "index_max_signatures": 2,
                     "max_batches": 1,
                     "delete_indexed_sigs": True,
@@ -525,6 +631,8 @@ class DownloadMaintenanceTests(SimpleTestCase):
                 sra_ids,
                 man_fail,
                 timeout_seconds,
+                endpoint=None,
+                database=DEFAULT_DATABASE_ID,
                 retry_failed=False,
                 max_downloads=None,
                 max_simultaneous=100,
@@ -546,6 +654,7 @@ class DownloadMaintenanceTests(SimpleTestCase):
             def fake_run_index_batches(
                 work_dir,
                 *,
+                database=None,
                 index_max_signatures=None,
                 max_batches=None,
                 delete_indexed_sigs=False,

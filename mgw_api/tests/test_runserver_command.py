@@ -1,11 +1,14 @@
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+from unittest.mock import call
 from unittest.mock import patch
 
 from django.test import SimpleTestCase
 from django.test import override_settings
 
+from mgw_api.database_config import metadata_init_flag
 from mgw_api.management.commands.runserver import Command
 
 
@@ -25,7 +28,9 @@ class RunserverCommandTests(SimpleTestCase):
 
             Command().run()
 
-        run_metadata.assert_called_once_with(no_download=True)
+        run_metadata.assert_called_once_with(
+            no_download=True, database="sra_metagenomes"
+        )
         runserver.assert_called_once_with()
 
     def test_initial_metadata_is_skipped_in_reloader_child(self):
@@ -44,7 +49,7 @@ class RunserverCommandTests(SimpleTestCase):
         run_metadata.assert_not_called()
         runserver.assert_called_once_with()
 
-    def test_initial_metadata_is_skipped_when_flag_exists(self):
+    def test_initial_metadata_runs_when_only_legacy_flag_exists(self):
         with (
             TemporaryDirectory() as tmpdir,
             override_settings(DATA_DIR=Path(tmpdir)),
@@ -57,6 +62,90 @@ class RunserverCommandTests(SimpleTestCase):
         ):
             os.environ.pop("RUN_MAIN", None)
             init_flag = Path(tmpdir) / "SRA" / "metadata" / "initial_setup.txt"
+            init_flag.parent.mkdir(parents=True)
+            init_flag.touch()
+
+            Command().run()
+
+        run_metadata.assert_called_once_with(
+            no_download=True, database="sra_metagenomes"
+        )
+        runserver.assert_called_once_with()
+
+    def test_initial_metadata_runs_for_every_enabled_database(self):
+        with (
+            TemporaryDirectory() as tmpdir,
+            override_settings(DATA_DIR=Path(tmpdir)),
+            patch.dict(os.environ, {}, clear=False),
+            patch(
+                "mgw_api.management.commands.runserver.enabled_databases",
+                return_value=[
+                    SimpleNamespace(id="sra_metagenomes"),
+                    SimpleNamespace(id="other_metagenomes"),
+                ],
+            ),
+            patch("mgw_api.services.maintenance.run_metadata") as run_metadata,
+            patch(
+                "mgw_api.management.commands.runserver.StaticRunServerCommand.run",
+                return_value=None,
+            ) as runserver,
+        ):
+            os.environ.pop("RUN_MAIN", None)
+
+            Command().run()
+
+        self.assertEqual(
+            run_metadata.call_args_list,
+            [
+                call(no_download=True, database="sra_metagenomes"),
+                call(no_download=True, database="other_metagenomes"),
+            ],
+        )
+        runserver.assert_called_once_with()
+
+    def test_initial_metadata_retries_only_databases_missing_init_flags(self):
+        with (
+            TemporaryDirectory() as tmpdir,
+            override_settings(DATA_DIR=Path(tmpdir)),
+            patch.dict(os.environ, {}, clear=False),
+            patch(
+                "mgw_api.management.commands.runserver.enabled_databases",
+                return_value=[
+                    SimpleNamespace(id="sra_metagenomes"),
+                    SimpleNamespace(id="other_metagenomes"),
+                ],
+            ),
+            patch("mgw_api.services.maintenance.run_metadata") as run_metadata,
+            patch(
+                "mgw_api.management.commands.runserver.StaticRunServerCommand.run",
+                return_value=None,
+            ) as runserver,
+        ):
+            os.environ.pop("RUN_MAIN", None)
+            init_flag = metadata_init_flag("sra_metagenomes")
+            init_flag.parent.mkdir(parents=True)
+            init_flag.touch()
+
+            Command().run()
+
+        run_metadata.assert_called_once_with(
+            no_download=True, database="other_metagenomes"
+        )
+        runserver.assert_called_once_with()
+
+    def test_initial_metadata_is_skipped_when_new_flag_exists(self):
+        with (
+            TemporaryDirectory() as tmpdir,
+            override_settings(DATA_DIR=Path(tmpdir)),
+            patch.dict(os.environ, {}, clear=False),
+            patch("mgw_api.services.maintenance.run_metadata") as run_metadata,
+            patch(
+                "mgw_api.management.commands.runserver.StaticRunServerCommand.run",
+                return_value=None,
+            ) as runserver,
+        ):
+            os.environ.pop("RUN_MAIN", None)
+            init_flag = Path(tmpdir) / "metadata" / "sra" / "initial-setup.done"
             init_flag.parent.mkdir(parents=True)
             init_flag.touch()
 
