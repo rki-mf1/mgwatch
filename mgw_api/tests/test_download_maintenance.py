@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import polars as pl
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
@@ -259,6 +260,45 @@ class DownloadMaintenanceTests(SimpleTestCase):
             [("sra_metagenomes_metadata_temp", "sra_metagenomes_metadata")],
         )
         self.assertEqual(FakeMongoClient.db.collections, {"sra_metagenomes_metadata"})
+
+    def test_import_parquet_treats_exclusion_terms_as_literal_substrings(self):
+        FakeMongoClient.reset()
+
+        with TemporaryDirectory() as tmp_dir:
+            parquet_dir = Path(tmp_dir)
+            pl.DataFrame(
+                {
+                    "acc": ["SRR1", "SRR2", "SRR3"],
+                    "librarysource": ["METAGENOMIC", "METAGENOMIC", "METAGENOMIC"],
+                    "description": [
+                        "assembled with C++ tools",
+                        "contains [draft] annotation",
+                        "plain metadata",
+                    ],
+                }
+            ).write_parquet(parquet_dir / "metadata.parquet")
+            database_config = SimpleNamespace(
+                id=DEFAULT_DATABASE_ID,
+                mongodb_collection="sra_metagenomes_metadata",
+                metadata_filter={
+                    "exclude": {"descriptive_fields_contain": ["C++", "[draft]"]}
+                },
+                enabled_profiles=(),
+            )
+
+            with (
+                patch("mgw_api.services.maintenance.pm.MongoClient", FakeMongoClient),
+                patch(
+                    "mgw_api.services.maintenance.get_database_config",
+                    return_value=database_config,
+                ),
+            ):
+                import_parquet(parquet_dir)
+
+        self.assertEqual(
+            [document["_id"] for document in FakeMongoClient.db.inserted],
+            ["SRR3"],
+        )
 
     @override_settings(
         DATA_DIR=Path("/tmp/mgwatch-test-data"),

@@ -288,7 +288,7 @@ def import_parquet(parquet_dir, indexed_only=False, database=DEFAULT_DATABASE_ID
                             pl.col(column)
                             .cast(pl.String)
                             .str.to_lowercase()
-                            .str.contains(str(term).lower())
+                            .str.contains(str(term).lower(), literal=True)
                             .fill_null(False)
                             for column in text_columns
                         ]
@@ -721,8 +721,16 @@ def run_index_batches(
                 failed_update_files.update(batch_update_files)
             indexing_ever_failed = indexing_ever_failed or not indexing_succeeded
             indexing_ever_succeeded = indexing_ever_succeeded or indexing_succeeded
-    already_indexed_update_files = set(update_sig_files) - processed_update_files
-    successful_update_files.update(already_indexed_update_files)
+    profile_accession_sets = list(indexed_accessions_by_profile.values())
+    fully_indexed_accessions = (
+        set.intersection(*profile_accession_sets) if profile_accession_sets else set()
+    )
+    completed_update_files = {
+        sig_file
+        for sig_file in update_sig_files
+        if sig_accession(sig_file) in fully_indexed_accessions
+    }
+    successful_update_files.update(completed_update_files)
     successful_update_files -= failed_update_files
     cleanup_indexed_files(
         successful_update_files,
@@ -838,13 +846,16 @@ def cleanup_indexed_files(
 ):
     if failed_update_files:
         move_files(sorted(failed_update_files), dir_paths, "indexing-failed")
-    delete_after_indexing = (
-        delete_indexed_sigs and successful_update_files and not partial_batch_files
-    )
-    if delete_after_indexing:
-        delete_files(sorted(successful_update_files))
-    elif successful_update_files:
-        move_files(sorted(successful_update_files), dir_paths, "signatures")
+    if not successful_update_files:
+        return
+    files_to_retain = successful_update_files & partial_batch_files
+    files_to_delete = successful_update_files - files_to_retain
+    if delete_indexed_sigs and files_to_delete:
+        delete_files(sorted(files_to_delete))
+    else:
+        files_to_retain |= files_to_delete
+    if files_to_retain:
+        move_files(sorted(files_to_retain), dir_paths, "signatures")
 
 
 def run_download_index(

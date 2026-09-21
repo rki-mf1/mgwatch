@@ -8,6 +8,7 @@ from django.contrib.staticfiles.management.commands.runserver import (
 )
 
 from mgw.settings import LOGGER
+from mgw_api.database_config import enabled_databases
 from mgw_api.database_config import metadata_init_flag
 
 
@@ -30,7 +31,8 @@ class Command(StaticRunServerCommand):
 
                 # Skip downloading to restore the original behaviour we had
                 # before arguments were added to create_metadata
-                run_metadata(no_download=True)
+                for database in enabled_databases():
+                    run_metadata(no_download=True, database=database.id)
 
         # Call Django's runserver
         super().run(**options)

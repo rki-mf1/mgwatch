@@ -223,6 +223,44 @@ class CreateIndexServiceTests(SimpleTestCase):
             ],
         )
 
+    def test_run_index_batches_leaves_truncated_batches_pending(self):
+        with TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir)
+            work_dir = data_dir / "work"
+            work_dir.mkdir()
+
+            with (
+                override_settings(DATA_DIR=data_dir),
+                patch("mgw_api.services.maintenance.update_index", return_value=0),
+                patch("mgw_api.services.maintenance.try_record_index_stats"),
+                patch("mgw_api.services.maintenance.try_record_index_update_runtime"),
+            ):
+                dirs = signature_dirs(DEFAULT_DATABASE_ID)
+                dirs["pending"].mkdir(parents=True)
+                first_sig = dirs["pending"] / "SRR1.sig"
+                second_sig = dirs["pending"] / "SRR2.sig"
+                first_sig.write_text("sig", encoding="ascii")
+                second_sig.write_text("sig", encoding="ascii")
+
+                result = run_index_batches(
+                    work_dir,
+                    database=DEFAULT_DATABASE_ID,
+                    index_max_signatures=1,
+                    max_batches=1,
+                )
+
+                indexed_sig = dirs["indexed"] / "SRR1.sig"
+                still_pending_sig = dirs["pending"] / "SRR2.sig"
+                indexed_sig_exists = indexed_sig.exists()
+                still_pending_sig_exists = still_pending_sig.exists()
+
+        self.assertEqual(
+            result,
+            {"indexes_updated": 1, "batches_processed": 1, "indexing_failed": False},
+        )
+        self.assertTrue(indexed_sig_exists)
+        self.assertTrue(still_pending_sig_exists)
+
     @override_settings(
         INDEX_MAX_SIGNATURES=100000,
         INDEX_MIN_ITERATOR=38,
