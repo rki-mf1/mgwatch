@@ -93,7 +93,7 @@ def run_metadata(
         )
         metadata_stat = try_record_metadata_stats(database=database_config.id)
 
-    init_flag = metadata_init_flag()
+    init_flag = metadata_init_flag(database_config.id)
     init_flag.parent.mkdir(parents=True, exist_ok=True)
     init_flag.touch()
     if not no_process:

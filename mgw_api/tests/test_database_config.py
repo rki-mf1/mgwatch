@@ -6,6 +6,7 @@ from django.test import SimpleTestCase
 from django.test import override_settings
 
 from mgw_api.database_config import get_database_configs
+from mgw_api.database_config import metadata_init_flag
 
 
 class DatabaseConfigValidationTests(SimpleTestCase):
@@ -126,3 +127,18 @@ databases:
             configs["sra_metagenomes"].metadata_filter["include"]["librarysource"],
             "METAGENOMIC",
         )
+
+    def test_metadata_init_flags_are_scoped_per_database(self):
+        with TemporaryDirectory() as tmpdir:
+            with override_settings(DATA_DIR=Path(tmpdir)):
+                self.assertEqual(
+                    metadata_init_flag("sra_metagenomes"),
+                    Path(tmpdir) / "metadata" / "sra" / "initial-setup.done",
+                )
+                self.assertEqual(
+                    metadata_init_flag("other_metagenomes"),
+                    Path(tmpdir)
+                    / "metadata"
+                    / "other_metagenomes"
+                    / "initial-setup.done",
+                )

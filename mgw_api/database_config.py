@@ -191,8 +191,11 @@ def metadata_cache_dir():
     return Path(settings.DATA_DIR) / "metadata" / "sra" / "parquet"
 
 
-def metadata_init_flag():
-    return Path(settings.DATA_DIR) / "metadata" / "sra" / "initial-setup.done"
+def metadata_init_flag(database_id=DEFAULT_DATABASE_ID):
+    database_id = normalize_database_id(database_id)
+    if database_id == DEFAULT_DATABASE_ID:
+        return Path(settings.DATA_DIR) / "metadata" / "sra" / "initial-setup.done"
+    return Path(settings.DATA_DIR) / "metadata" / database_id / "initial-setup.done"
 
 
 def profile_root(database_id, profile):

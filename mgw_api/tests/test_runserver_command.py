@@ -8,6 +8,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 from django.test import override_settings
 
+from mgw_api.database_config import metadata_init_flag
 from mgw_api.management.commands.runserver import Command
 
 
@@ -99,6 +100,36 @@ class RunserverCommandTests(SimpleTestCase):
                 call(no_download=True, database="sra_metagenomes"),
                 call(no_download=True, database="other_metagenomes"),
             ],
+        )
+        runserver.assert_called_once_with()
+
+    def test_initial_metadata_retries_only_databases_missing_init_flags(self):
+        with (
+            TemporaryDirectory() as tmpdir,
+            override_settings(DATA_DIR=Path(tmpdir)),
+            patch.dict(os.environ, {}, clear=False),
+            patch(
+                "mgw_api.management.commands.runserver.enabled_databases",
+                return_value=[
+                    SimpleNamespace(id="sra_metagenomes"),
+                    SimpleNamespace(id="other_metagenomes"),
+                ],
+            ),
+            patch("mgw_api.services.maintenance.run_metadata") as run_metadata,
+            patch(
+                "mgw_api.management.commands.runserver.StaticRunServerCommand.run",
+                return_value=None,
+            ) as runserver,
+        ):
+            os.environ.pop("RUN_MAIN", None)
+            init_flag = metadata_init_flag("sra_metagenomes")
+            init_flag.parent.mkdir(parents=True)
+            init_flag.touch()
+
+            Command().run()
+
+        run_metadata.assert_called_once_with(
+            no_download=True, database="other_metagenomes"
         )
         runserver.assert_called_once_with()
 
