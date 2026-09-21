@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from mgw_api.database_config import DEFAULT_DATABASE_ID
 from mgw_api.database_config import get_database_config
+from mgw_api.database_config import get_database_configs
 from mgw_api.database_config import profile_manifest
 from mgw_api.database_config import write_accession_parquet
 from mgw_api.models import Fasta
@@ -24,8 +25,11 @@ from mgw_api.services.maintenance import run_download_index
 from mgw_api.services.maintenance import run_index
 from mgw_api.services.maintenance import run_metadata
 from mgw_api.services.stats import count_index_samples
+from mgw_api.services.stats import get_cached_index_sample_count_for_databases
+from mgw_api.services.stats import record_index_stats
 from mgw_api.services.stats import record_metadata_stats
 from mgw_api.services.stats import record_search_rate
+from mgw_api.services.stats import statistic_scope
 from mgw_api.services.stats import try_record_search_rate
 
 
@@ -68,6 +72,67 @@ class StatsServiceTests(TestCase):
                     ["SRR1", "SRR2", "SRR3"],
                 )
                 self.assertEqual(count_index_samples(), 3)
+
+    def test_record_index_stats_stores_profile_scoped_current_rows(self):
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            config_dir = root / "config"
+            data_dir = root / "data"
+            config_dir.mkdir()
+            (config_dir / "database.yml").write_text(
+                """
+version: 1
+databases:
+  sra_metagenomes:
+    enabled: true
+    mongodb_collection: sra_metagenomes_metadata
+    wort_manifest_url: https://example.test/sra-manifest.parquet
+    wort_signature_endpoint: https://example.test/sra-signatures
+    profiles:
+      - kmer: 21
+        scaled: 1000
+        enabled: true
+      - kmer: 31
+        scaled: 1000
+        enabled: true
+""",
+                encoding="utf-8",
+            )
+
+            with override_settings(CONFIG_DIR=config_dir, DATA_DIR=data_dir):
+                get_database_configs.cache_clear()
+                try:
+                    database = get_database_config()
+                    profile_21, profile_31 = database.enabled_profiles
+                    write_accession_parquet(
+                        profile_manifest(database.id, profile_21),
+                        ["SRR1", "SRR2", "SRR3"],
+                    )
+                    write_accession_parquet(
+                        profile_manifest(database.id, profile_31),
+                        ["SRR1", "SRR2"],
+                    )
+
+                    statistic = record_index_stats()
+
+                    self.assertEqual(statistic.value, 2)
+                    self.assertEqual(
+                        SystemStatistic.objects.get(
+                            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                            scope=statistic_scope(database.id, profile_21.key),
+                        ).value,
+                        3,
+                    )
+                    self.assertEqual(
+                        SystemStatistic.objects.get(
+                            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                            scope=statistic_scope(database.id, profile_31.key),
+                        ).value,
+                        2,
+                    )
+                    self.assertEqual(SystemStatisticSnapshot.objects.count(), 2)
+                finally:
+                    get_database_configs.cache_clear()
 
     def test_record_metadata_stats_stores_current_and_snapshot_rows(self):
         with patch("mgw_api.services.stats.pm.MongoClient", FakeMongoClient):
@@ -142,6 +207,68 @@ class StatsServiceTests(TestCase):
         self.assertEqual(statistic.details["last_runtime_seconds"], 6)
         self.assertEqual(statistic.details["last_index_sample_count"], 3)
         count_index.assert_not_called()
+
+    def test_cached_index_count_sums_profile_scoped_database_rows(self):
+        with TemporaryDirectory() as tmp_dir:
+            config_dir = Path(tmp_dir)
+            (config_dir / "database.yml").write_text(
+                """
+version: 1
+databases:
+  sra_metagenomes:
+    enabled: true
+    mongodb_collection: sra_metagenomes_metadata
+    wort_manifest_url: https://example.test/sra-manifest.parquet
+    wort_signature_endpoint: https://example.test/sra-signatures
+    profiles:
+      - kmer: 21
+        scaled: 1000
+        enabled: true
+  other_metagenomes:
+    enabled: true
+    mongodb_collection: other_metagenomes_metadata
+    wort_manifest_url: https://example.test/other-manifest.parquet
+    wort_signature_endpoint: https://example.test/other-signatures
+    profiles:
+      - kmer: 21
+        scaled: 1000
+        enabled: true
+""",
+                encoding="utf-8",
+            )
+
+            with override_settings(CONFIG_DIR=config_dir):
+                get_database_configs.cache_clear()
+                try:
+                    SystemStatistic.objects.create(
+                        metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                        scope=statistic_scope("sra_metagenomes", "k21-scaled1000"),
+                        value=3,
+                        details={
+                            "database": "sra_metagenomes",
+                            "profile": "k21-scaled1000",
+                        },
+                        recorded_at=timezone.now(),
+                    )
+                    SystemStatistic.objects.create(
+                        metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                        scope=statistic_scope("other_metagenomes", "k21-scaled1000"),
+                        value=5,
+                        details={
+                            "database": "other_metagenomes",
+                            "profile": "k21-scaled1000",
+                        },
+                        recorded_at=timezone.now(),
+                    )
+
+                    self.assertEqual(
+                        get_cached_index_sample_count_for_databases(
+                            ["SRA", "other_metagenomes"]
+                        ),
+                        8,
+                    )
+                finally:
+                    get_database_configs.cache_clear()
 
     def test_try_record_search_rate_skips_when_index_count_is_not_cached(self):
         user, result = self.create_result()
@@ -299,6 +426,10 @@ class UpdateStatsCommandTests(TestCase):
             with (
                 override_settings(DATA_DIR=data_dir),
                 patch("mgw_api.services.stats.pm.MongoClient", FakeMongoClient),
+                patch(
+                    "mgw_api.services.stats.count_wort_signature_samples",
+                    return_value=7,
+                ),
             ):
                 database = get_database_config()
                 profile = database.enabled_profiles[0]
@@ -310,6 +441,7 @@ class UpdateStatsCommandTests(TestCase):
 
         self.assertIn("Index samples: 2", stdout.getvalue())
         self.assertIn("Metadata samples: 42", stdout.getvalue())
+        self.assertIn("Wort signature samples: 7", stdout.getvalue())
         self.assertEqual(
             SystemStatistic.objects.get(
                 metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT
@@ -322,13 +454,23 @@ class UpdateStatsCommandTests(TestCase):
             ).value,
             42,
         )
-        self.assertEqual(SystemStatisticSnapshot.objects.count(), 2)
+        self.assertEqual(
+            SystemStatistic.objects.get(
+                metric=SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT
+            ).value,
+            7,
+        )
+        self.assertEqual(SystemStatisticSnapshot.objects.count(), 3)
 
     def test_update_stats_index_only_refreshes_stale_cached_index_count(self):
         SystemStatistic.objects.create(
             metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope=statistic_scope(DEFAULT_DATABASE_ID, "k21-scaled1000"),
             value=1,
-            details={"database": "SRA"},
+            details={
+                "database": DEFAULT_DATABASE_ID,
+                "profile": "k21-scaled1000",
+            },
             recorded_at=timezone.now(),
         )
         with TemporaryDirectory() as tmp_dir:
@@ -349,7 +491,8 @@ class UpdateStatsCommandTests(TestCase):
         mongo_client.assert_not_called()
         self.assertIn("Index samples: 3", stdout.getvalue())
         statistic = SystemStatistic.objects.get(
-            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope=statistic_scope(DEFAULT_DATABASE_ID, "k21-scaled1000"),
         )
         self.assertEqual(statistic.value, 3)
         self.assertEqual(statistic.details["database"], DEFAULT_DATABASE_ID)
@@ -379,8 +522,13 @@ class StatsViewTests(TestCase):
         recorded_at = timezone.now()
         SystemStatistic.objects.create(
             metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope=statistic_scope(DEFAULT_DATABASE_ID, "k21-scaled1000"),
             value=1234,
             observation_count=0,
+            details={
+                "database": DEFAULT_DATABASE_ID,
+                "profile": "k21-scaled1000",
+            },
             recorded_at=recorded_at,
         )
         SystemStatisticSnapshot.objects.create(
@@ -388,6 +536,28 @@ class StatsViewTests(TestCase):
             value=1234,
             observation_count=0,
             details={},
+            recorded_at=recorded_at,
+        )
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+            scope=statistic_scope(DEFAULT_DATABASE_ID, "k21-scaled1000"),
+            value=2000,
+            observation_count=0,
+            details={
+                "database": DEFAULT_DATABASE_ID,
+                "profile": "k21-scaled1000",
+            },
+            recorded_at=recorded_at,
+        )
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
+            scope=statistic_scope(DEFAULT_DATABASE_ID, "k21-scaled1000"),
+            value=1500,
+            observation_count=0,
+            details={
+                "database": DEFAULT_DATABASE_ID,
+                "profile": "k21-scaled1000",
+            },
             recorded_at=recorded_at,
         )
         SystemStatistic.objects.create(
@@ -444,6 +614,14 @@ class StatsViewTests(TestCase):
         self.assertContains(response, "1,234")
         self.assertContains(response, "Average search rate")
         self.assertContains(response, "12.35 seq/s")
+        self.assertContains(response, "Database Status")
+        self.assertContains(response, "Estimated total database size")
+        self.assertContains(response, "Wort signatures")
+        self.assertContains(response, "Search index samples")
+        self.assertContains(response, "SRA metagenomes")
+        self.assertContains(response, "k21-scaled1000")
+        self.assertContains(response, "2,000")
+        self.assertContains(response, "1,500")
         self.assertContains(response, "Recent activity")
         self.assertNotContains(response, "Recent snapshots")
         self.assertContains(response, "Runtime")

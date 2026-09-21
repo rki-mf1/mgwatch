@@ -1,3 +1,4 @@
+import polars as pl
 import pymongo as pm
 from django.conf import settings
 from django.db import transaction
@@ -5,6 +6,7 @@ from django.utils import timezone
 
 from mgw.settings import LOGGER
 from mgw_api.database_config import DEFAULT_DATABASE_ID
+from mgw_api.database_config import enabled_databases
 from mgw_api.database_config import get_database_config
 from mgw_api.database_config import normalize_database_list
 from mgw_api.database_config import profile_manifest
@@ -14,33 +16,107 @@ from mgw_api.models import SystemStatisticSnapshot
 
 
 def count_index_samples(database=DEFAULT_DATABASE_ID):
-    database_config = get_database_config(database)
-    counts = [
-        len(read_accession_parquet(profile_manifest(database_config.id, profile)))
-        for profile in database_config.enabled_profiles
-    ]
+    counts = count_index_samples_by_profile(database=database).values()
     return min(counts) if counts else 0
+
+
+def count_index_samples_by_profile(database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
+    return {
+        profile.key: len(
+            read_accession_parquet(profile_manifest(database_config.id, profile))
+        )
+        for profile in database_config.enabled_profiles
+    }
+
+
+def statistic_scope(database, profile_key=""):
+    database = normalize_database_list([database])[0]
+    return f"{database}:{profile_key}" if profile_key else database
+
+
+def _profile_details(database_config, profile):
+    return {
+        "database": database_config.id,
+        "database_label": database_config.label,
+        "profile": profile.key,
+        "kmer": profile.kmer,
+        "scaled": profile.scaled,
+    }
+
+
+def _record_profile_metric(
+    *, metric, value, database_config, profile, recorded_at=None
+):
+    return record_metric(
+        metric=metric,
+        value=value,
+        details=_profile_details(database_config, profile),
+        scope=statistic_scope(database_config.id, profile.key),
+        recorded_at=recorded_at,
+    )
 
 
 def get_cached_index_sample_count_for_databases(databases):
     if isinstance(databases, str):
         databases = [databases]
-    databases = set(normalize_database_list(databases))
-    statistic = SystemStatistic.objects.filter(
-        metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT
-    ).first()
-    if statistic is None:
-        return None
-    statistic_database = normalize_database_list(
-        [statistic.details.get("database", DEFAULT_DATABASE_ID)]
-    )[0]
-    if databases != {statistic_database}:
-        LOGGER.debug(
-            "Skipped cached index sample count for unsupported database selection: %s",
-            sorted(databases),
+    total = 0
+    for database in dict.fromkeys(normalize_database_list(databases)):
+        database_config = get_database_config(database)
+        profile_scopes = [
+            statistic_scope(database_config.id, profile.key)
+            for profile in database_config.enabled_profiles
+        ]
+        profile_statistics = list(
+            SystemStatistic.objects.filter(
+                metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                scope__in=profile_scopes,
+            )
         )
-        return None
-    return int(statistic.value)
+        if profile_statistics:
+            if len(profile_statistics) != len(profile_scopes):
+                return None
+            total += min(int(statistic.value) for statistic in profile_statistics)
+            continue
+
+        database_statistic = SystemStatistic.objects.filter(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope=statistic_scope(database_config.id),
+        ).first()
+        if database_statistic is not None:
+            total += int(database_statistic.value)
+            continue
+
+        legacy_statistic = SystemStatistic.objects.filter(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope="",
+        ).first()
+        if legacy_statistic is None:
+            return None
+        statistic_database = normalize_database_list(
+            [legacy_statistic.details.get("database", DEFAULT_DATABASE_ID)]
+        )[0]
+        if database_config.id != statistic_database:
+            LOGGER.debug(
+                "Skipped cached index sample count for unsupported database: %s",
+                database_config.id,
+            )
+            return None
+        total += int(legacy_statistic.value)
+    return total
+
+
+def count_wort_signature_samples(database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
+    accessions = (
+        pl.scan_parquet(database_config.wort_manifest_url)
+        .select(pl.col("name").str.extract(r"([\w.]+)", 1).alias("accession"))
+        .collect()
+        .get_column("accession")
+        .unique()
+        .to_list()
+    )
+    return len(accessions)
 
 
 def count_metadata_samples(database=DEFAULT_DATABASE_ID):
@@ -54,13 +130,14 @@ def count_metadata_samples(database=DEFAULT_DATABASE_ID):
 
 
 def record_metric(
-    *, metric, value, observation_count=0, details=None, recorded_at=None
+    *, metric, value, observation_count=0, details=None, recorded_at=None, scope=""
 ):
     recorded_at = recorded_at or timezone.now()
     details = details or {}
     with transaction.atomic():
         statistic, _created = SystemStatistic.objects.update_or_create(
             metric=metric,
+            scope=scope,
             defaults={
                 "value": value,
                 "observation_count": observation_count,
@@ -79,22 +156,91 @@ def record_metric(
 
 
 def record_index_stats(database=DEFAULT_DATABASE_ID):
-    sample_count = count_index_samples(database=database)
-    return record_metric(
-        metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
-        value=sample_count,
-        details={"database": database},
-    )
+    database_config = get_database_config(database)
+    recorded_at = timezone.now()
+    profile_counts = count_index_samples_by_profile(database=database_config.id)
+    statistics = [
+        _record_profile_metric(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            value=profile_counts[profile.key],
+            database_config=database_config,
+            profile=profile,
+            recorded_at=recorded_at,
+        )
+        for profile in database_config.enabled_profiles
+    ]
+    if not statistics:
+        return None
+    return min(statistics, key=lambda statistic: statistic.value)
 
 
 def record_metadata_stats(database=DEFAULT_DATABASE_ID):
     database_config = get_database_config(database)
     sample_count = count_metadata_samples(database=database_config.id)
-    return record_metric(
-        metric=SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
-        value=sample_count,
-        details={"database": database_config.id},
-    )
+    recorded_at = timezone.now()
+    statistics = [
+        _record_profile_metric(
+            metric=SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+            value=sample_count,
+            database_config=database_config,
+            profile=profile,
+            recorded_at=recorded_at,
+        )
+        for profile in database_config.enabled_profiles
+    ]
+    return statistics[0] if statistics else None
+
+
+def record_wort_signature_stats(database=DEFAULT_DATABASE_ID):
+    database_config = get_database_config(database)
+    sample_count = count_wort_signature_samples(database=database_config.id)
+    recorded_at = timezone.now()
+    statistics = [
+        _record_profile_metric(
+            metric=SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
+            value=sample_count,
+            database_config=database_config,
+            profile=profile,
+            recorded_at=recorded_at,
+        )
+        for profile in database_config.enabled_profiles
+    ]
+    return statistics[0] if statistics else None
+
+
+def get_database_status_rows():
+    metrics = [
+        SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+        SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
+        SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+    ]
+    statistics = {
+        (statistic.metric, statistic.scope): statistic
+        for statistic in SystemStatistic.objects.filter(metric__in=metrics)
+    }
+    rows = []
+    for database in enabled_databases():
+        for profile in database.enabled_profiles:
+            scope = statistic_scope(database.id, profile.key)
+            rows.append(
+                {
+                    "database": database.label,
+                    "database_id": database.id,
+                    "profile": profile.key,
+                    "kmer": profile.kmer,
+                    "scaled": profile.scaled,
+                    "metadata_samples": statistics.get(
+                        (SystemStatistic.Metric.METADATA_SAMPLE_COUNT, scope)
+                    ),
+                    "wort_signature_samples": statistics.get(
+                        (SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT, scope)
+                    ),
+                    "index_samples": statistics.get(
+                        (SystemStatistic.Metric.INDEX_SAMPLE_COUNT, scope)
+                    ),
+                }
+            )
+    return rows
 
 
 def record_timed_metric(*, metric, duration_seconds, details=None, recorded_at=None):
@@ -107,6 +253,7 @@ def record_timed_metric(*, metric, duration_seconds, details=None, recorded_at=N
     with transaction.atomic():
         statistic, _created = SystemStatistic.objects.select_for_update().get_or_create(
             metric=metric,
+            scope="",
             defaults={
                 "value": 0.0,
                 "observation_count": 0,
@@ -203,6 +350,7 @@ def record_search_rate(
     with transaction.atomic():
         statistic, _created = SystemStatistic.objects.select_for_update().get_or_create(
             metric=metric,
+            scope="",
             defaults={
                 "value": 0.0,
                 "observation_count": 0,
@@ -270,6 +418,20 @@ def try_record_metadata_stats(database=DEFAULT_DATABASE_ID):
             )
         else:
             LOGGER.exception("Failed to record metadata statistics")
+    return None
+
+
+def try_record_wort_signature_stats(database=DEFAULT_DATABASE_ID):
+    try:
+        return record_wort_signature_stats(database=database)
+    except Exception as exc:
+        if exc.__class__.__name__ == "DatabaseOperationForbidden":
+            LOGGER.debug(
+                "Skipped Wort signature statistics recording because database is "
+                "unavailable"
+            )
+        else:
+            LOGGER.exception("Failed to record Wort signature statistics")
     return None
 
 
