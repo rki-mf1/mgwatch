@@ -265,20 +265,21 @@ def record_index_stats(database=DEFAULT_DATABASE_ID):
     database_config = get_database_config(database)
     recorded_at = timezone.now()
     profile_counts = count_index_samples_by_profile(database=database_config.id)
-    _delete_database_scope_statistic(
-        SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
-        database_config,
-    )
-    statistics = [
-        _record_profile_metric(
-            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
-            value=profile_counts[profile.key],
-            database_config=database_config,
-            profile=profile,
-            recorded_at=recorded_at,
+    with transaction.atomic():
+        _delete_database_scope_statistic(
+            SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            database_config,
         )
-        for profile in database_config.enabled_profiles
-    ]
+        statistics = [
+            _record_profile_metric(
+                metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                value=profile_counts[profile.key],
+                database_config=database_config,
+                profile=profile,
+                recorded_at=recorded_at,
+            )
+            for profile in database_config.enabled_profiles
+        ]
     if not statistics:
         return None
     return min(statistics, key=lambda statistic: statistic.value)
@@ -288,20 +289,21 @@ def record_metadata_stats(database=DEFAULT_DATABASE_ID):
     database_config = get_database_config(database)
     sample_count = count_metadata_samples(database=database_config.id)
     recorded_at = timezone.now()
-    _delete_database_scope_statistic(
-        SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
-        database_config,
-    )
-    statistics = [
-        _record_profile_metric(
-            metric=SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
-            value=sample_count,
-            database_config=database_config,
-            profile=profile,
-            recorded_at=recorded_at,
+    with transaction.atomic():
+        _delete_database_scope_statistic(
+            SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+            database_config,
         )
-        for profile in database_config.enabled_profiles
-    ]
+        statistics = [
+            _record_profile_metric(
+                metric=SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+                value=sample_count,
+                database_config=database_config,
+                profile=profile,
+                recorded_at=recorded_at,
+            )
+            for profile in database_config.enabled_profiles
+        ]
     return statistics[0] if statistics else None
 
 
@@ -310,20 +312,21 @@ def record_wort_signature_stats(database=DEFAULT_DATABASE_ID, sample_count=None)
     if sample_count is None:
         sample_count = count_wort_signature_samples(database=database_config.id)
     recorded_at = timezone.now()
-    _delete_database_scope_statistic(
-        SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
-        database_config,
-    )
-    statistics = [
-        _record_profile_metric(
-            metric=SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
-            value=sample_count,
-            database_config=database_config,
-            profile=profile,
-            recorded_at=recorded_at,
+    with transaction.atomic():
+        _delete_database_scope_statistic(
+            SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
+            database_config,
         )
-        for profile in database_config.enabled_profiles
-    ]
+        statistics = [
+            _record_profile_metric(
+                metric=SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
+                value=sample_count,
+                database_config=database_config,
+                profile=profile,
+                recorded_at=recorded_at,
+            )
+            for profile in database_config.enabled_profiles
+        ]
     return statistics[0] if statistics else None
 
 

@@ -12,6 +12,7 @@ from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+import mgw_api.services.stats as stats_service
 from mgw_api.database_config import DEFAULT_DATABASE_ID
 from mgw_api.database_config import get_database_config
 from mgw_api.database_config import get_database_configs
@@ -146,6 +147,93 @@ databases:
                         ).exists()
                     )
                     self.assertEqual(SystemStatisticSnapshot.objects.count(), 2)
+                finally:
+                    get_database_configs.cache_clear()
+
+    def test_record_index_stats_rolls_back_partial_profile_refresh(self):
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            config_dir = root / "config"
+            data_dir = root / "data"
+            config_dir.mkdir()
+            (config_dir / "database.yml").write_text(
+                """
+version: 1
+databases:
+  sra_metagenomes:
+    enabled: true
+    mongodb_collection: sra_metagenomes_metadata
+    wort_manifest_url: https://example.test/sra-manifest.parquet
+    wort_signature_endpoint: https://example.test/sra-signatures
+    profiles:
+      - kmer: 21
+        scaled: 1000
+        enabled: true
+      - kmer: 31
+        scaled: 1000
+        enabled: true
+""",
+                encoding="utf-8",
+            )
+
+            with override_settings(CONFIG_DIR=config_dir, DATA_DIR=data_dir):
+                get_database_configs.cache_clear()
+                try:
+                    database = get_database_config()
+                    profile_21, profile_31 = database.enabled_profiles
+                    write_accession_parquet(
+                        profile_manifest(database.id, profile_21),
+                        ["SRR1", "SRR2", "SRR3"],
+                    )
+                    write_accession_parquet(
+                        profile_manifest(database.id, profile_31),
+                        ["SRR1", "SRR2"],
+                    )
+                    fallback = SystemStatistic.objects.create(
+                        metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                        scope=statistic_scope(database.id),
+                        value=999,
+                        details={"database": "SRA"},
+                        recorded_at=timezone.now(),
+                    )
+                    original_record_profile_metric = (
+                        stats_service._record_profile_metric
+                    )
+                    calls = []
+
+                    def fail_second_profile_write(**kwargs):
+                        calls.append(kwargs["profile"].key)
+                        if len(calls) == 2:
+                            raise RuntimeError("profile write failed")
+                        return original_record_profile_metric(**kwargs)
+
+                    with (
+                        patch(
+                            "mgw_api.services.stats._record_profile_metric",
+                            side_effect=fail_second_profile_write,
+                        ),
+                        self.assertRaisesMessage(
+                            RuntimeError,
+                            "profile write failed",
+                        ),
+                    ):
+                        record_index_stats()
+
+                    fallback.refresh_from_db()
+                    self.assertEqual(fallback.value, 999)
+                    self.assertFalse(
+                        SystemStatistic.objects.filter(
+                            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                            scope=statistic_scope(database.id, profile_21.key),
+                        ).exists()
+                    )
+                    self.assertFalse(
+                        SystemStatistic.objects.filter(
+                            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                            scope=statistic_scope(database.id, profile_31.key),
+                        ).exists()
+                    )
+                    self.assertEqual(SystemStatisticSnapshot.objects.count(), 0)
                 finally:
                     get_database_configs.cache_clear()
 
