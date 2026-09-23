@@ -4,6 +4,7 @@ from django.core.management.base import CommandError
 from mgw_api.database_config import DEFAULT_DATABASE_ID
 from mgw_api.services.stats import record_index_stats
 from mgw_api.services.stats import record_metadata_stats
+from mgw_api.services.stats import record_wort_signature_stats
 
 
 class Command(BaseCommand):
@@ -24,8 +25,7 @@ class Command(BaseCommand):
             "--index-only",
             action="store_true",
             help=(
-                "Only refresh the cached index sample count from the on-disk "
-                "manifest."
+                "Only refresh the cached index sample count from the on-disk manifest."
             ),
         )
         parser.add_argument(
@@ -40,6 +40,7 @@ class Command(BaseCommand):
 
         update_index = not kwargs["metadata_only"]
         update_metadata = not kwargs["index_only"]
+        update_wort = not kwargs["index_only"] and not kwargs["metadata_only"]
 
         if update_index:
             index_stat = record_index_stats(database=kwargs["database"])
@@ -51,4 +52,10 @@ class Command(BaseCommand):
             metadata_stat = record_metadata_stats(database=kwargs["database"])
             self.stdout.write(
                 self.style.SUCCESS(f"Metadata samples: {int(metadata_stat.value):,}")
+            )
+
+        if update_wort:
+            wort_stat = record_wort_signature_stats(database=kwargs["database"])
+            self.stdout.write(
+                self.style.SUCCESS(f"Wort signature samples: {int(wort_stat.value):,}")
             )

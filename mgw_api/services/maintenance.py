@@ -48,6 +48,7 @@ from mgw_api.services.stats import try_record_index_stats
 from mgw_api.services.stats import try_record_index_update_runtime
 from mgw_api.services.stats import try_record_metadata_stats
 from mgw_api.services.stats import try_record_metadata_update_runtime
+from mgw_api.services.stats import try_record_wort_signature_stats
 
 from .processes import run_command
 from .searches import run_search
@@ -378,6 +379,10 @@ def prepare_download_targets(ids=None, database=DEFAULT_DATABASE_ID):
         mongo_ids = get_mongo_ids(start_date, end_date, database_config.id)
         wanted_ids = (set(mongo_ids) - indexed_ids) | missing_profile_ids
     sra_ids_in_wort = get_wort_accessions(database_config.id)
+    try_record_wort_signature_stats(
+        database=database_config.id,
+        sample_count=len(sra_ids_in_wort),
+    )
     target_ids = wanted_ids & sra_ids_in_wort
     stage_retained_signatures(target_ids, dir_paths)
     return dir_paths, man_fail, sorted(target_ids)

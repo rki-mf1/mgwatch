@@ -50,6 +50,8 @@ from .services.filters import has_active_filters
 from .services.filters import merge_filter_spec_from_post
 from .services.filters import normalize_filter_spec
 from .services.filters import remove_filter_from_spec
+from .services.stats import aggregate_current_stat
+from .services.stats import get_database_status_rows
 from .tasks import submit_search_job
 from .tasks import submit_signature_pipeline_job
 
@@ -232,6 +234,16 @@ def _format_searches_in_average(metric, observation_count):
 
 def _format_stat_details(metric, details):
     details = details or {}
+    if metric in (
+        SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+        SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+        SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
+    ):
+        database = details.get("database_label") or details.get("database")
+        profile = details.get("profile")
+        if database and profile:
+            return f"{database} / {profile}"
+        return database or profile or ""
     if metric == SystemStatistic.Metric.DOWNLOAD_INDEX_RUNTIME_SECONDS:
         return (
             f"{details.get('downloaded', 0):,} samples downloaded, "
@@ -263,34 +275,28 @@ def _format_runtime(metric, value, details):
     return f"{float(runtime):,.2f} s"
 
 
+def _format_database_status_value(statistic):
+    if statistic is None:
+        return "Not recorded"
+    return f"{int(statistic.value):,}"
+
+
 @login_required
 def stats(request):
     if not request.user.is_staff:
         raise PermissionDenied
-    current_stats = {
-        statistic.metric: statistic
-        for statistic in SystemStatistic.objects.filter(
-            metric__in=[
-                SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
-                SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
-                SystemStatistic.Metric.AVERAGE_SEARCH_RATE_SEQUENCES_PER_SECOND,
-                SystemStatistic.Metric.METADATA_UPDATE_RUNTIME_SECONDS,
-                SystemStatistic.Metric.INDEX_UPDATE_RUNTIME_SECONDS,
-                SystemStatistic.Metric.DOWNLOAD_INDEX_RUNTIME_SECONDS,
-            ]
-        )
-    }
     metric_labels = dict(SystemStatistic.Metric.choices)
     metrics = []
     for metric in [
         SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
         SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+        SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
         SystemStatistic.Metric.AVERAGE_SEARCH_RATE_SEQUENCES_PER_SECOND,
         SystemStatistic.Metric.METADATA_UPDATE_RUNTIME_SECONDS,
         SystemStatistic.Metric.INDEX_UPDATE_RUNTIME_SECONDS,
         SystemStatistic.Metric.DOWNLOAD_INDEX_RUNTIME_SECONDS,
     ]:
-        statistic = current_stats.get(metric)
+        statistic = aggregate_current_stat(metric)
         metrics.append(
             {
                 "metric": metric,
@@ -315,6 +321,17 @@ def stats(request):
                 ),
             }
         )
+    database_status_rows = [
+        {
+            **row,
+            "metadata_samples": _format_database_status_value(row["metadata_samples"]),
+            "wort_signature_samples": _format_database_status_value(
+                row["wort_signature_samples"]
+            ),
+            "index_samples": _format_database_status_value(row["index_samples"]),
+        }
+        for row in get_database_status_rows()
+    ]
     recent_snapshots = [
         {
             "label": snapshot.get_metric_display(),
@@ -339,7 +356,11 @@ def stats(request):
     return render(
         request,
         "mgw_api/stats.html",
-        {"metrics": metrics, "recent_snapshots": recent_snapshots},
+        {
+            "database_status_rows": database_status_rows,
+            "metrics": metrics,
+            "recent_snapshots": recent_snapshots,
+        },
     )
 
 

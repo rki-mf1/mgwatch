@@ -246,6 +246,10 @@ class SystemStatistic(models.Model):
     class Metric(models.TextChoices):
         INDEX_SAMPLE_COUNT = "index_sample_count", "Index samples"
         METADATA_SAMPLE_COUNT = "metadata_sample_count", "Metadata samples"
+        WORT_SIGNATURE_SAMPLE_COUNT = (
+            "wort_signature_sample_count",
+            "Wort signature samples",
+        )
         AVERAGE_SEARCH_RATE_SEQUENCES_PER_SECOND = (
             "average_search_rate_sequences_per_second",
             "Average search rate",
@@ -263,7 +267,8 @@ class SystemStatistic(models.Model):
             "Sample download/index runtime",
         )
 
-    metric = models.CharField(max_length=64, choices=Metric.choices, unique=True)
+    metric = models.CharField(max_length=64, choices=Metric.choices)
+    scope = models.CharField(max_length=128, default="", blank=True)
     value = models.FloatField(default=0)
     observation_count = models.PositiveIntegerField(default=0)
     details = models.JSONField(default=dict, blank=True)
@@ -271,7 +276,13 @@ class SystemStatistic(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["metric"]
+        ordering = ["metric", "scope"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["metric", "scope"],
+                name="mgw_api_systemstat_metric_scope_uniq",
+            ),
+        ]
 
     def __str__(self):
         return self.get_metric_display()

@@ -17,6 +17,33 @@
                 </article>
             {% endfor %}
         </div>
+        <h3>Database Status</h3>
+        {% if database_status_rows %}
+            <table class="result-list">
+                <thead>
+                    <tr>
+                        <th>Database</th>
+                        <th>Profile</th>
+                        <th>Estimated total database size</th>
+                        <th>Wort signatures</th>
+                        <th>Search index samples</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in database_status_rows %}
+                        <tr>
+                            <td>{{ row.database }}</td>
+                            <td>{{ row.profile }}</td>
+                            <td>{{ row.metadata_samples }}</td>
+                            <td>{{ row.wort_signature_samples }}</td>
+                            <td>{{ row.index_samples }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <mark>No enabled database profiles configured.</mark>
+        {% endif %}
         <h3>Recent activity</h3>
         {% if recent_snapshots %}
             <table class="result-list">
