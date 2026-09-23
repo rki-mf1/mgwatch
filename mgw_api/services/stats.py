@@ -206,9 +206,10 @@ def record_metadata_stats(database=DEFAULT_DATABASE_ID):
     return statistics[0] if statistics else None
 
 
-def record_wort_signature_stats(database=DEFAULT_DATABASE_ID):
+def record_wort_signature_stats(database=DEFAULT_DATABASE_ID, sample_count=None):
     database_config = get_database_config(database)
-    sample_count = count_wort_signature_samples(database=database_config.id)
+    if sample_count is None:
+        sample_count = count_wort_signature_samples(database=database_config.id)
     recorded_at = timezone.now()
     _delete_database_scope_statistic(
         SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
@@ -440,9 +441,12 @@ def try_record_metadata_stats(database=DEFAULT_DATABASE_ID):
     return None
 
 
-def try_record_wort_signature_stats(database=DEFAULT_DATABASE_ID):
+def try_record_wort_signature_stats(database=DEFAULT_DATABASE_ID, sample_count=None):
     try:
-        return record_wort_signature_stats(database=database)
+        return record_wort_signature_stats(
+            database=database,
+            sample_count=sample_count,
+        )
     except Exception as exc:
         if exc.__class__.__name__ == "DatabaseOperationForbidden":
             LOGGER.debug(

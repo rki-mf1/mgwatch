@@ -26,6 +26,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .database_config import DEFAULT_DATABASE_ID
+from .database_config import enabled_databases
 from .database_config import normalize_database_list
 from .forms import FastaForm
 from .forms import LoginForm
@@ -52,6 +53,7 @@ from .services.filters import merge_filter_spec_from_post
 from .services.filters import normalize_filter_spec
 from .services.filters import remove_filter_from_spec
 from .services.stats import get_database_status_rows
+from .services.stats import statistic_scope
 from .tasks import submit_search_job
 from .tasks import submit_signature_pipeline_job
 
@@ -280,13 +282,35 @@ def _aggregate_current_stat(metric):
             None,
         )
 
+    enabled_scope_by_database = {
+        database.id: {
+            statistic_scope(database.id, profile.key)
+            for profile in database.enabled_profiles
+        }
+        for database in enabled_databases()
+    }
+    enabled_database_scopes = {
+        statistic_scope(database_id) for database_id in enabled_scope_by_database
+    }
     statistics_by_database = {}
     for statistic in statistics:
         database = statistic.details.get("database")
         if not database and statistic.scope:
             database = statistic.scope.split(":", 1)[0]
         database = normalize_database_list([database or DEFAULT_DATABASE_ID])[0]
+        if database not in enabled_scope_by_database:
+            continue
+        profile = statistic.details.get("profile")
+        if not profile and ":" in statistic.scope:
+            profile = statistic.scope.split(":", 1)[1]
+        if profile:
+            if statistic.scope not in enabled_scope_by_database[database]:
+                continue
+        elif statistic.scope and statistic.scope not in enabled_database_scopes:
+            continue
         statistics_by_database.setdefault(database, []).append(statistic)
+    if not statistics_by_database:
+        return None
     values = []
     for database_statistics in statistics_by_database.values():
         profile_statistics = [

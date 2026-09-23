@@ -552,6 +552,28 @@ class StatsViewTests(TestCase):
             details={"database": "SRA"},
             recorded_at=recorded_at,
         )
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope=statistic_scope(DEFAULT_DATABASE_ID, "k31-scaled1000"),
+            value=99,
+            observation_count=0,
+            details={
+                "database": DEFAULT_DATABASE_ID,
+                "profile": "k31-scaled1000",
+            },
+            recorded_at=recorded_at,
+        )
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope=statistic_scope("removed_metagenomes", "k21-scaled1000"),
+            value=5000,
+            observation_count=0,
+            details={
+                "database": "removed_metagenomes",
+                "profile": "k21-scaled1000",
+            },
+            recorded_at=recorded_at,
+        )
         SystemStatisticSnapshot.objects.create(
             metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
             value=1234,
@@ -634,6 +656,8 @@ class StatsViewTests(TestCase):
         self.assertContains(response, "Stats")
         self.assertContains(response, "1,234")
         self.assertNotContains(response, "2,233")
+        self.assertNotContains(response, "99")
+        self.assertNotContains(response, "6,234")
         self.assertContains(response, "Average search rate")
         self.assertContains(response, "12.35 seq/s")
         self.assertContains(response, "Database Status")

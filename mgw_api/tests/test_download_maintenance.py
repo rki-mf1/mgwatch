@@ -362,6 +362,27 @@ class DownloadMaintenanceTests(SimpleTestCase):
         self.assertEqual(sra_ids, ["SRR_HISTORICAL"])
         self.assertTrue(pending_signature_exists)
 
+    def test_prepare_download_targets_refreshes_wort_signature_stats(self):
+        with TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir)
+
+            with (
+                override_settings(DATA_DIR=data_dir, INDEX_FROM_SCRATCH=True),
+                patch(
+                    "mgw_api.services.maintenance.get_wort_accessions",
+                    return_value={"SRR1", "SRR2", "SRR3"},
+                ),
+                patch(
+                    "mgw_api.services.maintenance.try_record_wort_signature_stats"
+                ) as record_wort_stats,
+            ):
+                prepare_download_targets(ids=["SRR1"])
+
+        record_wort_stats.assert_called_once_with(
+            database=DEFAULT_DATABASE_ID,
+            sample_count=3,
+        )
+
     def test_get_update_accessions_reads_pending_signatures_from_updates_dir(self):
         with TemporaryDirectory() as tmp_dir:
             updates_dir = Path(tmp_dir)

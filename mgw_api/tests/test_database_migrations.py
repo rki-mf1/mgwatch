@@ -1,4 +1,5 @@
 import importlib
+from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -6,10 +7,12 @@ from django.apps import apps
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.test import override_settings
+from django.utils import timezone
 
 from mgw_api.models import Result
 from mgw_api.models import Settings
 from mgw_api.models import Signature
+from mgw_api.models import SystemStatistic
 
 
 class SuspendUnsupportedWatchesMigrationTests(TestCase):
@@ -388,3 +391,50 @@ databases:
         settings.refresh_from_db()
         self.assertEqual(settings.database, ["replacement_metagenomes"])
         self.assertEqual(settings.kmer, [31])
+
+
+class ScopedStatisticsMigrationTests(TestCase):
+    def test_reverse_consolidates_current_rows_to_one_per_metric(self):
+        migration = importlib.import_module(
+            "mgw_api.migrations.0041_scope_system_statistics"
+        )
+        older_at = timezone.now() - timedelta(hours=1)
+        newer_at = timezone.now()
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope="sra_metagenomes:k21-scaled1000",
+            value=10,
+            recorded_at=older_at,
+        )
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope="other_metagenomes:k21-scaled1000",
+            value=20,
+            recorded_at=newer_at,
+        )
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+            scope="sra_metagenomes:k21-scaled1000",
+            value=30,
+            recorded_at=older_at,
+        )
+
+        migration.consolidate_scoped_statistics(apps, None)
+
+        index_statistic = SystemStatistic.objects.get(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT
+        )
+        self.assertEqual(index_statistic.value, 20)
+        self.assertEqual(index_statistic.scope, "")
+        self.assertEqual(
+            SystemStatistic.objects.filter(
+                metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            SystemStatistic.objects.get(
+                metric=SystemStatistic.Metric.METADATA_SAMPLE_COUNT
+            ).scope,
+            "",
+        )

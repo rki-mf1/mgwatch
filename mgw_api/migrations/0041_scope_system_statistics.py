@@ -25,6 +25,29 @@ def scope_legacy_count_statistics(apps, schema_editor):
         statistic.save(update_fields=["scope"])
 
 
+def consolidate_scoped_statistics(apps, schema_editor):
+    SystemStatistic = apps.get_model("mgw_api", "SystemStatistic")
+    metrics = (
+        SystemStatistic.objects.order_by().values_list("metric", flat=True).distinct()
+    )
+    for metric in metrics:
+        statistics = list(
+            SystemStatistic.objects.filter(metric=metric).order_by(
+                "-recorded_at",
+                "-pk",
+            )
+        )
+        if not statistics:
+            continue
+        keeper = statistics[0]
+        duplicate_ids = [statistic.pk for statistic in statistics[1:]]
+        if duplicate_ids:
+            SystemStatistic.objects.filter(pk__in=duplicate_ids).delete()
+        if keeper.scope:
+            keeper.scope = ""
+            keeper.save(update_fields=["scope"])
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ("mgw_api", "0040_suspend_unsupported_watches"),
@@ -94,7 +117,7 @@ class Migration(migrations.Migration):
         ),
         migrations.RunPython(
             scope_legacy_count_statistics,
-            reverse_code=migrations.RunPython.noop,
+            reverse_code=consolidate_scoped_statistics,
         ),
         migrations.AddConstraint(
             model_name="systemstatistic",
