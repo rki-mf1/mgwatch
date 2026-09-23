@@ -1,3 +1,4 @@
+from datetime import timedelta
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -578,7 +579,10 @@ class StatsViewTests(TestCase):
             metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
             value=1234,
             observation_count=0,
-            details={},
+            details={
+                "database": DEFAULT_DATABASE_ID,
+                "profile": "k21-scaled1000",
+            },
             recorded_at=recorded_at,
         )
         SystemStatistic.objects.create(
@@ -669,6 +673,7 @@ class StatsViewTests(TestCase):
         self.assertContains(response, "2,000")
         self.assertContains(response, "1,500")
         self.assertContains(response, "Recent activity")
+        self.assertContains(response, "sra_metagenomes / k21-scaled1000")
         self.assertNotContains(response, "Recent snapshots")
         self.assertContains(response, "Runtime")
         self.assertContains(response, "Searches in average")
@@ -683,6 +688,90 @@ class StatsViewTests(TestCase):
         self.assertContains(response, "4 samples downloaded, 2 index batches")
         count_index.assert_not_called()
         count_metadata.assert_not_called()
+
+    def test_current_stats_require_complete_enabled_profile_rows(self):
+        with TemporaryDirectory() as tmp_dir:
+            config_dir = Path(tmp_dir)
+            (config_dir / "database.yml").write_text(
+                """
+version: 1
+databases:
+  sra_metagenomes:
+    enabled: true
+    label: SRA Metagenomes
+    mongodb_collection: sra_metagenomes_metadata
+    wort_manifest_url: https://example.test/sra-manifest.parquet
+    wort_signature_endpoint: https://example.test/sra-signatures
+    profiles:
+      - kmer: 21
+        scaled: 1000
+        enabled: true
+      - kmer: 31
+        scaled: 1000
+        enabled: true
+""",
+                encoding="utf-8",
+            )
+
+            with override_settings(CONFIG_DIR=config_dir):
+                get_database_configs.cache_clear()
+                try:
+                    SystemStatistic.objects.create(
+                        metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+                        scope=statistic_scope(DEFAULT_DATABASE_ID, "k21-scaled1000"),
+                        value=1234,
+                        details={
+                            "database": DEFAULT_DATABASE_ID,
+                            "profile": "k21-scaled1000",
+                        },
+                        recorded_at=timezone.now(),
+                    )
+                    self.client.login(username="staff", password="testpass123")
+                    response = self.client.get(reverse("mgw_api:stats"))
+                finally:
+                    get_database_configs.cache_clear()
+
+        index_metric = next(
+            metric
+            for metric in response.context["metrics"]
+            if metric["metric"] == SystemStatistic.Metric.INDEX_SAMPLE_COUNT
+        )
+        self.assertEqual(index_metric["value"], "Not recorded")
+
+    def test_current_stats_timestamp_comes_from_included_rows(self):
+        included_at = timezone.now() - timedelta(days=1)
+        excluded_at = timezone.now()
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope=statistic_scope(DEFAULT_DATABASE_ID, "k21-scaled1000"),
+            value=1234,
+            details={
+                "database": DEFAULT_DATABASE_ID,
+                "profile": "k21-scaled1000",
+            },
+            recorded_at=included_at,
+        )
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope=statistic_scope(DEFAULT_DATABASE_ID, "k31-scaled1000"),
+            value=99,
+            details={
+                "database": DEFAULT_DATABASE_ID,
+                "profile": "k31-scaled1000",
+            },
+            recorded_at=excluded_at,
+        )
+        self.client.login(username="staff", password="testpass123")
+
+        response = self.client.get(reverse("mgw_api:stats"))
+
+        index_metric = next(
+            metric
+            for metric in response.context["metrics"]
+            if metric["metric"] == SystemStatistic.Metric.INDEX_SAMPLE_COUNT
+        )
+        self.assertEqual(index_metric["value"], "1,234")
+        self.assertEqual(index_metric["recorded_at"], included_at)
 
     def test_non_staff_user_cannot_view_stats(self):
         self.client.login(username="user", password="testpass123")

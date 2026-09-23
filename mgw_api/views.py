@@ -236,6 +236,16 @@ def _format_searches_in_average(metric, observation_count):
 
 def _format_stat_details(metric, details):
     details = details or {}
+    if metric in (
+        SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+        SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+        SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
+    ):
+        database = details.get("database_label") or details.get("database")
+        profile = details.get("profile")
+        if database and profile:
+            return f"{database} / {profile}"
+        return database or profile or ""
     if metric == SystemStatistic.Metric.DOWNLOAD_INDEX_RUNTIME_SECONDS:
         return (
             f"{details.get('downloaded', 0):,} samples downloaded, "
@@ -312,19 +322,39 @@ def _aggregate_current_stat(metric):
     if not statistics_by_database:
         return None
     values = []
-    for database_statistics in statistics_by_database.values():
+    included_statistics = []
+    for database_id, profile_scopes in enabled_scope_by_database.items():
+        database_statistics = statistics_by_database.get(database_id, [])
         profile_statistics = [
             statistic
             for statistic in database_statistics
             if statistic.details.get("profile") or ":" in statistic.scope
         ]
-        selected_statistics = profile_statistics or database_statistics
-        values.append(min(statistic.value for statistic in selected_statistics))
+        if profile_statistics:
+            if {statistic.scope for statistic in profile_statistics} != profile_scopes:
+                return None
+            selected_statistics = profile_statistics
+            values.append(min(statistic.value for statistic in selected_statistics))
+        else:
+            fallback_statistics = [
+                statistic
+                for statistic in database_statistics
+                if not statistic.details.get("profile") and ":" not in statistic.scope
+            ]
+            if not fallback_statistics:
+                return None
+            selected_statistics = [
+                max(fallback_statistics, key=lambda statistic: statistic.recorded_at)
+            ]
+            values.append(selected_statistics[0].value)
+        included_statistics.extend(selected_statistics)
     return SimpleNamespace(
         value=sum(values),
-        observation_count=sum(statistic.observation_count for statistic in statistics),
+        observation_count=sum(
+            statistic.observation_count for statistic in included_statistics
+        ),
         details={},
-        recorded_at=max(statistic.recorded_at for statistic in statistics),
+        recorded_at=max(statistic.recorded_at for statistic in included_statistics),
     )
 
 
