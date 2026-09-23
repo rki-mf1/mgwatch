@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import polars as pl
 import pymongo as pm
 from django.conf import settings
@@ -62,6 +64,103 @@ def _delete_database_scope_statistic(metric, database_config):
         metric=metric,
         scope=statistic_scope(database_config.id),
     ).delete()
+
+
+def _count_metrics():
+    return {
+        SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+        SystemStatistic.Metric.METADATA_SAMPLE_COUNT,
+        SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT,
+    }
+
+
+def _enabled_scope_by_database():
+    return {
+        database.id: {
+            statistic_scope(database.id, profile.key)
+            for profile in database.enabled_profiles
+        }
+        for database in enabled_databases()
+    }
+
+
+def _statistic_database(statistic):
+    database = statistic.details.get("database")
+    if not database and statistic.scope:
+        database = statistic.scope.split(":", 1)[0]
+    return normalize_database_list([database or DEFAULT_DATABASE_ID])[0]
+
+
+def _is_profile_statistic(statistic):
+    return bool(statistic.details.get("profile") or ":" in statistic.scope)
+
+
+def _enabled_count_statistics_by_database(metric):
+    enabled_scope_by_database = _enabled_scope_by_database()
+    enabled_database_scopes = {
+        statistic_scope(database_id) for database_id in enabled_scope_by_database
+    }
+    statistics_by_database = {}
+    for statistic in SystemStatistic.objects.filter(metric=metric):
+        database = _statistic_database(statistic)
+        if database not in enabled_scope_by_database:
+            continue
+        profile = statistic.details.get("profile")
+        if not profile and ":" in statistic.scope:
+            profile = statistic.scope.split(":", 1)[1]
+        if profile:
+            if statistic.scope not in enabled_scope_by_database[database]:
+                continue
+        elif statistic.scope and statistic.scope not in enabled_database_scopes:
+            continue
+        statistics_by_database.setdefault(database, []).append(statistic)
+    return enabled_scope_by_database, statistics_by_database
+
+
+def aggregate_current_stat(metric):
+    if metric not in _count_metrics():
+        return SystemStatistic.objects.filter(metric=metric, scope="").first()
+
+    enabled_scope_by_database, statistics_by_database = (
+        _enabled_count_statistics_by_database(metric)
+    )
+    if not statistics_by_database:
+        return None
+    values = []
+    included_statistics = []
+    for database_id, profile_scopes in enabled_scope_by_database.items():
+        database_statistics = statistics_by_database.get(database_id, [])
+        profile_statistics = [
+            statistic
+            for statistic in database_statistics
+            if _is_profile_statistic(statistic)
+        ]
+        if profile_statistics:
+            if {statistic.scope for statistic in profile_statistics} != profile_scopes:
+                return None
+            selected_statistics = profile_statistics
+            values.append(min(statistic.value for statistic in selected_statistics))
+        else:
+            fallback_statistics = [
+                statistic
+                for statistic in database_statistics
+                if not _is_profile_statistic(statistic)
+            ]
+            if not fallback_statistics:
+                return None
+            selected_statistics = [
+                max(fallback_statistics, key=lambda statistic: statistic.recorded_at)
+            ]
+            values.append(selected_statistics[0].value)
+        included_statistics.extend(selected_statistics)
+    return SimpleNamespace(
+        value=sum(values),
+        observation_count=sum(
+            statistic.observation_count for statistic in included_statistics
+        ),
+        details={},
+        recorded_at=max(statistic.recorded_at for statistic in included_statistics),
+    )
 
 
 def get_cached_index_sample_count_for_databases(databases):
@@ -240,8 +339,28 @@ def get_database_status_rows():
     }
     rows = []
     for database in enabled_databases():
+        database_fallbacks = {
+            metric: statistics.get((metric, statistic_scope(database.id)))
+            for metric in metrics
+        }
+        profile_statistics_by_metric = {
+            metric: [
+                statistics.get((metric, statistic_scope(database.id, profile.key)))
+                for profile in database.enabled_profiles
+            ]
+            for metric in metrics
+        }
         for profile in database.enabled_profiles:
             scope = statistic_scope(database.id, profile.key)
+            profile_statistics = {
+                metric: statistics.get((metric, scope)) for metric in metrics
+            }
+            row_statistics = {}
+            for metric in metrics:
+                if any(profile_statistics_by_metric[metric]):
+                    row_statistics[metric] = profile_statistics[metric]
+                else:
+                    row_statistics[metric] = database_fallbacks[metric]
             rows.append(
                 {
                     "database": database.label,
@@ -249,15 +368,15 @@ def get_database_status_rows():
                     "profile": profile.key,
                     "kmer": profile.kmer,
                     "scaled": profile.scaled,
-                    "metadata_samples": statistics.get(
-                        (SystemStatistic.Metric.METADATA_SAMPLE_COUNT, scope)
-                    ),
-                    "wort_signature_samples": statistics.get(
-                        (SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT, scope)
-                    ),
-                    "index_samples": statistics.get(
-                        (SystemStatistic.Metric.INDEX_SAMPLE_COUNT, scope)
-                    ),
+                    "metadata_samples": row_statistics[
+                        SystemStatistic.Metric.METADATA_SAMPLE_COUNT
+                    ],
+                    "wort_signature_samples": row_statistics[
+                        SystemStatistic.Metric.WORT_SIGNATURE_SAMPLE_COUNT
+                    ],
+                    "index_samples": row_statistics[
+                        SystemStatistic.Metric.INDEX_SAMPLE_COUNT
+                    ],
                 }
             )
     return rows

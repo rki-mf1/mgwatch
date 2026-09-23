@@ -27,6 +27,7 @@ from mgw_api.services.maintenance import run_index
 from mgw_api.services.maintenance import run_metadata
 from mgw_api.services.stats import count_index_samples
 from mgw_api.services.stats import get_cached_index_sample_count_for_databases
+from mgw_api.services.stats import get_database_status_rows
 from mgw_api.services.stats import record_index_stats
 from mgw_api.services.stats import record_metadata_stats
 from mgw_api.services.stats import record_search_rate
@@ -283,6 +284,20 @@ databases:
                     )
                 finally:
                     get_database_configs.cache_clear()
+
+    def test_database_status_rows_use_database_scope_fallback(self):
+        SystemStatistic.objects.create(
+            metric=SystemStatistic.Metric.INDEX_SAMPLE_COUNT,
+            scope=statistic_scope(DEFAULT_DATABASE_ID),
+            value=1234,
+            details={"database": "SRA"},
+            recorded_at=timezone.now(),
+        )
+
+        rows = get_database_status_rows()
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["index_samples"].value, 1234)
 
     def test_try_record_search_rate_skips_when_index_count_is_not_cached(self):
         user, result = self.create_result()
