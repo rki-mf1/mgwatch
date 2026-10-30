@@ -260,7 +260,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/whitenoise-6.12.0-pyhd8ed1ab_0.conda
       - pypi: https://files.pythonhosted.org/packages/08/bd/ccd7416fdb30f104ddf6cfd8ee9f699441c7d9880a26f9b3089438adee05/python_ipware-3.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/11/33/bf539925b102d68200da5b1d3eacb8aa5d5d9a065972e8b8724d0d53bb0d/django_ipware-7.0.1-py2.py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/46/f6/777a5df7d5698eeb23c7c496cc268c0181f0489dbc5b5f2b235b30e5d8dd/django_axes-8.3.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/2d/a0/da4e8cb4c43c8aa5266a5fcde1394fe68b2e86b43fc2a0df2b282b18962b/django_axes-9.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7e/9f/09cdb9a1eebe8533b02a7694ca787acfc1e4d93b5b6175ff99366d4e6d64/django_redis-7.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a9/91/38ba24b9d76925ce166b2eebe1b4ea460063b8ba8cf91d39d97ee3bad517/django_auth_ldap-5.3.0-py3-none-any.whl
   security:
@@ -638,7 +638,7 @@ packages:
   - python_abi 3.13.* *_cp313
   license: BSD-3-Clause AND MIT AND EPL-2.0
   purls:
-  - pkg:pypi/backports-zstd?source=compressed-mapping
+  - pkg:pypi/backports-zstd?source=hash-mapping
   run_exports: {}
   size: 243747
   timestamp: 1788491297080
@@ -4065,7 +4065,7 @@ packages:
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/sqlparse?source=compressed-mapping
+  - pkg:pypi/sqlparse?source=hash-mapping
   run_exports: {}
   size: 47341
   timestamp: 1786961786485
@@ -4185,15 +4185,15 @@ packages:
   requires_dist:
   - python-ipware>=2.0.3
   requires_python: '>=3.8'
-- pypi: https://files.pythonhosted.org/packages/46/f6/777a5df7d5698eeb23c7c496cc268c0181f0489dbc5b5f2b235b30e5d8dd/django_axes-8.3.1-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/2d/a0/da4e8cb4c43c8aa5266a5fcde1394fe68b2e86b43fc2a0df2b282b18962b/django_axes-9.0.0-py3-none-any.whl
   name: django-axes
-  version: 8.3.1
-  sha256: f7887582fd12713064f1602091ff6152752becae5e891a15bf802746cab0f51a
+  version: 9.0.0
+  sha256: fb7b0322a09d8f090d5a980690cb5468dc1903d3d950f1968c4e067348d58059
   requires_dist:
-  - django>=4.2
+  - django>=5.2
   - asgiref>=3.6.0
   - django-ipware>=3 ; extra == 'ipware'
-  requires_python: '>=3.10'
+  requires_python: '>=3.11'
 - pypi: https://files.pythonhosted.org/packages/7e/9f/09cdb9a1eebe8533b02a7694ca787acfc1e4d93b5b6175ff99366d4e6d64/django_redis-7.0.0-py3-none-any.whl
   name: django-redis
   version: 7.0.0
