@@ -1,5 +1,6 @@
 version: 2
 updates:
+  # Renovate manages Docker images and application dependencies.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -9,33 +10,6 @@ updates:
         applies-to: security-updates
         patterns:
           - "*"
-      all-versions:
-        applies-to: version-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-versions:
-        applies-to: version-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker-compose"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      all-versions:
-        applies-to: version-updates
-        patterns:
-          - "*"
-  - package-ecosystem: "docker-compose"
-    directory: "/example-config"
-    schedule:
-      interval: "weekly"
-    groups:
       all-versions:
         applies-to: version-updates
         patterns:

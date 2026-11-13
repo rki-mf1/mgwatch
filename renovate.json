@@ -3,5 +3,8 @@
   "extends": [
     "config:recommended",
     ":maintainLockFilesWeekly"
-  ]
+  ],
+  "github-actions": {
+    "enabled": false
+  }
 }
