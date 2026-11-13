@@ -2,7 +2,7 @@ version: 7
 platforms:
 - name: linux-64
   virtual-packages:
-  - __unix=0=0
+  - __unix=0
   - __linux=4.18
   - __glibc=2.28
   - __archspec=0=x86_64
@@ -56,7 +56,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gflags-2.3.1-h54a6638_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/glog-0.7.1-hb7133d2_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/graphite2-1.3.15-h54a6638_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/gunicorn-26.2.0-py313h78bf25f_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/gunicorn-27.0.1-py313h78bf25f_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/icu-78.3-py310h44b86e0_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/keyutils-1.6.3-h7cc23a3_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/kiwisolver-1.5.1-py313h2551ef2_1.conda
@@ -638,7 +638,7 @@ packages:
   - python_abi 3.13.* *_cp313
   license: BSD-3-Clause AND MIT AND EPL-2.0
   purls:
-  - pkg:pypi/backports-zstd?source=compressed-mapping
+  - pkg:pypi/backports-zstd?source=hash-mapping
   run_exports: {}
   size: 243747
   timestamp: 1788491297080
@@ -993,21 +993,20 @@ packages:
     - graphite2 >=1.3.15,<2.0a0
   size: 102835
   timestamp: 1786118485753
-- conda: https://conda.anaconda.org/conda-forge/linux-64/gunicorn-26.2.0-py313h78bf25f_1.conda
-  sha256: a1ba8cbafac01cd6a7811c18a32b60e86b119d5a400d7e3de4ed76f06a634517
-  md5: d74fddab1f0f7987daf0eafc18d4136e
+- conda: https://conda.anaconda.org/conda-forge/linux-64/gunicorn-27.0.1-py313h78bf25f_0.conda
+  sha256: f5ccc25e563988f0c2f7554a969b0463da49c88a13337ae21589ed5ef197c168
+  md5: d011501472ab5fab0265e83bb9155104
   depends:
   - packaging
   - python >=3.13,<3.14.0a0
   - python_abi 3.13.* *_cp313
   - setuptools >=3.0
   license: MIT
-  license_family: MIT
   purls:
-  - pkg:pypi/gunicorn?source=hash-mapping
+  - pkg:pypi/gunicorn?source=compressed-mapping
   run_exports: {}
-  size: 451703
-  timestamp: 1788522726406
+  size: 509390
+  timestamp: 1794566752400
 - conda: https://conda.anaconda.org/conda-forge/linux-64/icu-78.3-py310h44b86e0_2.conda
   sha256: 9f07834f0c546ab14d885ce0366285f61f44e326c0edd1fc63b8294e113ae432
   md5: 72a381cbad04f24b1c2a43ef707f45b4
@@ -4065,7 +4064,7 @@ packages:
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/sqlparse?source=compressed-mapping
+  - pkg:pypi/sqlparse?source=hash-mapping
   run_exports: {}
   size: 47341
   timestamp: 1786961786485
