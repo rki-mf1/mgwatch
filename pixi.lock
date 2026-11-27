@@ -225,7 +225,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/h2-4.4.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/hpack-4.2.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/httpcore-1.0.9-pyh29332c3_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/httpx-0.28.1-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/httpx-0.29.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/httpx-retries-0.6.0-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/hyperframe-6.1.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/idna-3.20-pyh5ded981_0.conda
@@ -874,7 +874,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/fonttools?source=compressed-mapping
+  - pkg:pypi/fonttools?source=hash-mapping
   run_exports: {}
   size: 3255588
   timestamp: 1793164612909
@@ -917,7 +917,7 @@ packages:
   license: Apache-2.0
   license_family: APACHE
   purls:
-  - pkg:pypi/frozenlist?source=compressed-mapping
+  - pkg:pypi/frozenlist?source=hash-mapping
   run_exports: {}
   size: 61596
   timestamp: 1792669317640
@@ -2518,7 +2518,7 @@ packages:
   - libjpeg-turbo >=3.2.0,<4.0a0
   license: HPND
   purls:
-  - pkg:pypi/pillow?source=compressed-mapping
+  - pkg:pypi/pillow?source=hash-mapping
   run_exports: {}
   size: 1083173
   timestamp: 1792416406105
@@ -2553,7 +2553,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/polars-runtime-32?source=compressed-mapping
+  - pkg:pypi/polars-runtime-32?source=hash-mapping
   run_exports: {}
   size: 41048638
   timestamp: 1793016606615
@@ -2586,7 +2586,7 @@ packages:
   license: Apache-2.0
   license_family: APACHE
   purls:
-  - pkg:pypi/propcache?source=compressed-mapping
+  - pkg:pypi/propcache?source=hash-mapping
   run_exports: {}
   size: 60671
   timestamp: 1792906266644
@@ -3213,7 +3213,7 @@ packages:
   license: Apache-2.0
   license_family: APACHE
   purls:
-  - pkg:pypi/aiobotocore?source=compressed-mapping
+  - pkg:pypi/aiobotocore?source=hash-mapping
   run_exports: {}
   size: 94402
   timestamp: 1793122051864
@@ -3518,7 +3518,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/click-repl?source=compressed-mapping
+  - pkg:pypi/click-repl?source=hash-mapping
   run_exports: {}
   size: 20506
   timestamp: 1792507214474
@@ -3746,22 +3746,22 @@ packages:
   run_exports: {}
   size: 49483
   timestamp: 1745602916758
-- conda: https://conda.anaconda.org/conda-forge/noarch/httpx-0.28.1-pyhd8ed1ab_0.conda
-  sha256: cd0f1de3697b252df95f98383e9edb1d00386bfdd03fdf607fa42fe5fcb09950
-  md5: d6989ead454181f4f9bc987d3dc4e285
+- conda: https://conda.anaconda.org/conda-forge/noarch/httpx-0.29.0-pyhd8ed1ab_0.conda
+  sha256: 4f4e315edbf5ffbe775e434afd6001f42aa7d4ba44c281f2365054826bdab8cf
+  md5: 2be12cd5531cd7902bd3875cf61b4107
   depends:
   - anyio
   - certifi
   - httpcore 1.*
   - idna
-  - python >=3.9
+  - python >=3.11
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/httpx?source=hash-mapping
+  - pkg:pypi/httpx?source=compressed-mapping
   run_exports: {}
-  size: 63082
-  timestamp: 1733663449209
+  size: 64911
+  timestamp: 1795769689060
 - conda: https://conda.anaconda.org/conda-forge/noarch/httpx-retries-0.6.0-pyhc364b38_0.conda
   sha256: 82e6bd564e79c7222684ba6f80ceb315daa5924b0da08317f7d18c5ef80306cf
   md5: 3bd183d4d46caf7635173871408cdf87
@@ -3962,7 +3962,7 @@ packages:
   license: BSD-2-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/pyasn1?source=compressed-mapping
+  - pkg:pypi/pyasn1?source=hash-mapping
   run_exports: {}
   size: 67126
   timestamp: 1793089118986
@@ -4232,7 +4232,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/tzlocal?source=compressed-mapping
+  - pkg:pypi/tzlocal?source=hash-mapping
   run_exports: {}
   size: 24206
   timestamp: 1792678127238
